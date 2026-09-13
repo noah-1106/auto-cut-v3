@@ -511,11 +511,16 @@ async function loadConfig(){
     '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag">单故事线</span>')+'</div>'+
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
+  const bgmreg=await(await fetch('/api/registry/bgm')).json();
+  const subreg=await(await fetch('/api/registry/subtitles')).json();
+  const bgmItems=Object.keys(bgmreg).filter(k=>!k.startsWith('_')).map(k=>bgmreg[k].name||k);
+  const subItems=Object.keys(subreg).filter(k=>!k.startsWith('_')).map(k=>subreg[k].name||k);
   $('reggrid').innerHTML=[
     ['视频类型',(en.video_types||[]).length,(en.video_types||[]).map(x=>x.name).join(' · ')],
     ['封面策略',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
     ['旁白模式',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
-    ['字幕风格',2,'卡拉OK金 · 简洁白'],
+    ['BGM',bgmItems.length,bgmItems.join(' · ')],
+    ['字幕风格',subItems.length,subItems.join(' · ')],
     ['贴纸',(en.stickers||[]).length,(en.stickers||[]).map(x=>x.id).join(' · ')],
     ['音效',(en.sfx||[]).length,(en.sfx||[]).map(x=>x.id).join(' · ')],
     ['平台',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
@@ -549,6 +554,7 @@ async function openProj(name,story,silent){
   DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
+  P.registry={bgm:await(await fetch('/api/registry/bgm')).json()};
   go('proj');renderTabs();buildCreator();buildViews();
   renderPack();renderCuts();
   if(!silent)showTab('create');

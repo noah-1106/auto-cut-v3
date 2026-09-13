@@ -126,13 +126,26 @@ def build_prompt(dossier, intent, transitions):
 4. 幕数 2-4；单幕时长 3-20 秒；总时长 20-90 秒
 5. transition_out 只能取：%s，或 null
 6. 第一幕优先用带开场钩子台词的素材；空镜/环境素材适合做 B 轨叠画或转场幕
+7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
 
 [输出] 只输出合法 JSON（无 markdown 代码块、无解释）：
 {"title":"故事线标题","outline":"这条线在讲什么（2-3句）",
 "beats":[{"story":"这一幕讲什么（1-2句）",
 "tracks":[{"role":"A","source_id":"素材id","src_in":起点秒,"duration":时长秒,"requirement":"选用理由一句话"},
 {"role":"B","source_id":"素材id","src_in":0,"duration":秒,"pos":"top-right","scale":0.3,"requirement":"叠画理由"}],
-"narration":{"mode":"original"},"transition_out":null}]}""" % (dossier, intent, ", ".join(transitions) or "（无转场注册）")
+"narration":{"mode":"original"},"transition_out":null}],
+"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, ", ".join(transitions) or "（无转场注册）",
+    ", ".join("%s(%s：%s)" % (k, v.get("name", ""), (v.get("desc") or "")[:24]) for k, v in _bgm_reg().items() if not k.startswith("_")) or "（无 BGM 注册，bgm_id 填 null）")
+
+
+def _bgm_reg():
+    import os
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "registry", "bgm.json")
+    try:
+        with open(f, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
 
 
 def chat_llm(messages):
@@ -241,6 +254,9 @@ def save_storyline(pid, draft, beats):
                "outline": str(draft.get("outline") or ""),
                "origin": "ai-draft",
                "beats": [dict(b, no=i + 1, id="b%d" % (i + 1)) for i, b in enumerate(beats)]})
+    _au = draft.get("audio") or {}
+    if isinstance(_au, dict) and _au.get("bgm_id"):
+        sl.setdefault("meta", {}).setdefault("audio", {})["bgm_id"] = str(_au["bgm_id"])
     with open(os.path.join(sp, sid + ".json"), "w", encoding="utf-8") as fh:
         json.dump(sl, fh, ensure_ascii=False, indent=1)
     return sid

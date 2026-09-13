@@ -71,6 +71,12 @@ class H(BaseHTTPRequestHandler):
             self._json(jload(f"{pd}/materials/library.json", {}))
         elif u.path == "/api/enums":
             self._json(jload(f"{ROOT}/registry/enums.json", {}))
+        elif u.path.startswith("/api/registry/"):
+            # 注册表读接口（2026-09-14）：/api/registry/bgm → registry/bgm.json。人/Agent 同权。
+            rname = u.path[len("/api/registry/"):]
+            if not _safe(rname):
+                return self._json({"err": "bad registry name"}, 400)
+            return self._json(jload(f"{ROOT}/registry/{rname}.json", {}))
         elif u.path.startswith("/api/cover/"):
             name = u.path.split("/")[3]
             if not _safe(name):
@@ -841,6 +847,42 @@ class H(BaseHTTPRequestHandler):
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
                 return self._json({"err": "no such project"}, 404)
+        if u.path.startswith("/api/registry-upload/"):
+            # 效果素材导入（2026-09-14）：/api/registry-upload/bgm/myid → assets/music/myid.mp3
+            # + registry/bgm.json 自动加条目。白名单按类别：音频(bgm,sfx) mp3/wav/m4a/flac，图片(stickers) png。
+            # 文件名按真实扩展名落盘；同时写注册表条目（name=文件名，desc 标注导入来源）。
+            parts = u.path.split("/")
+            kind, rid = parts[3], parts[4] if len(parts) > 4 else ""
+            KIND = {"bgm": ("assets/music", "bgm.json", "music",
+                            {"mp3": "audio/mpeg", "wav": "audio/x-wav", "m4a": "audio/mp4", "flac": "audio/flac"}),
+                    "sfx": ("assets/sfx", "sfx.json", "audio",
+                            {"mp3": "audio/mpeg", "wav": "audio/x-wav", "m4a": "audio/mp4", "flac": "audio/flac"}),
+                    "stickers": ("assets/stickers", "stickers.json", "image", {"png": "image/png"})}
+            if kind not in KIND or not _safe(rid):
+                return self._json({"err": "bad kind/id"}, 400)
+            _q = parse_qs(u.query)
+            fname = (_q.get("filename") or [""])[0]
+            if not _safe(fname) or "." not in fname:
+                return self._json({"err": "bad filename"}, 400)
+            ext = fname.rsplit(".", 1)[-1].lower()
+            subdir, regf, _, mime = KIND[kind]
+            if ext not in mime:
+                return self._json({"err": "不支持的格式: .%s（%s 类接受 %s）" % (ext, kind, "/".join(sorted(mime)))}, 400)
+            n = int(self.headers.get("Content-Length", 0))
+            if n <= 0 or n > 50 << 20:
+                return self._json({"err": f"bad size {n}"}, 400)
+            dest_dir = f"{ROOT}/{subdir}"
+            os.makedirs(dest_dir, exist_ok=True)
+            fp = f"{dest_dir}/{rid}.{ext}"
+            with open(fp, "wb") as f:
+                f.write(self.rfile.read(n))
+            regp = f"{ROOT}/registry/{regf}"
+            reg = jload(regp, {})
+            reg[rid] = {"file": f"{subdir}/{rid}.{ext}", "name": fname.rsplit(".", 1)[0],
+                        "desc": f"导入于 {time.strftime('%Y-%m-%d %H:%M')} · {n}B"}
+            with open(regp, "w", encoding="utf-8") as f:
+                json.dump(reg, f, ensure_ascii=False, indent=1)
+            return self._json({"ok": True, "id": rid, "registry": regf, "file": fp[len(ROOT)+1:]})
         if u.path.startswith("/api/cover-upload/"):
             name = u.path.split("/")[3]
             if not _safe(name):

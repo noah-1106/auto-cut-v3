@@ -337,7 +337,16 @@ def build_plan(project_dir, sid=None):
         "flash_peak": ov.get("flash"),
         "tconf": trans,
     }
-    if audio.get("bgm") or audio.get("bgm_default"):
+    # BGM 三态解析（2026-09-14 注册表化）：bgm_id（新，查注册表）> bgm_default/bgm（旧，路径直用）
+    bgm_reg = load(f"{ROOT}/registry/bgm.json") if os.path.exists(f"{ROOT}/registry/bgm.json") else {}
+    bid = audio.get("bgm_id")
+    if bid:
+        conf = bgm_reg.get(bid)
+        if not conf:
+            raise SystemExit("BGM ?? %s（bgm.json 无此 id）——故事线 audio.bgm_id 拼写错误" % bid)
+        plan["bgm"] = os.path.join(ROOT, conf["file"])
+        plan["bgm_id"] = bid
+    elif audio.get("bgm") or audio.get("bgm_default"):
         plan["bgm"] = os.path.join(ROOT, audio.get("bgm_default") or audio.get("bgm"))
     if audio.get("bgm_volume") is not None:
         plan["bgm_volume"] = float(audio["bgm_volume"])

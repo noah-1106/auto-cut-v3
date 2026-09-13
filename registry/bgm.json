@@ -1,0 +1,7 @@
+{
+  "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：PUT /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。",
+  "bgm_n001": {"file": "assets/music/bgm_n001.mp3", "name": "默认轻快", "desc": "现役默认底乐，中速不抢人声"},
+  "bgm_n002_light": {"file": "assets/music/bgm_n002_light.mp3", "name": "轻快叮当", "desc": "高频段轻快律动，适合快节奏干货口播（占位合成音）"},
+  "bgm_n003_deep": {"file": "assets/music/bgm_n003_deep.mp3", "name": "低频沉稳", "desc": "低频铺底，适合警示/干货检核类内容（占位合成音）"},
+  "bgm_n004_soft": {"file": "assets/music/bgm_n004_soft.mp3", "name": "柔和叙事", "desc": "柔和慢律动，适合情感/收尾段（占位合成音）"}
+}
