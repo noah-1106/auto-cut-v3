@@ -8,7 +8,7 @@ auto-cut V3 Studio · 人监视器 v0.1
 import json, os, re, shutil, subprocess, sys, time, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import urllib.parse
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -57,7 +57,7 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(d)
 
     def do_GET(self):
-        u = urlparse(self.path)
+        u = urlparse(unquote(self.path, encoding="utf-8"))  # path 段统一解码：中文 id 的 percent 编码态在此还原（同族问题根治点）
         if u.path in ("/", "/index.html"):
             fp = os.path.join(ROOT, "studio", "index.html")
             try:
@@ -328,7 +328,7 @@ class H(BaseHTTPRequestHandler):
             self._json({"err": "not found"}, 404)
 
     def do_POST(self):
-        u = urlparse(self.path)
+        u = urlparse(unquote(self.path, encoding="utf-8"))  # 同 do_GET
         if u.path.startswith("/api/library/") and "/clip/" in u.path:
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）
@@ -650,7 +650,7 @@ class H(BaseHTTPRequestHandler):
             # 人工校对：转写文本以人的修正为准（素材权威解读的最后一道）
             parts = u.path.split("/")
             pid_, fid = parts[3], parts[4]
-            if not (_safe(pid_) and _safe(fid)):
+            if not (_safe(pid_) and _safe_id(fid)):
                 return self._json({"err": "bad id"}, 400)
             pp = f"{ROOT}/materials/packs/{pid_}/pack.json"
             pj = jload(pp, {})
@@ -771,7 +771,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/pack/") and u.path.endswith("/usable"):
             parts = u.path.split("/")
             pid, fid = parts[3], parts[4]
-            if not (_safe(pid) and _safe(fid)):
+            if not (_safe(pid) and _safe_id(fid)):
                 return self._json({"err": "bad id"}, 400)
             pp = f"{ROOT}/materials/packs/{pid}/pack.json"
             pj = jload(pp, {})
@@ -836,6 +836,8 @@ class H(BaseHTTPRequestHandler):
             # 幕级预览渲染：反馈半径缩小到一幕（秒级），绝低压力快速剪辑的核心
             parts = u.path.split("/")
             name, beat_no = parts[3], parts[4]
+            if not beat_no.isdigit():
+                return self._json({"err": "bad beat no"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
             if sid and not _safe(sid):
@@ -919,7 +921,7 @@ class H(BaseHTTPRequestHandler):
             # 删注册表条目：不动 assets 文件（可能被历史故事线引用），返回 file 供人工清理
             parts = u.path.split("/")
             rname = parts[3]
-            rid = urllib.parse.unquote(parts[4], encoding="utf-8") if len(parts) > 4 else ""  # path 段中文 id：先解码再校验
+            rid = parts[4] if len(parts) > 4 else ""
             if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers") or not _safe_id(rid):
                 return self._json({"err": "bad registry/id（id 支持中文）"}, 400)
             regp = f"{ROOT}/registry/{rname}.json"
@@ -936,7 +938,7 @@ class H(BaseHTTPRequestHandler):
             # 文件名按真实扩展名落盘；同时写注册表条目（name=文件名，desc 标注导入来源）。
             parts = u.path.split("/")
             kind = parts[3]
-            rid = urllib.parse.unquote(parts[4], encoding="utf-8") if len(parts) > 4 else ""  # path 段中文 id：先解码再校验
+            rid = parts[4] if len(parts) > 4 else ""
             KIND = {"bgm": ("assets/music", "bgm.json", "music",
                             {"mp3": "audio/mpeg", "wav": "audio/x-wav", "m4a": "audio/mp4", "flac": "audio/flac"}),
                     "sfx": ("assets/sfx", "sfx.json", "audio",
