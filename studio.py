@@ -7,6 +7,7 @@ auto-cut V3 Studio · 人监视器 v0.1
 """
 import json, os, re, shutil, subprocess, sys, time, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 from urllib.parse import urlparse, parse_qs
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +16,18 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 def _safe(s):
     """URL 拼路径的成分必须过这个白名单：字母数字、下划线、中划线、点（防 ../ 穿越）。"""
     return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.]{1,80}", s) and ".." not in s
+
+
+def _filename(s):
+    """用户上传文件名校验（2026-09-14 立规：素材名是用户资产，系统不剥夺——中文全放行）。
+    只禁真正危险的：路径分隔符、空字节、.. 穿越、隐藏文件。"""
+    return bool(s) and len(s) <= 120 and s not in (".", "..") and not s.startswith(".") \
+        and "/" not in s and "\\" not in s and "\x00" not in s and ".." not in s
+
+
+def _safe_id(s):
+    """素材 id：ASCII 白名单 + 中文（CJK）——id 可能从中文文件名生成，query 传参 urlencode 后合法。"""
+    return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.\u4e00-\u9fff]{1,40}", s) and ".." not in s
 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
 PIPE = os.path.join(ROOT, "autocut3", "pipeline.py")
@@ -448,8 +461,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(u.query)
             fname = (_q.get("filename") or [""])[0]
-            if not _safe(fname) or "." not in fname:
-                return self._json({"err": "bad filename"}, 400)
+            if not _filename(fname) or "." not in fname:
+                return self._json({"err": "bad filename（禁路径分隔符/隐藏文件/..；中文名允许）"}, 400)
             pk_dir = f"{ROOT}/materials/packs/{pid}"
             if not os.path.isdir(pk_dir):
                 os.makedirs(pk_dir, exist_ok=True)  # 目录兜底：忘先 pack-create 时自动建包（2026-09-14 彭程林实战踩坑）
@@ -497,7 +510,9 @@ class H(BaseHTTPRequestHandler):
                 rotation = g["rotation"]
             except Exception:
                 pass  # 探测失败回落 0（与旧行为一致，不阻塞上传）
-            mid = re.sub(r"[^A-Za-z0-9]", "", fname.rsplit(".", 1)[0]).upper()[:12] or "MAT"
+            _stem = fname.rsplit(".", 1)[0]
+            _mnum = re.search(r"[Mm]\d{3,}", _stem)  # 手机素材命名 20260827_M0269 → 提取 M0269（短·唯一·可辨识）
+            mid = _mnum.group(0).upper() if _mnum else (re.sub(r"[\s/\\\x00]+", "_", _stem)[:24].upper() or "MAT")  # id 统一大写惯例（rmw_smoke R3-2 回归锚）
             base = mid
             # id 去重改到写锁内进行（R2-2 残留自查）：预检读只是存在性检查，
             # 并发上传各自基于陈旧快照算 id 仍会撞号——最终以锁内重读的最新 pack 为准
@@ -508,8 +523,8 @@ class H(BaseHTTPRequestHandler):
                     subprocess.run([FF, "-y", "-loglevel", "error",
                                     "-ss", ("1" if kind == "video" else "0"), "-i", dest,
                                     "-vframes", "1", "-vf", "scale=480:-2",
-                                    f"{pk_dir}/thumbs/{mid}.jpg"], capture_output=True, timeout=30)
-                    thumb = f"/files/materials/packs/{pid}/thumbs/{mid}.jpg"
+                                    f"{pk_dir}/thumbs/_t{__import__('hashlib').md5((pid + fname).encode()).hexdigest()[:10]}.jpg"], capture_output=True, timeout=30)
+                    thumb = f"/files/materials/packs/{pid}/thumbs/_t{__import__('hashlib').md5((pid + fname).encode()).hexdigest()[:10]}.jpg"
                 except Exception:
                     pass
             entry = {"id": mid, "file": fname, "kind": kind,
@@ -681,7 +696,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             mid = (_q.get("material") or [None])[0]
-            if not _safe(mid):
+            if not _safe_id(mid):
                 return self._json({"err": "bad id"}, 400)
             prov = (_q.get("vision") or [None])[0]
             force = (_q.get("force") or ["0"])[0] in ("1", "true")
@@ -704,7 +719,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             mid = (_q.get("material") or [None])[0]
-            if not _safe(mid):
+            if not _safe_id(mid):
                 return self._json({"err": "bad id"}, 400)
             prov = (_q.get("asr") or [None])[0]
             force = (_q.get("force") or ["0"])[0] in ("1", "true")
@@ -870,9 +885,10 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/registry-delete/"):
             # 删注册表条目：不动 assets 文件（可能被历史故事线引用），返回 file 供人工清理
             parts = u.path.split("/")
-            rname, rid = parts[3], parts[4] if len(parts) > 4 else ""
-            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers") or not _safe(rid):
-                return self._json({"err": "bad registry/id"}, 400)
+            rname = parts[3]
+            rid = urllib.parse.unquote(parts[4], encoding="utf-8") if len(parts) > 4 else ""  # path 段中文 id：先解码再校验
+            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers") or not _safe_id(rid):
+                return self._json({"err": "bad registry/id（id 支持中文）"}, 400)
             regp = f"{ROOT}/registry/{rname}.json"
             reg = jload(regp, {})
             if rid not in reg:
@@ -886,18 +902,19 @@ class H(BaseHTTPRequestHandler):
             # + registry/bgm.json 自动加条目。白名单按类别：音频(bgm,sfx) mp3/wav/m4a/flac，图片(stickers) png。
             # 文件名按真实扩展名落盘；同时写注册表条目（name=文件名，desc 标注导入来源）。
             parts = u.path.split("/")
-            kind, rid = parts[3], parts[4] if len(parts) > 4 else ""
+            kind = parts[3]
+            rid = urllib.parse.unquote(parts[4], encoding="utf-8") if len(parts) > 4 else ""  # path 段中文 id：先解码再校验
             KIND = {"bgm": ("assets/music", "bgm.json", "music",
                             {"mp3": "audio/mpeg", "wav": "audio/x-wav", "m4a": "audio/mp4", "flac": "audio/flac"}),
                     "sfx": ("assets/sfx", "sfx.json", "audio",
                             {"mp3": "audio/mpeg", "wav": "audio/x-wav", "m4a": "audio/mp4", "flac": "audio/flac"}),
                     "stickers": ("assets/stickers", "stickers.json", "image", {"png": "image/png"})}
-            if kind not in KIND or not _safe(rid):
-                return self._json({"err": "bad kind/id"}, 400)
+            if kind not in KIND or not _safe_id(rid):
+                return self._json({"err": "bad kind/id（id 支持中文；禁路径分隔符/..）"}, 400)
             _q = parse_qs(u.query)
             fname = (_q.get("filename") or [""])[0]
-            if not _safe(fname) or "." not in fname:
-                return self._json({"err": "bad filename"}, 400)
+            if not _filename(fname) or "." not in fname:
+                return self._json({"err": "bad filename（中文名允许；禁路径分隔符/隐藏文件/..）"}, 400)
             ext = fname.rsplit(".", 1)[-1].lower()
             subdir, regf, _, mime = KIND[kind]
             if ext not in mime:
