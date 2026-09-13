@@ -49,6 +49,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
     changed = False
     for f in pk.get("files", []):
         aud = f.setdefault("audit", {})
+        print("  · 转写中 %s (%dMB)…" % (f.get("id"), int((f.get("size_mb") or 0))), flush=True) if not (aud.get("transcript") == "done" and not force) else None
         if aud.get("transcript") == "done" and not force:
             continue
         if material and f.get("id") != material:

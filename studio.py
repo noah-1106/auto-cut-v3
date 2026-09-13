@@ -451,6 +451,8 @@ class H(BaseHTTPRequestHandler):
             if not _safe(fname) or "." not in fname:
                 return self._json({"err": "bad filename"}, 400)
             pk_dir = f"{ROOT}/materials/packs/{pid}"
+            if not os.path.isdir(pk_dir):
+                os.makedirs(pk_dir, exist_ok=True)  # 目录兜底：忘先 pack-create 时自动建包（2026-09-14 彭程林实战踩坑）
             n = int(self.headers.get("Content-Length", 0))
             if n <= 0 or n > 500 << 20:
                 return self._json({"err": "bad size %d（上限 500MB）" % n}, 400)
@@ -472,8 +474,9 @@ class H(BaseHTTPRequestHandler):
             fcntl.flock(_lf, fcntl.LOCK_EX)
             try:
                 pk = jload(f"{pk_dir}/pack.json", {})
-                if not pk:
-                    return self._json({"err": "no such pack"}, 404)
+                if not pk:  # 目录兜底的伴生逻辑：pack.json 缺失时初始化空壳（与 pack-create 同构）
+                    pk = {"id": pid, "name": pid, "files": []}
+                    json.dump(pk, open(f"{pk_dir}/pack.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             finally:
                 fcntl.flock(_lf, fcntl.LOCK_UN); _lf.close()
             remain = n

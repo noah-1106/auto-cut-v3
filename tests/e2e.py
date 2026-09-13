@@ -98,6 +98,7 @@ def t4_sync():
 def t5_upload():
     # 测试夹具（2026-09-11 rotation 必检升级）：直拷苏炜素材 2s——带真实 rotation=-90 的
     # 手机素材（编码 1920x1080）。合成 testsrc 无 rotation，恰好漏掉了人侧上传的几何盲区。
+    api("/api/pack-create/", method="POST", body={"id": "nature-stock", "name": "E2E 夹具包"})  # 幂等：已存在 409 忽略
     tmp = "/tmp/e2e_upload.mp4"
     subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
                     "-ss", "0", "-t", "2",
