@@ -806,6 +806,20 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "file": f})
             except Exception as e:
                 return self._json({"ok": False, "err": str(e)[:200]}, 500)
+        if u.path.startswith("/api/digest/"):
+            # 编排闭环：单素材识别后手动触发包级盘点（digest = 导演视角统一理解，dossier 头）
+            pid_ = u.path.split("/")[3]
+            if not _safe_id(pid_):
+                return self._json({"err": "bad id"}, 400)
+            try:
+                sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+                import understand as U
+                d = U.build_digest(pid_)
+                return self._json({"ok": True, "digest": d})
+            except RuntimeError as e:
+                return self._json({"ok": False, "err": str(e)[:180]}, 400)
+            except Exception as e:
+                return self._json({"ok": False, "err": str(e)[:200]}, 500)
         if u.path.startswith("/api/transcribe/"):
             # 人机等价入口：Agent 走 CLI，人点素材卡「转写」按钮——同一落盘 pack.json
             pid_ = u.path.split("/")[3]

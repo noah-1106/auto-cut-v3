@@ -656,6 +656,72 @@ def t23_dossier_selfaudit():
 
 
 # ---------------------------------------------------------------- T24 proofread v2 分级+队列
+def t26_voiceover_orchestration():
+    """M0269 错判修复的三缺口回归锚（Noah："改完测试了吗"）——
+    T26a 念稿指纹检测器（曾跑完就丢，无回归保护）；
+    T26b 强制升级分支（dup≥12 时 narration→voiceover，M0269 实测时模型自己判对、分支从未被触发）；
+    T26c digest 消费链（dossier 头 + voiceover 表述，此前只有打印验证）。全部离线 tempdir 隔离。"""
+    import tempfile, shutil
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    try:
+        import transcribe as TR
+        # ── T26a 指纹检测器（正式用例；M0269 台词清洗后最长重复 23 字）──
+        m0269_line = ("我们做的是一整张欧松板加固，如果不做的话，后面吊顶下坠全是安全隐患。"
+                      "我们做的是一整张欧松板加固，如果不做的话，后面吊顶会下坠，全是安全隐患。")
+        a1 = TR._dup_len(m0269_line) >= 12
+        a2 = TR._dup_len("大家好今天我们来看看厨房防水做法第一步先刷第一遍") == 0
+        a3 = TR._dup_len("") == 0
+        check("T26a 念稿指纹检测（重录≥12字/正常独白=0/空文本=0）", a1 and a2 and a3,
+              "dup=%d/%d/%d" % (TR._dup_len(m0269_line),
+                                TR._dup_len("大家好今天我们来看看厨房防水做法第一步先刷第一遍"),
+                                TR._dup_len("")))
+        # ── T26b 强制升级分支 ──
+        import vision as V
+        def _mk(ct):
+            return {"summary": "x", "content_type": ct, "moments": [], "ocr": [], "defects": [], "usage": ["x"]}
+        b1 = V._normalize_v2(_mk("narration"), 19.0, "test", dup=23)
+        b2 = V._normalize_v2(_mk("narration"), 19.0, "test", dup=0)
+        b3 = V._normalize_v2(_mk("voiceover"), 19.0, "test", dup=23)
+        ok = (b1["content_type"] == "voiceover" and any("dup=23" in f for f in b1["flags"])
+              and b2["content_type"] == "narration"
+              and b3["content_type"] == "voiceover" and not any("强制升级" in f for f in b3["flags"]))
+        check("T26b 念稿指纹强制升级（dup=23:narration→voiceover / dup=0:保持 / 模型自判:无flag）", ok,
+              "%s/%s/%s" % (b1["content_type"], b2["content_type"], b3["content_type"]))
+        # ── T26c digest 消费链（dossier 头 + voiceover 表述）──
+        import draft as D
+        tmp = tempfile.mkdtemp(prefix="t26_")
+        old_root = D.ROOT
+        try:
+            D.ROOT = tmp
+            pp = os.path.join(tmp, "materials", "packs", "tp")
+            os.makedirs(pp)
+            json.dump({
+                "id": "tp",
+                "digest": {"at": "2026-09-14T07:00:00", "theme": "测试题材",
+                           "inventory": {"a_roll_candidates": ["A01"], "broll_pool": ["B01"],
+                                         "voiceover_sources": ["M0269"], "ambient": [], "gaps": "缺成果镜头"},
+                           "roles": [{"id": "M0269", "suggest": "旁白音轨源，词轨铺broll"}]},
+                "files": [
+                    {"id": "M0269", "kind": "video", "usable": True, "duration": 19.0,
+                     "transcript": {"text": "测试台词", "scripted_dup": 23, "words": []},
+                     "visual": {"desc": "念稿", "content_type": "voiceover", "usage": "旁白音轨源"}},
+                    {"id": "A01", "kind": "video", "usable": True, "duration": 20.0,
+                     "transcript": {"text": "正常口播", "words": []},
+                     "visual": {"desc": "口播出镜", "content_type": "narration", "usage": "主轴"}}]},
+                open(os.path.join(pp, "pack.json"), "w", encoding="utf-8"), ensure_ascii=False)
+            dos, mats = D.build_dossier(["tp"])
+            c1 = "素材包盘点" in dos and "旁白音轨源：M0269" in dos and "缺成果镜头" in dos
+            c2 = "🎙voiceover" in dos and "词轨可作旁白音轨源" in dos
+            c3 = "逐条明细" in dos and "M0269" in mats and mats["M0269"].get("transcript", {}).get("scripted_dup") == 23
+            check("T26c digest 消费链（盘点头/voiceover表述/明细降级无digest也可用）", c1 and c2 and c3,
+                  "盘点头=%s voiceover标注=%s mats穿透=%s" % (c1, c2, c3))
+        finally:
+            D.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T26 编排回归", False, str(e)[:120])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -767,6 +833,7 @@ def main():
     t23_dossier_selfaudit()
     t24_proofread_v2()
     t24b_proofread_words_sync()
+    t26_voiceover_orchestration()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     if FAIL:

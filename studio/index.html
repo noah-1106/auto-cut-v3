@@ -398,6 +398,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
     <button class="ghost" id="tallbtn" onclick="transcribeAll()">↻ 转写全部待审</button>
     <button class="ghost" id="uallbtn" onclick="understandAll()">◉ 识别全部待审</button>
     <input type="text" id="tsearch" placeholder="按台词搜素材：试试「定时炸弹」或「窗帘盒」" style="max-width:360px" oninput="renderPack()">
+    <button class="ghost" style="font-size:11px" onclick="rebuildDigest()" title="包级统一理解：导演视角盘点全部素材（题材/资产清单/逐条定位/缺口）。识别有增删后建议重跑——draft 起草会以它开头">📋 重新盘点</button>
     <span class="statusline" id="tallstat"></span>
   </div>
   <div id="packgroups"></div>
@@ -1080,6 +1081,17 @@ async function previewBeat(no){
 }
 
 /* ═══ 素材库 ═══ */
+async function rebuildDigest(){
+  if(!VIEW.proj)return;
+  const btn=event.target;btn.disabled=true;btn.textContent='⏳ 盘点中…（全包 LLM 调用，约 15-30s）';
+  try{
+    const st=await fetch('/api/digest/'+VIEW.proj,{method:'POST'});
+    const d=await st.json();
+    if(d.ok){setStatus('📋 素材包盘点已更新：'+(d.digest.theme||'').slice(0,50));PULSE=null;}
+    else setStatus('盘点失败：'+(d.err||''),'bad');
+  }catch(e){setStatus('盘点请求失败：'+e,'bad');}
+  btn.disabled=false;btn.textContent='📋 重新盘点';
+}
 function renderPack(){
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
   const fs=(P.pack_files||[]).filter(f=>!q||((f.transcript&&f.transcript.text)||'').toLowerCase().indexOf(q)>=0||(f.id||'').toLowerCase().indexOf(q)>=0);
