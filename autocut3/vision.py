@@ -19,6 +19,8 @@ v2 变更（2026-09-12，A/B 实测背书 docs/ab-vision-20260912/）：
   词轨先验：说话区间+要点注入（A/B 实测：延迟 -39%，content_type 判对 3/3，OCR 召回↑）
   铁律入提示词：只描述确实看到的/不确定写不确定/时间不越界
   降级：v2 失败 → 自动回退 3帧旧路径（schema=1，frames=帧数，如实标注）
+  v2.1 通用化（2026-09-14，Noah 质询"只考虑了装修素材？"）：去题材预设/镜头语言入 moments/
+  usage 不限题材。JSON 契约零改动。生效批次前 A/B 对比 docs/ab-vision-20260912/（旧基线）
 """
 import base64, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
 
@@ -84,19 +86,28 @@ def _speech_prior(words, dur):
 
 
 def _prompt_v2(prior, dur):
-    return ("这是一段竖版短视频素材，时长 %.1f 秒。已知信息（来自音频转写，可信）：\n%s\n"
+    # v2.1 通用化（2026-09-14，业界调研：NVIDIA 视频摘要蓝图/ClipCatalog 编目实践/Qwen2.5-VL 事件定位）：
+    # ① 去题材预设（原"竖版短视频"会把横版/录屏/风景带偏）②content_type 按"内容性质"而非"题材"定义
+    # ③moments 补镜头语言（景别/运镜——Agent 选"特写佐证"才有依据）④usage 枚举标注不限题材。
+    # JSON 键名契约零改动（desc/ocr/usage/content_type/moments/defects——draft.py/审计依赖）。
+    return ("以下是一条原始视频素材，时长 %.1f 秒。已知信息（来自音频转写，可信）：\n%s\n"
             "请观看整段视频，只输出合法 JSON（不要 markdown 代码块、不要任何多余文字）：\n"
-            '{"summary":"一句话：这条视频拍了什么、谁在做什么",\n'
-            '"content_type":"narration|meta|dialogue|ambient|broll 五选一。narration=对镜头讲内容；'
-            'meta=拍摄指挥/说戏（谈补镜头、后期、拍摄安排等事务）；dialogue=多人与事项相关的对话；'
-            'ambient=纯环境画面；broll=纯画面展示",\n'
-            '"moments":[{"t":[起,止],"note":"该时段画面发生了什么"}],\n'
+            '{"summary":"一句话：这条视频拍了什么、谁在做什么。题材不限（口播/教程/美食/旅行/'
+            '产品/录屏/表演/风景等一视同仁），按实际所见描述",\n'
+            '"content_type":"narration|meta|dialogue|ambient|broll 五选一，按内容性质而非题材分类。'
+            'narration=单人对镜头讲话或旁白讲解；'
+            'meta=拍摄事务（说戏/指挥/要求重拍/谈补镜头后期等）；dialogue=多人围绕具体事项的对话；'
+            'ambient=环境/氛围画面（无主体或主体不承担内容）；broll=纯画面展示（产品/风景/过程/'
+            '屏幕内容/动作特写等）",\n'
+            '"moments":[{"t":[起,止],"note":"该时段发生了什么+怎么拍的（景别：远/中/近/特写；'
+            '运镜：固定/横摇/推拉/手持）"}],\n'
             '"ocr":[{"t":出现的大致秒,"text":"画面文字","where":"画面位置"}],\n'
             '"defects":[{"t":[起,止],"type":"blur|shake|exposure|framing|still|other",'
             '"note":"画面质量问题；没有则空数组"}],\n'
-            '"usage":["剪辑用途建议，可多个（开场钩子/B-roll/特写佐证/过程记录等）"]}\n'
+            '"usage":["剪辑用途建议，可多个；基于实际所见、不限题材（如：开场钩子/B-roll/'
+            '细节特写/过程记录/氛围镜头/讲解配图等）"]}\n'
             "铁律：只描述确实看到的；不确定就写'不确定'，禁止推断补全；"
-            "moments/ocr/defects 里的时间必须以秒为单位且不得超出 0-%.1f 秒；"
+            "moments/ocr/defects 里的时间必须以秒为单位、保留 1 位小数、不得超出 0-%.1f 秒；"
             "画面无文字则 ocr 为空数组。") % (dur, prior, dur)
 
 
@@ -222,7 +233,7 @@ def _legacy_video(src, becfg, td, provider):
 请只输出合法 JSON（不要 markdown 代码块、不要任何多余文字）：
 {"desc":"一段话描述画面内容：场景、人物/物体、动作、构图与光线",
 "ocr":["画面中出现的所有文字（招牌/字幕/标签/水印），按出现顺序；没有则空数组"],
-"usage":"这条素材在短视频剪辑中的用途建议（如：开场钩子/空镜B-roll/过程记录/特写佐证/工艺展示，一句话）"}''')
+"usage":"这条素材在剪辑中的用途建议，基于实际所见、不限题材（如：开场钩子/空镜B-roll/过程记录/细节特写/氛围镜头，一句话）"}''')
     content.append({"type": "text", "text": text})
     key = asr.resolve_key(becfg)
     payload = {"model": becfg.get("model", "MiniMax-M3"),
@@ -315,9 +326,9 @@ def understand(src, kind, provider=None, words=None):
 
 
 _IMAGE_PROMPT_TAIL = '''请只输出合法 JSON（不要 markdown 代码块、不要任何多余文字）：
-{"desc":"一段话描述画面内容：场景、人物/物体、动作、构图与光线",
+{"desc":"一段话描述画面内容：场景、人物/物体、动作、构图与光线。题材不限，按实际所见",
 "ocr":["画面中出现的所有文字（招牌/字幕/标签/水印），按出现顺序；没有则空数组"],
-"usage":"这条素材在短视频剪辑中的用途建议（如：开场钩子/空镜B-roll/过程记录/特写佐证/工艺展示，一句话）"}'''
+"usage":"这条素材在剪辑中的用途建议，基于实际所见、不限题材（如：开场钩子/空镜B-roll/过程记录/细节特写/氛围镜头，一句话）"}'''
 
 
 if __name__ == "__main__":
