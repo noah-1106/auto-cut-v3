@@ -680,7 +680,6 @@ class H(BaseHTTPRequestHandler):
                                     diff = [(i, a, b) for i, (a, b) in enumerate(zip(old_text, new_text)) if a != b]
                                     segs_, cur = [], [diff[0]]
                                     for prev, cur_d in zip(diff, diff[1:]):
-                                        (cur.append(cur_d) if cur_d[0] == prev[0] + 1 else (segs_.append(cur), cur.__class__([cur_d]) and cur.extend([]))) if False else None
                                         if cur_d[0] == prev[0] + 1:
                                             cur.append(cur_d)
                                         else:
@@ -697,6 +696,7 @@ class H(BaseHTTPRequestHandler):
                                     idx = 0
                                     for w in tr["words"]:
                                         w["text"] = "".join(chars[idx:idx + per]); idx += per
+                                    tr["words"] = [w for w in tr["words"] if w.get("text")]  # 空词过滤（与 cut 端对齐）
                             tr["text"] = new_text
                         f.setdefault("audit", {})["proofread"] = "done"
                         json.dump(pj2, open(pp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -779,10 +779,10 @@ class H(BaseHTTPRequestHandler):
                 sid, draft, beats = D.run(name, intent, save=True)
             except SystemExit as e:
                 return self._json({"err": "起草前置缺失（LLM key 未配置？）：%s" % (str(e.code) if e.code else "")[:180]}, 500)  # sys.exit 在 HTTP 线程里会打穿请求（Claude P2-②）
-                return self._json({"ok": True, "sid": sid, "beats": len(beats),
-                                   "title": draft.get("title"), "outline": draft.get("outline")})
             except Exception as e:
                 return self._json({"err": str(e)[:250]}, 500)
+            return self._json({"ok": True, "sid": sid, "beats": len(beats),
+                               "title": draft.get("title"), "outline": draft.get("outline")})
         if u.path.startswith("/api/understand/"):
             # 人机等价入口：Agent 走 CLI，人点素材卡「⟳ 画面识别」——同一落盘 pack.json
             pid_ = u.path.split("/")[3]

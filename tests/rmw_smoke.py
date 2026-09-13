@@ -77,7 +77,9 @@ def t_rmw_upload():
     return ok
 
 def t_rmw_lockmap():
-    """静态守卫：studio.py + video_gen.py 的每个 pack.json【写点】往前 20 行内必须有 flock。
+    """静态守卫：studio.py + video_gen.py 的每个 pack.json【写点】往前 60 行内必须有 flock。
+    （窗口 20→60：2026-09-14 词轨同步约 40 行合法代码插入锁与 dump 之间触发误报——
+      启发式窗口必须大于最大合法临界区；锁的"在位性"靠窗口，原子性靠 rmw_smoke 动态测试双保险）
     （只读者不加锁是设计——半截 JSON 属可用性风险已 deferred；写者才是 RMW 原子性的责任人）"""
     bad = []
     for fname in ("studio.py", os.path.join("autocut3", "video_gen.py")):
@@ -87,7 +89,7 @@ def t_rmw_lockmap():
                         or ("json.dump" in ln and ("pk2" in ln or "pj2" in ln))  # dump 持久句柄
                         or ("open(pp" in ln and '"w"' in ln))
             if is_write:
-                win = "\n".join(lines[max(0, i - 20):i])
+                win = "\n".join(lines[max(0, i - 60):i])
                 if "flock" not in win and "锁豁免注记" not in win:  # 初建写（files=[] 无并发对象）显式豁免
                     bad.append("%s:%d" % (fname, i + 1))
     ok = not bad
