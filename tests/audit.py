@@ -38,11 +38,9 @@ for i, ln in param_lines:
     if var.startswith("_") and var.endswith("_"): continue
     EXEMPT = {"sid_render_progress", "kind"}  # 已人工复核：kind 在 KIND 白名单内 / sid 仅入内存 job key
     if not re.search(r'_safe\(|_safe_id\(|_filename\(|isdigit\(\)|in \("|\.(lower\(\))', window):
-        if var == "kind" and "KIND" in "
-".join(lines[i:i+12]):
+        if var == "kind" and "KIND" in "\n".join(lines[i:i+12]):
             continue
-        if var == "rid" and "unquote" in window or var == "rid" and "KIND" in "
-".join(lines[i:i+12]):
+        if var == "rid" and "unquote" in window or var == "rid" and "KIND" in "\n".join(lines[i:i+12]):
             continue
         if var == "sid" and "_q.get(\"story\")" in ln:
             continue  # story 仅入 RENDER_JOBS key / beat CLI 参数，无文件系统路径拼接
