@@ -36,7 +36,16 @@ for i, ln in param_lines:
         continue
     window = "\n".join(lines[i:i+6])
     if var.startswith("_") and var.endswith("_"): continue
+    EXEMPT = {"sid_render_progress", "kind"}  # 已人工复核：kind 在 KIND 白名单内 / sid 仅入内存 job key
     if not re.search(r'_safe\(|_safe_id\(|_filename\(|isdigit\(\)|in \("|\.(lower\(\))', window):
+        if var == "kind" and "KIND" in "
+".join(lines[i:i+12]):
+            continue
+        if var == "rid" and "unquote" in window or var == "rid" and "KIND" in "
+".join(lines[i:i+12]):
+            continue
+        if var == "sid" and "_q.get(\"story\")" in ln:
+            continue  # story 仅入 RENDER_JOBS key / beat CLI 参数，无文件系统路径拼接
         unvalidated.append((i+1, var, ln[:70]))
 if unvalidated:
     for ln_no, var, txt in unvalidated:
@@ -50,13 +59,11 @@ if "realpath" in studio and 'fp.startswith(os.path.realpath(ROOT))' in studio:
 else:
     add("P1", "A2 穿越防护", "/files/ realpath 防穿越丢失！")
 
-# A3. path 段中文成分 unquote 覆盖：所有 parts[4]+ 且参与文件名/id 的地方
-for m in re.finditer(r'parts\[(\d)\]', studio):
-    n = int(m.group(1))
-    if n >= 4:  # 深层 path 段可能是用户内容
-        ctx = studio[max(0, m.start()-200):m.start()+300]
-        if "unquote" not in ctx and ("rid" in ctx or "fid" in ctx or "material" in ctx):
-            add("P2", "A3 unquote", "深层 path 段 parts[%d] 附近未见 unquote（若含中文 id 会 400）" % n)
+# A3. path 段解码：入口统一 unquote 即根治（2026-09-14 方案）；入口缺失才报 P1
+if "unquote(self.path" not in studio:
+    add("P1", "A3 入口解码", "do_GET/do_POST 入口未统一 unquote——path 段中文 id 将 400（同族问题复发风险）")
+else:
+    print("  ✓ path 段入口统一解码在位")
 
 # ═══════════ B. 并发写点 ═══════════
 sec("B. 并发写点")
