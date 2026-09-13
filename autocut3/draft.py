@@ -75,6 +75,18 @@ def build_dossier(packs):
         if not os.path.exists(pp):
             continue
         pk = json.load(open(pp, encoding="utf-8"))
+        dg = pk.get("digest")
+        if dg:
+            rows.append("【素材包盘点（导演视角，digest 生成于 %s）】题材：%s｜可作A轨：%s｜B-roll池：%s｜旁白音轨源：%s｜空镜：%s%s"
+                        % (dg.get("at", "?")[:10], dg.get("theme", ""),
+                           ",".join(dg.get("inventory", {}).get("a_roll_candidates", [])) or "无",
+                           ",".join(dg.get("inventory", {}).get("broll_pool", [])) or "无",
+                           ",".join(dg.get("inventory", {}).get("voiceover_sources", [])) or "无",
+                           ",".join(dg.get("inventory", {}).get("ambient", [])) or "无",
+                           ("｜缺口：" + dg["inventory"]["gaps"] if dg.get("inventory", {}).get("gaps") else "")))
+            for r_ in dg.get("roles", []):
+                rows.append("  · 定位 %s：%s" % (r_.get("id"), r_.get("suggest", "")))
+            rows.append("——以下为逐条明细——")
         for f in pk.get("files", []):
             kind = f.get("kind", "video")
             usable = bool(f.get("usable", True))
@@ -98,6 +110,8 @@ def build_dossier(packs):
                 # R3-3：deny 清单与 dossier.narration_eligible 同集合（broll 曾横幅判非而档案判可入=口径分裂）
                 if ct in ("meta", "ambient", "broll"):
                     line += " ⛔%s类素材：禁作口播A轨" % ct
+                if ct == "voiceover":
+                    line += " 🎙voiceover：念稿/配音录制——词轨可作旁白音轨源，画面不建议作A轨主体（Noah 2026-09-14：M0269 错判修复）"
                 if v.get("usage"):
                     line += "（用途：%s）" % v["usage"]
             if kind == "image":

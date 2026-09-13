@@ -17,6 +17,7 @@
 import argparse, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import asr  # noqa: E402  digest 时间戳用（datetime_iso）
 import vision  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -60,7 +61,8 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
             continue
         try:
             r = vision.understand(src, kind, provider=provider,
-                                  words=(f.get("transcript") or {}).get("words"))
+                                  words=(f.get("transcript") or {}).get("words"),
+                                  dup=int((f.get("transcript") or {}).get("scripted_dup") or 0))  # 念稿指纹随词轨入视觉（M0269 错判修复）
         except Exception as e:
             out[f["id"]] = {"ok": False, "err": str(e)[:120]}
             continue
@@ -101,6 +103,70 @@ def main():
         if not res:
             total["skip"] += len(json.load(open(os.path.join(ROOT, "materials", "packs", pid, "pack.json"), encoding="utf-8")).get("files", []))
     print("UNDERSTAND DONE: +%d (跳过 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]))
+    # 编排闭环（Noah 2026-09-14）：单素材识别全部完成后 → 包级统一理解 digest。
+    # 没有这层，起草 LLM 面对的是扁平列表，悟不出"M0269 是旁白音轨源"这类整体定位——
+    # 这是编排缺口，不是识别提示词的错。单素材模式（--material）不触发（盘点需要全量视图）。
+    if not a.material and total["done"] > 0:
+        for pid in packs:
+            try:
+                d = build_digest(pid)
+                print("  📋 DIGEST %s：%s（A轨候选%d/B-roll池%d/配音源%d）"
+                      % (pid, d.get("theme", "")[:40],
+                         len(d.get("inventory", {}).get("a_roll_candidates", [])),
+                         len(d.get("inventory", {}).get("broll_pool", [])),
+                         len(d.get("inventory", {}).get("voiceover_sources", []))))
+            except Exception as e:
+                print("  ⚠ DIGEST %s 失败（不影响素材识别结果）：%s" % (pid, str(e)[:100]))
+
+
+def build_digest(pid):
+    """包级统一理解：汇总全部单素材识别结果 → LLM 一次调用产出导演视角盘点。
+    产物 pack.json.digest = {theme, inventory{a_roll_candidates,broll_pool,voiceover_sources,ambient,gaps},
+    roles[{id,suggest}], narrative_assets}。draft.build_dossier 读它做档案头。"""
+    import fcntl
+    pp = os.path.join(ROOT, "materials", "packs", pid, "pack.json")
+    pk = json.load(open(pp, encoding="utf-8"))
+    lines = []
+    for f in pk.get("files", []):
+        if not f.get("usable", True):
+            lines.append("- %s：拍摄废片（禁用）" % f["id"]); continue
+        tr = f.get("transcript") or {}
+        v = f.get("visual") or {}
+        parts = ["- %s（%ss，%s）" % (f["id"], f.get("duration", "?"), (v.get("content_type") or "未识别"))]
+        if tr.get("text"):
+            parts.append("台词：%s" % tr["text"][:60])
+        if tr.get("scripted_dup"):
+            parts.append("【台词≥%d字逐字重复=念稿/重录指纹】" % tr["scripted_dup"])
+        if v.get("desc"):
+            parts.append("画面：%s" % v["desc"][:60])
+        if v.get("usage"):
+            parts.append("用途：%s" % str(v["usage"])[:50])
+        lines.append(" ".join(parts))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import draft as D
+    prompt = (
+        "以下是同一个素材包内全部素材的识别结果。请做导演视角的统一盘点，只输出合法 JSON：\n"
+        '{"theme":"一句话：这包素材整体拍的是什么（题材/场景/叙事价值）",\n'
+        '"inventory":{"a_roll_candidates":["适合作出镜口播主轴的素材id——自然讲话、内容成段"],'
+        '"broll_pool":["适合垫画面的素材id"],'
+        '"voiceover_sources":["念稿/配音录制素材id——词轨是主资产，画面仅辅助"],'
+        '"ambient":["空镜/环境素材id"],'
+        '"gaps":"这包素材缺什么（如缺全景/缺成果镜头/缺收尾）——没有就空字符串"},\n'
+        '"roles":[{"id":"素材id","suggest":"一句话：这条在整体中的最佳定位与用法"}],\n'
+        '"narrative_assets":"这包素材能支撑的叙事主题，一句话"}\n'
+        "铁律：分类要尊重识别层给出的 content_type 和念稿指纹，不要重新臆测；"
+        "素材id 必须来自清单，禁止编造。\n\n素材清单：\n" + "\n".join(lines))
+    d = D.extract_json(D.chat_llm([{"role": "user", "content": prompt}]))
+    if not isinstance(d, dict):
+        raise RuntimeError("digest LLM 未返回合法 JSON")
+    d["at"] = asr.datetime_iso()
+    with open(pp + ".lock", "w") as _lf:
+        import fcntl as _f
+        _f.flock(_lf, _f.LOCK_EX)
+        pk2 = json.load(open(pp, encoding="utf-8"))
+        pk2["digest"] = d
+        json.dump(pk2, open(pp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return d
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@
   files[i].audit.transcript     = "done"
 供应商由 config/services.json 登记（换供应商不改代码），--asr 可临时覆盖做 A/B 对比。
 """
-import argparse, json, os, sys
+import argparse, json, os, re, sys  # re：_dup_len 念稿指纹检测（漏 import=NameError 雷，Claude 审查同族）
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr  # noqa: E402
@@ -37,6 +37,21 @@ def _locked(pdir):
     lf = open(os.path.join(pdir, ".lock"), "w")
     fcntl.flock(lf, fcntl.LOCK_EX)
     return lf
+
+
+def _dup_len(text, min_len=12):
+    """最长逐字重复子串长度（标点清洗后）。≥12 字逐字重复 = 念稿/重录指纹（自然讲话不会逐字复述）。
+    O(n²) 对转写文本量级（<500 字）足够；返回最长重复字数，0=无重复。"""
+    t = re.sub(r"[，。！？、,.!?\s]", "", text or "")
+    best = 0
+    n = len(t)
+    for i in range(n - min_len + 1):
+        # 从最长可能往下探，命中即记
+        for L in range(n - i, best, -1):
+            if L >= min_len and t.count(t[i:i + L]) >= 2:
+                best = max(best, L)
+                break
+    return best
 
 
 def transcribe_pack(pack_id, material=None, provider=None, force=False):
@@ -70,6 +85,9 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
         f["transcript"] = {"provider": r["provider"], "tier": r["tier"], "text": r["text"],
                            "words": r["words"], "duration": r["duration"],
                            "has_speech": has_speech, "at": r["at"]}
+        _dup = _dup_len(r["text"])
+        if _dup >= 12:
+            f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（Noah 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
         aud["transcript"] = "done"
         changed = True
         out[f["id"]] = {"ok": True, "tier": r["tier"], "words": len(r["words"]),

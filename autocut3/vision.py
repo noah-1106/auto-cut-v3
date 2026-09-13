@@ -94,8 +94,10 @@ def _prompt_v2(prior, dur):
             "请观看整段视频，只输出合法 JSON（不要 markdown 代码块、不要任何多余文字）：\n"
             '{"summary":"一句话：这条视频拍了什么、谁在做什么。题材不限（口播/教程/美食/旅行/'
             '产品/录屏/表演/风景等一视同仁），按实际所见描述",\n'
-            '"content_type":"narration|meta|dialogue|ambient|broll 五选一，按内容性质而非题材分类。'
-            'narration=单人对镜头讲话或旁白讲解；'
+            '"content_type":"narration|voiceover|meta|dialogue|ambient|broll 六选一，按内容性质而非题材分类。'
+            'narration=对镜头自然讲话/讲解（出镜即内容主体）；'
+            'voiceover=念稿/配音录制（对着手机或剧本念词：手持稿件、目光在稿件与镜头间切换、'
+            '明显朗读腔、或台词明显重复——画面常是录音的副产品，音轨才是主资产）；'
             'meta=拍摄事务（说戏/指挥/要求重拍/谈补镜头后期等）；dialogue=多人围绕具体事项的对话；'
             'ambient=环境/氛围画面（无主体或主体不承担内容）；broll=纯画面展示（产品/风景/过程/'
             '屏幕内容/动作特写等）",\n'
@@ -105,7 +107,8 @@ def _prompt_v2(prior, dur):
             '"defects":[{"t":[起,止],"type":"blur|shake|exposure|framing|still|other",'
             '"note":"画面质量问题；没有则空数组"}],\n'
             '"usage":["剪辑用途建议，可多个；基于实际所见、不限题材（如：开场钩子/B-roll/'
-            '细节特写/过程记录/氛围镜头/讲解配图等）"]}\n'
+            '细节特写/过程记录/氛围镜头/讲解配图等）。识别到念稿/配音录制特征时，优先给'
+            '旁白音轨类用途（画外音/配音源），不要推荐作出镜主体"]}\n'
             "铁律：只描述确实看到的；不确定就写'不确定'，禁止推断补全；"
             "moments/ocr/defects 里的时间必须以秒为单位、保留 1 位小数、不得超出 0-%.1f 秒；"
             "画面无文字则 ocr 为空数组。") % (dur, prior, dur)
@@ -165,15 +168,20 @@ def _clamp_t(x, dur):
     return (round(a, 1), round(b, 1), not (abs(oa - a) < 1e-6 and abs(ob - b) < 1e-6))
 
 
-def _normalize_v2(obj, dur, provider, at=None):
+def _normalize_v2(obj, dur, provider, at=None, dup=0):
     """M3 v2 输出 → 归一化契约（兼容三键 + 结构化新键；越界钳制并如实标注 flags）。"""
     flags = []
     desc = str(obj.get("summary") or obj.get("desc") or "").strip()
     ct = str(obj.get("content_type") or "").strip().lower()
-    if ct not in ("narration", "meta", "dialogue", "ambient", "broll"):
+    if ct not in ("narration", "voiceover", "meta", "dialogue", "ambient", "broll"):
         if ct:
             flags.append("content_type 非法值丢弃:%s" % ct[:20])
         ct = ""
+    # 念稿/重录指纹（transcribe 的确定性信号）——dup≥12 且模型判 narration 时强制升级 voiceover：
+    # 自然讲话不会逐字复述 ≥12 字；模型只看画面判不出"念稿"，指纹信号优先于画面推断（M0269 错判根因修复）
+    if dup >= 12 and ct == "narration":
+        ct = "voiceover"
+        flags.append("dup=%d 逐字重复指纹，narration 强制升级 voiceover" % dup)
 
     def tlist(key):
         out, clamped, dropped = [], 0, 0
@@ -262,7 +270,7 @@ def _legacy_video(src, becfg, td, provider):
             "flags": ["v2 失败降级 3 帧路径"]}
 
 
-def understand(src, kind, provider=None, words=None):
+def understand(src, kind, provider=None, words=None, dup=0):
     """主入口：素材文件 → 归一化视觉档案（契约见文件头）。kind: image|video"""
     if kind == "audio":
         raise ValueError("音频无视觉轨——理解走 asr.py")
@@ -301,7 +309,10 @@ def understand(src, kind, provider=None, words=None):
         if dur > 0.5:
             try:
                 v720 = _transcode_720(src, tmpdir)
-                pr = _prompt_v2(_speech_prior(words, dur), dur)
+                pr = _speech_prior(words, dur)
+                if dup >= 12:
+                    pr += "（注意：音频转写检测到台词存在 ≥%d 字逐字重复——念稿/重录特征）" % dup
+                pr = _prompt_v2(pr, dur)
                 obj = None
                 # R3-5 成本注记：attempt(2) × 阶梯(3) = 持续空回答时最多 6 次计费调用才降级 3 帧。
                 # 接受此上限（真实素材 think 持续吃满极罕见），不做跨层去重
@@ -316,7 +327,7 @@ def understand(src, kind, provider=None, words=None):
                         if attempt == 2:
                             obj = None
                 if obj:
-                    return _normalize_v2(obj, dur, provider)
+                    return _normalize_v2(obj, dur, provider, dup=dup)
             except Exception:
                 pass  # 降级路径接管，flags 如实标注
         with tempfile.TemporaryDirectory() as td2:
