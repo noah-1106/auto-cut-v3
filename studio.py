@@ -257,8 +257,41 @@ class H(BaseHTTPRequestHandler):
                           "grid_videos": gvs, "images": imgs, "mlt": mlt,
                           "cover": f"/files/projects/{name}/cover/cover{sfx}.jpg"},
             })
+        elif u.path.startswith("/api/sub-preview/"):
+            # 字幕样式预览：用该样式的 ASS 参数烧一句样例台词 → jpg（缓存到 assets/preview/）
+            sid = u.path.split("/")[3]
+            try:
+                sid = urllib.parse.unquote(sid, encoding="utf-8")
+            except Exception:
+                pass
+            if not _safe_id(sid):
+                return self._json({"err": "bad id"}, 400)
+            st = jload(f"{ROOT}/registry/subtitles.json", {}).get(sid)
+            if not st:
+                return self._json({"err": "no such style"}, 404)
+            pv_dir = f"{ROOT}/assets/preview"
+            os.makedirs(pv_dir, exist_ok=True)
+            jpg = f"{pv_dir}/sub-{sid}.jpg"
+            if not os.path.exists(jpg):
+                # 样例 ASS：1280x720 深色底（模拟实拍画面）+ 该样式一行卡拉OK台词
+                ass = "[Script Info]\nScriptType: v4.00+\nPlayResX: 1280\nPlayResY: 720\n\n" \
+                      "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" \
+                      "Style: PV,%s,%s,%s,%s,%s,&H00000000,0,0,0,0,100,100,0,0,1,%s,0,2,60,60,%s,1\n\n" \
+                      "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" \
+                      "Dialogue: 0,0:00:00.00,0:00:02.00,PV,,0,0,0,,{\\k30}装修{\\k30}避坑{\\k30}样例{\\k30}字幕\n" % (
+                          st.get("font", "Smiley Sans"), int(st.get("size", 64) * 720 / 1920),
+                          st.get("primary", "&H00FFFFFF"), st.get("secondary", "&H00F0F0F0"),
+                          st.get("outline_col", "&H00101010"), st.get("border", 3), st.get("marginv", 180) * 720 // 1920)
+                open(f"{pv_dir}/_pv_{sid}.ass", "w", encoding="utf-8").write(ass)
+                subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+                                "-f", "lavfi", "-i", "color=c=0x1a1e24:s=1280x720:d=0.1",
+                                "-vf", "drawtext=text='':fontcolor=white",
+                                "-i", f"{pv_dir}/_pv_{sid}.ass", "-map", "0:v", "-map", "1:s",
+                                "-frames:v", "1", "-q:v", "3", jpg],
+                               capture_output=True, timeout=30)
+            return self._json({"ok": True, "url": f"/files/assets/preview/sub-{sid}.jpg"})
         elif u.path.startswith("/files/"):
-            fp = os.path.realpath(os.path.join(ROOT, u.path[len("/files/"):]))
+            fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
             if not fp.startswith(os.path.realpath(ROOT)) or not os.path.isfile(fp):
                 return self._json({"err": "not found"}, 404)
             ctype = MIME.get(fp.rsplit(".", 1)[-1].lower(), "application/octet-stream")

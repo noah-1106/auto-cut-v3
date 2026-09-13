@@ -6,6 +6,10 @@
 <title>auto-cut V3 · Studio</title>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 <style>
+/* 项目字体（registry/subtitles 样张与界面共用——assets/fonts 直 serve） */
+@font-face{font-family:'Smiley Sans';src:url('/files/assets/fonts/SmileySans-Oblique.ttf')}
+@font-face{font-family:'LXGW WenKai';src:url('/files/assets/fonts/LXGWWenKai-Regular.ttf')}
+@font-face{font-family:'ZCOOL KuaiLe';src:url('/files/assets/fonts/ZCOOLKuaiLe-Regular.ttf')}
 :root{
   --bg:#0a0a0f; --panel:rgba(255,255,255,.035); --panel2:#13131a;
   --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
@@ -516,7 +520,7 @@ function go(page){
   $('crumb').innerHTML=(page==='config')?'配置 · 项目与注册表':
     ('项目 · <b>'+esc((P&&P.projTitle)||'')+'</b>'+(VIEW.story?' <span class="mono" style="color:var(--gold)">/ '+esc(VIEW.story)+'</span>':''));
 }
-async function goHome(){VIEW.proj=null;P=null;await loadConfig();go('config');}
+async function goHome(){VIEW.proj=null;P=null;try{await loadConfig();}finally{go('config');}}  // finally：加载失败也保证页面切回首页
 
 /* ═══ 配置页 ═══ */
 async function loadConfig(){
@@ -528,6 +532,7 @@ async function loadConfig(){
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
   const REGS=[['bgm','BGM'],['subtitles','字幕样式'],['transitions','转场'],['sfx','音效'],['stickers','贴纸']];
+  P={registry:{}};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）
   for(const[rn]of REGS)P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
   const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
   const names=rn=>items(rn).map(k=>(P.registry[rn][k].name||k)).join(' · ');
@@ -620,8 +625,19 @@ async function renderRegMgr(){
   const needFile=(REGCUR==='bgm'||REGCUR==='sfx'||REGCUR==='stickers');
   $('regmgr-body').innerHTML=
     '<div style="font-size:11px;color:var(--faint);margin-bottom:12px">文件格式：'+REGFILE[REGCUR]+' · 注册表是人与 Agent 共用的选材事实源，改完即时生效（下一次渲染生效）</div>'+
-    ids.map(id=>{const e=reg[id];return '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
+    ids.map(id=>{const e=reg[id];
+      let prev='';
+      if((REGCUR==='bgm'||REGCUR==='sfx')&&e.file)
+        prev='<audio controls preload="none" src="/files/'+esc(e.file)+'" style="height:32px;max-width:230px"></audio>';
+      else if(REGCUR==='stickers'&&e.file)
+        prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=\\"font:10px var(--mono);color:var(--faint)\\">图缺失</span>\'">';
+      else if(REGCUR==='subtitles')
+        prev=regStyleCard(e);
+      else if(REGCUR==='transitions')
+        prev='<span class="achip">xfade · '+esc(e.preset||e.type||'')+'</span>';
+      return '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      (prev?'<div style="flex:0 0 auto;min-width:150px">'+prev+'</div>':'')+
       '<span style="font:12px var(--mono);color:var(--gold)">'+esc(id)+'</span>'+
       '<input class="req" style="flex:1;min-width:120px" value="'+esc(e.name||'')+'" placeholder="名称" onchange="regSet(\''+id+'\',\'name\',this.value)">'+
       '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="描述（Agent 选材依据）" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
@@ -675,6 +691,15 @@ function regAddEntry(){
              :{name:id,desc:''};
   reg[id]=proto;
   regSave(reg).then(ok=>{if(ok)renderRegMgr()});
+}
+function ass2css(a){  // ASS &HAABBGGRR → CSS #RRGGBB
+  const h=String(a||'').replace('&H','').replace('&h','').padStart(8,'0');
+  return '#'+h.slice(6,8)+h.slice(4,6)+h.slice(2,4);
+}
+function regStyleCard(e){  // 字幕样式样张：字体+颜色+四向描边（text-shadow 模拟 ASS Border）
+  const col=ass2css(e.primary), ol=ass2css(e.outline_col||'&H00101010');
+  return '<span style="font-family:\''+esc(e.font||'sans-serif')+'\';font-size:'+Math.min(e.size||64,26)+'px;color:'+col+
+    ';text-shadow:-2px 0 '+ol+',2px 0 '+ol+',0 -2px '+ol+',0 2px '+ol+';font-weight:700;white-space:nowrap;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:4px">字幕预览 Aa 龙</span>';
 }
 function regList(rn){
   const reg=(P.registry||{})[rn]||{};
