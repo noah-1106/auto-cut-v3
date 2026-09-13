@@ -130,7 +130,12 @@ def retrieve(project, task_id, file_id):
     gdir = os.path.join(project, "gen")
     os.makedirs(gdir, exist_ok=True)
     mp4 = os.path.join(gdir, "gen_%s.mp4" % task_id)
-    urllib.request.urlretrieve(url, mp4)
+    with urllib.request.urlopen(url, timeout=60) as resp, open(mp4, "wb") as fo:  # 60s 超时：urlretrieve 无超时，远程生成拉取可挂死线程（Claude P2-⑤，video_gen 属数字人生成模块非渲染主链）
+        while True:
+            chunk = resp.read(1 << 20)
+            if not chunk:
+                break
+            fo.write(chunk)
     # 入包：与拍摄素材同权（转写/识别/usable 审计后才能被起草取用）
     pk_dir = os.path.join(ROOT, "materials", "packs", GEN_PACK)
     os.makedirs(os.path.join(pk_dir, "thumbs"), exist_ok=True)

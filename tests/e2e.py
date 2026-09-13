@@ -672,6 +672,22 @@ def t25_rmw_smoke():
         check("T25 RMW 并发竞争冒烟（慢写者 vs usable/upload，RMW 原子性）", False, str(e)[:100])
 
 
+def t24b_proofread_words_sync():
+    # Claude 审查 P1-③/T24假绿回归锚：人工校对若只改 text 不改 words，渲染链（pipeline 读 words）永远不上屏。
+    # 本测直接验证 studio.py 人工端点采用的词轨同步逻辑（等长 apply_eqsub 保时间戳）。
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import proofread as PF
+    old_text, new_text = "轮骨不牢，方可以了。", "龙骨不牢，方可以了。"
+    words = [{"text": ch, "start": round(0.1 * i, 1), "end": round(0.1 * i + 0.1, 1)} for i, ch in enumerate(old_text)]
+    times_before = [w["start"] for w in words]
+    diff = [(i, a, b) for i, (a, b) in enumerate(zip(old_text, new_text)) if a != b]
+    PF.apply_eqsub(words, "".join(d[1] for d in diff), "".join(d[2] for d in diff))
+    after = "".join(w["text"] for w in words)
+    check("T24B 人工校对词轨同步（等长替换保时间戳）",
+          after == new_text and [w["start"] for w in words] == times_before,
+          "text=%r 时间戳不动=%s" % (after, [w["start"] for w in words] == times_before))
+
+
 def t24_proofread_v2():
     # 回归：词表命中=auto 直改；非词表=needs-human 进队列；非等长=拒绝；超长(>6字)=转人工；dry=零落盘。
     # 假 LLM 注入四类修正各一发，临时 ROOT 隔离，不碰真实项目。
@@ -750,6 +766,7 @@ def main():
     t22_vision_v2_contract()
     t23_dossier_selfaudit()
     t24_proofread_v2()
+    t24b_proofread_words_sync()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     if FAIL:

@@ -545,7 +545,7 @@ class H(BaseHTTPRequestHandler):
                 pass  # 探测失败回落 0（与旧行为一致，不阻塞上传）
             _stem = fname.rsplit(".", 1)[0]
             _mnum = re.search(r"[Mm]\d{3,}", _stem)  # 手机素材命名 20260827_M0269 → 提取 M0269（短·唯一·可辨识）
-            mid = _mnum.group(0).upper() if _mnum else (re.sub(r"[\s/\\\x00]+", "_", _stem)[:24].upper() or "MAT")  # id 统一大写惯例（rmw_smoke R3-2 回归锚）
+            mid = _mnum.group(0).upper() if _mnum else (re.sub(r"[\s/\\\x00'\"<>`]+", "_", _stem)[:24].upper() or "MAT")  # 剥引号/尖括号（前端 onclick 单引号拼接安全前提，Claude P1-①）  # id 统一大写惯例（rmw_smoke R3-2 回归锚）
             base = mid
             # id 去重改到写锁内进行（R2-2 残留自查）：预检读只是存在性检查，
             # 并发上传各自基于陈旧快照算 id 仍会撞号——最终以锁内重读的最新 pack 为准
@@ -671,7 +671,33 @@ class H(BaseHTTPRequestHandler):
                 for f in pj2.get("files", []):
                     if f.get("id") == fid:
                         if f.get("transcript") is not None:
-                            f["transcript"]["text"] = str(body.get("text", ""))
+                            tr = f["transcript"]
+                            new_text = str(body.get("text", ""))
+                            # 词轨同步（Claude P1-②）：渲染链读 words 不读 text。等长→apply_eqsub 保时间戳；非等长→按字均摊重建
+                            if tr.get("words") and tr["text"] != new_text:
+                                old_text = "".join(w.get("text", "") for w in tr["words"])
+                                if len(old_text) == len(new_text) and old_text != new_text:
+                                    diff = [(i, a, b) for i, (a, b) in enumerate(zip(old_text, new_text)) if a != b]
+                                    segs_, cur = [], [diff[0]]
+                                    for prev, cur_d in zip(diff, diff[1:]):
+                                        (cur.append(cur_d) if cur_d[0] == prev[0] + 1 else (segs_.append(cur), cur.__class__([cur_d]) and cur.extend([]))) if False else None
+                                        if cur_d[0] == prev[0] + 1:
+                                            cur.append(cur_d)
+                                        else:
+                                            segs_.append(cur); cur = [cur_d]
+                                    segs_.append(cur)
+                                    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+                                    import proofread as PF
+                                    for seg in segs_:
+                                        fs = "".join(d[1] for d in seg); rs = "".join(d[2] for d in seg)
+                                        if fs: PF.apply_eqsub(tr["words"], fs, rs)
+                                else:
+                                    chars = list(new_text)
+                                    per = max(1, len(chars) // max(len(tr["words"]), 1))
+                                    idx = 0
+                                    for w in tr["words"]:
+                                        w["text"] = "".join(chars[idx:idx + per]); idx += per
+                            tr["text"] = new_text
                         f.setdefault("audit", {})["proofread"] = "done"
                         json.dump(pj2, open(pp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
                         return self._json({"ok": True, "file": f})
@@ -696,7 +722,40 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad cut_index"}, 400)
             for c in lib.get("cuts", []):
                 if c.get("cut_index") == ci:
-                    c["text"] = str(body.get("text", ""))
+                    new_text = str(body.get("text", ""))
+                    # 词轨同步（Claude 审查 P1-③）：pipeline.remap_words 读 cut["words"]——只改 text 校对不上屏
+                    if c.get("words"):
+                        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+                        import proofread as PF
+                        old_text = "".join(w.get("text", "") for w in c["words"])
+                        if old_text != new_text:
+                            if len(old_text) == len(new_text):
+                                diff = [(i, a, b) for i, (a, b) in enumerate(zip(old_text, new_text)) if a != b]
+                                segs_, cur = [], [diff[0]]
+                                for prev, cur_d in zip(diff, diff[1:]):
+                                    if cur_d[0] == prev[0] + 1:
+                                        cur.append(cur_d)
+                                    else:
+                                        segs_.append(cur); cur = [cur_d]
+                                segs_.append(cur)
+                                for seg in segs_:
+                                    find_s = "".join(d[1] for d in seg)
+                                    repl_s = "".join(d[2] for d in seg)
+                                    if find_s:
+                                        PF.apply_eqsub(c["words"], find_s, repl_s)
+                            else:
+                                total = sum(len(w.get("text", "")) for w in c["words"]) or 1
+                                pos = 0.0
+                                chars = list(new_text)
+                                step = total / max(len(chars), 1)
+                                for w in c["words"]:
+                                    L = len(w.get("text", ""))
+                                    w["text"] = "".join(chars[int(pos):int(pos + L)])
+                                    pos += L
+                                c["words"] = [w for w in c["words"] if w.get("text")]  # 空词过滤：新文本更短时尾部词为空串
+                        c["text"] = new_text
+                    else:
+                        c["text"] = new_text
                     c.setdefault("audit", {})["proofread"] = "done"
                     json.dump(lib, open(lp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
                     return self._json({"ok": True})
@@ -718,6 +777,8 @@ class H(BaseHTTPRequestHandler):
                 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
                 import draft as D
                 sid, draft, beats = D.run(name, intent, save=True)
+            except SystemExit as e:
+                return self._json({"err": "起草前置缺失（LLM key 未配置？）：%s" % (str(e.code) if e.code else "")[:180]}, 500)  # sys.exit 在 HTTP 线程里会打穿请求（Claude P2-②）
                 return self._json({"ok": True, "sid": sid, "beats": len(beats),
                                    "title": draft.get("title"), "outline": draft.get("outline")})
             except Exception as e:
@@ -914,6 +975,11 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad json"}, 400)
             if not isinstance(obj, dict):
                 return self._json({"err": "registry 必须是对象"}, 400)
+            for k in obj:
+                if k.startswith("_"):
+                    continue
+                if k != k.strip() or not _safe_id(k.strip()):
+                    return self._json({"err": "非法条目 id: %r（允许中文/字母/数字/_-，禁引号/尖括号/首尾空格）" % str(k)[:20]}, 400)  # key 白名单（Claude P1-①服务端层）
             with open(f"{ROOT}/registry/{rname}.json", "w", encoding="utf-8") as f:
                 json.dump(obj, f, ensure_ascii=False, indent=1)
             return self._json({"ok": True, "count": len([k for k in obj if not k.startswith("_")])})

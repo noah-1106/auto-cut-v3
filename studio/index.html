@@ -422,7 +422,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 /* ═══ 基础 ═══ */
 const $=id=>document.getElementById(id);
 const nz=(v,d)=>(v===undefined||v===null||v==='')?d:v;
-const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // 单引号转义：inline onclick 单引号拼接断串/XSS 根（Claude P1-①）
 let P=null, DRAFT=null, VIEW={page:'config',tab:'config',proj:null,story:null};
 let DIRTY=false, SYNC=null;  // DIRTY: 创作台有未落盘改动；SYNC: 当前故事线的 mtime 基线
 let AUTOSAVE_TIMER=null;

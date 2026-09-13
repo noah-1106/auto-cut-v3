@@ -63,6 +63,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
         try:
             r = asr.transcribe(src, provider=provider)
         except Exception as e:
+        aud["transcript"] = "error:" + str(e)[:80]  # 失败标记（Claude P3-①）：跳过≠无声吞掉
             out[f["id"]] = {"ok": False, "err": str(e)[:120]}
             continue
         has_speech = bool(r["words"])
