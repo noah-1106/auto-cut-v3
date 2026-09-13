@@ -142,6 +142,8 @@ def build_digest(pid):
         if v.get("usage"):
             parts.append("用途：%s" % str(v["usage"])[:50])
         lines.append(" ".join(parts))
+    if not lines:
+        raise RuntimeError("素材包为空（无可用素材），无可盘点内容")  # 空包护栏：不调 LLM（曾把模型的"错误说明"当成 digest 落库）
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import draft as D
     prompt = (
