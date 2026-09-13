@@ -21,8 +21,8 @@ def _safe(s):
 def _filename(s):
     """用户上传文件名校验（2026-09-14 立规：素材名是用户资产，系统不剥夺——中文全放行）。
     只禁真正危险的：路径分隔符、空字节、.. 穿越、隐藏文件。"""
-    return bool(s) and len(s) <= 120 and s not in (".", "..") and not s.startswith(".") \
-        and "/" not in s and "\\" not in s and "\x00" not in s and ".." not in s
+    return bool(s) and len(s) <= 120 and s not in (".", "..") and not s.startswith((".", "-")) \
+        and "/" not in s and "\\" not in s and "\x00" not in s and ".." not in s  # 拒 - 开头：防 ffmpeg 参数解析吃掉文件名
 
 
 def _safe_id(s):
