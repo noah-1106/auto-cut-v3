@@ -302,6 +302,22 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
   <div class="reggrid" id="reggrid"></div>
 </section>
 
+<!-- ═══════════ 注册表管理抽屉（效果五件套的增删改 + 素材导入）═══════════ -->
+<div id="regmgr" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80" onclick="if(event.target===this)closeRegMgr()">
+  <div style="position:absolute;right:0;top:0;bottom:0;width:min(680px,94vw);background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)">
+      <h3 id="regmgr-title" style="margin:0;font-size:15px">注册表管理</h3>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="ghost" onclick="regAddEntry()">＋ 新增条目</button>
+        <button class="ghost" onclick="regImport()">⬆ 导入素材文件</button>
+        <button class="ghost" onclick="closeRegMgr()">✕ 关闭</button>
+      </div>
+    </div>
+    <div id="regmgr-body" style="flex:1;overflow:auto;padding:16px 22px"></div>
+  </div>
+</div>
+<input type="file" id="regfile" style="display:none">
+
 <!-- ═══════════ 配置页 · 模板工程台 ═══════════ -->
 <section id="s-tune">
   <div class="sec">filmBurn 模板工程台 <span style="text-transform:none;letter-spacing:0;color:var(--faint)">（精确数值只在配置层，创作台不出现数字）</span></div>
@@ -511,20 +527,17 @@ async function loadConfig(){
     '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag">单故事线</span>')+'</div>'+
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
-  const bgmreg=await(await fetch('/api/registry/bgm')).json();
-  const subreg=await(await fetch('/api/registry/subtitles')).json();
-  const bgmItems=Object.keys(bgmreg).filter(k=>!k.startsWith('_')).map(k=>bgmreg[k].name||k);
-  const subItems=Object.keys(subreg).filter(k=>!k.startsWith('_')).map(k=>subreg[k].name||k);
-  $('reggrid').innerHTML=[
-    ['视频类型',(en.video_types||[]).length,(en.video_types||[]).map(x=>x.name).join(' · ')],
-    ['封面策略',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
-    ['旁白模式',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
-    ['BGM',bgmItems.length,bgmItems.join(' · ')],
-    ['字幕风格',subItems.length,subItems.join(' · ')],
-    ['贴纸',(en.stickers||[]).length,(en.stickers||[]).map(x=>x.id).join(' · ')],
-    ['音效',(en.sfx||[]).length,(en.sfx||[]).map(x=>x.id).join(' · ')],
-    ['平台',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
-  ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5>'+r[0]+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('');
+  const REGS=[['bgm','BGM'],['subtitles','字幕样式'],['transitions','转场'],['sfx','音效'],['stickers','贴纸']];
+  for(const[rn]of REGS)P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
+  const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
+  const names=rn=>items(rn).map(k=>(P.registry[rn][k].name||k)).join(' · ');
+  $('reggrid').innerHTML=
+    [['视频类型',(en.video_types||[]).length,names(en.video_types||[])&&((en.video_types||[]).map(x=>x.name).join(' · '))],
+     ['封面策略',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
+     ['旁白模式',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
+     ['平台',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
+    ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5>'+r[0]+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
+    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+4)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5>'+r[1]+'<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||'空')+'</div></div>').join('');
   const pr={flash:0.6,grain:16,hold:1.0,duration:0.5};
   $('gtune').innerHTML=sld('g-flash','白闪强度 flash',0.1,0.9,0.05,pr.flash)+sld('g-grain','噪点密度 grain',0,32,1,pr.grain)+
     sld('g-hold','白闪保持 hold (s)',0.2,2,0.1,pr.hold)+sld('g-dur','溶解时长 duration (s)',0.2,1,0.05,pr.duration);
@@ -554,7 +567,8 @@ async function openProj(name,story,silent){
   DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
-  P.registry={bgm:await(await fetch('/api/registry/bgm')).json()};
+  P.registry={};
+  for(const rn of ['bgm','subtitles','transitions','sfx','stickers'])P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
   go('proj');renderTabs();buildCreator();buildViews();
   renderPack();renderCuts();
   if(!silent)showTab('create');
@@ -589,6 +603,83 @@ async function delProject(name){
 }
 
 /* ═══ 创作台 ═══ */
+/* ═══ 注册表管理抽屉：五件套（bgm/subtitles/transitions/sfx/stickers）增删改+素材导入 ═══ */
+let REGCUR=null;
+const REGFILE={bgm:'音频（mp3/wav/m4a/flac）',sfx:'音频（mp3/wav/m4a/flac）',stickers:'图片（png 透明底）',subtitles:'—纯JSON样式，无需文件—',transitions:'—纯JSON转场，无需文件—'};
+function openRegMgr(rn,title){
+  REGCUR=rn;
+  $('regmgr-title').textContent=title+' · 注册表管理';
+  $('regmgr').style.display='block';
+  renderRegMgr();
+}
+function closeRegMgr(){$('regmgr').style.display='none'}
+async function renderRegMgr(){
+  const reg=await(await fetch('/api/registry/'+REGCUR)).json();
+  P.registry[REGCUR]=reg;
+  const ids=Object.keys(reg).filter(k=>!k.startsWith('_'));
+  const needFile=(REGCUR==='bgm'||REGCUR==='sfx'||REGCUR==='stickers');
+  $('regmgr-body').innerHTML=
+    '<div style="font-size:11px;color:var(--faint);margin-bottom:12px">文件格式：'+REGFILE[REGCUR]+' · 注册表是人与 Agent 共用的选材事实源，改完即时生效（下一次渲染生效）</div>'+
+    ids.map(id=>{const e=reg[id];return '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      '<span style="font:12px var(--mono);color:var(--gold)">'+esc(id)+'</span>'+
+      '<input class="req" style="flex:1;min-width:120px" value="'+esc(e.name||'')+'" placeholder="名称" onchange="regSet(\''+id+'\',\'name\',this.value)">'+
+      '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="描述（Agent 选材依据）" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
+      (needFile?'<span style="font:10px var(--mono);color:var(--faint)">'+esc(e.file||'')+'</span>':'')+
+      '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">删除</button>'+
+      '</div></div>';}).join('')||'<div class="empty">空注册表——点右上「新增条目」或「导入素材文件」</div>';
+}
+async function regSet(id,k,v){
+  const reg=Object.assign({},P.registry[REGCUR]);
+  reg[id]=Object.assign({},reg[id],{[k]:v});
+  await regSave(reg);
+}
+async function regSave(reg){
+  const st=await fetch('/api/registry-save/'+REGCUR,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reg)});
+  const d=await st.json();
+  if(!d.ok){alert('保存失败：'+(d.err||st.status));return false}
+  P.registry[REGCUR]=reg;
+  return true;
+}
+async function regDel(id){
+  if(!confirm('删除条目「'+id+'」？\n（素材文件保留在 assets/，可再导入恢复）'))return;
+  const st=await fetch('/api/registry-delete/'+REGCUR+'/'+id,{method:'POST'});
+  const d=await st.json();
+  if(!d.ok){alert('删除失败：'+(d.err||st.status));return}
+  delete P.registry[REGCUR][id];
+  renderRegMgr();
+}
+function regImport(){
+  const fi=$('regfile');
+  fi.value='';fi.accept=(REGCUR==='stickers')?'.png':'.mp3,.wav,.m4a,.flac';
+  fi.onchange=async()=>{
+    const f=fi.files[0];if(!f)return;
+    let id=(f.name.replace(/\.[^.]+$/,'').toLowerCase()||'asset').replace(/[^a-z0-9_\-]/g,'_');
+    id=prompt('条目 id（Agent 用它引用）:',id)||'';if(!id)return;
+    const fd=new FormData();
+    const st=await fetch('/api/registry-upload/'+REGCUR+'/'+encodeURIComponent(id)+'?filename='+encodeURIComponent(f.name),{method:'POST',body:f});
+    const d=await st.json();
+    if(!d.ok){alert('导入失败：'+(d.err||st.status));return}
+    await renderRegMgr();
+  };
+  fi.click();
+}
+function regAddEntry(){
+  let id=prompt('新条目 id（字母/数字/下划线/中划线，Agent 用它引用）:');
+  if(!id)return;id=id.trim();
+  if(!/^[A-Za-z0-9_\-]{1,40}$/.test(id)){alert('id 只允许字母/数字/下划线/中划线');return}
+  const reg=Object.assign({},P.registry[REGCUR]);
+  if(reg[id]){alert('id 已存在');return}
+  const proto=REGCUR==='subtitles'?{font:'Smiley Sans',size:64,primary:'&H00FFFFFF',secondary:'&H00F0F0F0',outline_col:'&H00101010',border:3,marginv:180,karaoke:true,name:id,desc:''}
+             :REGCUR==='transitions'?{type:'xfade',preset:'fade',duration:0.5,name:id,desc:''}
+             :{name:id,desc:''};
+  reg[id]=proto;
+  regSave(reg).then(ok=>{if(ok)renderRegMgr()});
+}
+function regList(rn){
+  const reg=(P.registry||{})[rn]||{};
+  return Object.keys(reg).filter(k=>!k.startsWith('_')).map(k=>({id:k,name:reg[k].name||reg[k].desc||k}));
+}
 function optHtml(list,cur){
   return (list||[]).map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.name||o.id)+'</option>').join('');
 }
@@ -599,7 +690,8 @@ function buildCreator(){
     '<div class="mf"><label>视频类型</label><select onchange="DRAFT.meta.type=this.value">'+optHtml(en.video_types,m.type)+'</select></div>'+
     '<div class="mf"><label>人设</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
     '<div class="mf"><label>平台</label><select onchange="DRAFT.meta.platform=this.value">'+optHtml(en.platforms,m.platform)+'</select></div>'+
-    '<div class="mf"><label>字幕风格</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml([{id:'karaoke-gold',name:'卡拉OK金'},{id:'plain-white',name:'简洁白'}],m.style.subtitle)+'</select></div>'+
+    '<div class="mf"><label>字幕风格</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
+    '<div class="mf"><label>BGM</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null" title="全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表">'+optHtml([{id:'',name:'（无 BGM）'}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
     '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22"></div>'+
     '<div class="mf"><label>画幅氛围</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:'自然'},{id:'warm',name:'暖调'},{id:'cool',name:'冷调'}],m.style.grade)+'</select></div>';
   $('coverops').innerHTML=
@@ -1170,6 +1262,7 @@ function buildViews(){
     auditRow('人设',esc(nz(m.persona,'—'))),
     auditRow('字幕风格',esc(nz(m.style.subtitle,'—'))),
     auditRow('画幅氛围',esc(nz(m.style.grade,'—'))),
+    auditRow('BGM',esc((P.registry&&P.registry.bgm&&(P.registry.bgm[m.audio.bgm_id||'']||{}).name)||m.audio.bgm_id||'（无）')),
     auditRow('BGM 音量',esc(String(nz(m.audio.bgm_volume,'—')))),
     auditRow('封面',esc(nz(m.cover.strategy,'—'))+(m.cover.title_text?' ·「'+esc(m.cover.title_text)+'」':'')),
     auditRow('大纲',esc(DRAFT.outline||'—')),

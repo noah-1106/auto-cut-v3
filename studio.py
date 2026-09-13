@@ -847,6 +847,37 @@ class H(BaseHTTPRequestHandler):
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
                 return self._json({"err": "no such project"}, 404)
+        if u.path.startswith("/api/registry-save/"):
+            # 注册表整体保存（前端管理面板编辑后 PUT）：白名单五件套，enums/formats 语义枚举不开放
+            rname = u.path.split("/")[3]
+            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers"):
+                return self._json({"err": "registry 不可编辑: " + rname}, 400)
+            n = int(self.headers.get("Content-Length", 0))
+            if n <= 0 or n > 2 << 20:
+                return self._json({"err": f"bad size {n}"}, 400)
+            try:
+                obj = json.loads(self.rfile.read(n))
+            except Exception:
+                return self._json({"err": "bad json"}, 400)
+            if not isinstance(obj, dict):
+                return self._json({"err": "registry 必须是对象"}, 400)
+            with open(f"{ROOT}/registry/{rname}.json", "w", encoding="utf-8") as f:
+                json.dump(obj, f, ensure_ascii=False, indent=1)
+            return self._json({"ok": True, "count": len([k for k in obj if not k.startswith("_")])})
+        if u.path.startswith("/api/registry-delete/"):
+            # 删注册表条目：不动 assets 文件（可能被历史故事线引用），返回 file 供人工清理
+            parts = u.path.split("/")
+            rname, rid = parts[3], parts[4] if len(parts) > 4 else ""
+            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers") or not _safe(rid):
+                return self._json({"err": "bad registry/id"}, 400)
+            regp = f"{ROOT}/registry/{rname}.json"
+            reg = jload(regp, {})
+            if rid not in reg:
+                return self._json({"err": "no such entry"}, 404)
+            gone = reg.pop(rid)
+            with open(regp, "w", encoding="utf-8") as f:
+                json.dump(reg, f, ensure_ascii=False, indent=1)
+            return self._json({"ok": True, "removed_file": gone.get("file")})
         if u.path.startswith("/api/registry-upload/"):
             # 效果素材导入（2026-09-14）：/api/registry-upload/bgm/myid → assets/music/myid.mp3
             # + registry/bgm.json 自动加条目。白名单按类别：音频(bgm,sfx) mp3/wav/m4a/flac，图片(stickers) png。
