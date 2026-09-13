@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.DS_Store
+nohup.out
+# 归档目录（2.5GB 旧渲染产物）
+projects/_attic/
+# 素材库（任意层级的 materials 目录——根目录 packs 与项目内都在内）
+materials/
+projects/*/materials/
+# 渲染产物（派生物，随时可重渲）
+projects/*/out-*.mp4
+projects/*/plan-*.json
+projects/*/subtitle-*.ass
+projects/*/previews/
+projects/*/qc-report.json
+projects/*/render.status
+projects/*/params.json
+# ffmpeg 二进制（自备 6.0+）
+bin/

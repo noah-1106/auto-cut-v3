@@ -1,0 +1,24 @@
+{
+  "crossDissolve": {
+    "type": "xfade",
+    "preset": "fade",
+    "duration": 0.5,
+    "name": "叠化",
+    "desc": "A 淡出 B 淡入 · 经典柔和"
+  },
+  "filmBurn": {
+    "type": "flash",
+    "preset": "fade",
+    "duration": 0.5,
+    "hold": 1.0,
+    "noise": 16,
+    "color": "white",
+    "name": "胶片烧转",
+    "desc": "过曝白闪 + 胶片颗粒 · 烧灼感遮切（v5 同名转场平移）",
+    "params_doc": {
+      "noise": "颗粒密度 6=数字干净 / 16=胶片甜区 / 28=脏旧拷贝",
+      "hold": "白闪峰值保持秒数",
+      "duration": "溶解时长（入/出各一段）"
+    }
+  }
+}

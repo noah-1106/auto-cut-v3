@@ -1,0 +1,14 @@
+{
+ "warn-frame": {
+  "file": "assets/stickers/warn-frame.png",
+  "pos": "top-center",
+  "duration": 1.2,
+  "desc": "警示框（词点强调）"
+ },
+ "tuijian": {
+  "file": "assets/stickers/tuijian.png",
+  "pos": "top-right",
+  "duration": 1.2,
+  "desc": "推荐角标"
+ }
+}

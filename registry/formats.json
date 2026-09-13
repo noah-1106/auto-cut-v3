@@ -1,0 +1,27 @@
+{
+ "_comment": "画幅注册表——画幅是项目级属性。项目 meta.format 存 id；无此字段默认 vertical。",
+ "vertical": {
+  "name": "抖音竖版",
+  "width": 1080,
+  "height": 1920,
+  "sticker_w": 500,
+  "sticker_h": 140,
+  "sub_clear": 360
+ },
+ "landscape": {
+  "name": "横版",
+  "width": 1920,
+  "height": 1080,
+  "sticker_w": 560,
+  "sticker_h": 156,
+  "sub_clear": 200
+ },
+ "square": {
+  "name": "方版",
+  "width": 1080,
+  "height": 1080,
+  "sticker_w": 460,
+  "sticker_h": 129,
+  "sub_clear": 220
+ }
+}

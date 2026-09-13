@@ -1,0 +1,127 @@
+{
+ "video_types": [
+  {
+   "id": "knowledge-koubo",
+   "name": "知识口播",
+   "desc": "专业人设分享干货，建立信任、引导关注",
+   "rhythm": "钩子先行，信息密度高"
+  },
+  {
+   "id": "story-narrative",
+   "name": "剧情叙事",
+   "desc": "有起承转合的故事线，情绪驱动",
+   "rhythm": "铺垫-冲突-反转"
+  },
+  {
+   "id": "tutorial",
+   "name": "教程演示",
+   "desc": "步骤化教学，重操作演示",
+   "rhythm": "步骤递进"
+  },
+  {
+   "id": "product-show",
+   "name": "产品展示",
+   "desc": "卖点+场景+促转化",
+   "rhythm": "卖点循环"
+  },
+  {
+   "id": "vlog",
+   "name": "日常 Vlog",
+   "desc": "轻记录，人设养号",
+   "rhythm": "松弛跟随"
+  },
+  {
+   "id": "interview-cut",
+   "name": "访谈切片",
+   "desc": "长访谈切金句",
+   "rhythm": "金句独立成幕"
+  }
+ ],
+ "cover_strategies": [
+  {
+   "id": "first-frame",
+   "name": "首帧封面",
+   "desc": "取第一幕素材入点帧 + 标题叠加",
+   "engineer_note": "工程自动抽取，无需人工"
+  },
+  {
+   "id": "beat-frame",
+   "name": "指定幕帧",
+   "desc": "取指定幕的指定时刻画面",
+   "engineer_note": "需填 beat_no 与时刻"
+  },
+  {
+   "id": "ai-generated",
+   "name": "AI 生成封面",
+   "desc": "由图图/生成模型按故事线出图",
+   "engineer_note": "生成图放入 cover/ 即被收口"
+  },
+  {
+   "id": "upload",
+   "name": "外部上传",
+   "desc": "设计稿/截图直接上传",
+   "engineer_note": "上传后自动落位 cover/"
+  }
+ ],
+ "narration_modes": [
+  {
+   "id": "original",
+   "name": "视频原声",
+   "desc": "直接用该幕素材的原声（当前 ASR 词级时间戳驱动字幕）"
+  },
+  {
+   "id": "tts",
+   "name": "AI 旁白",
+   "desc": "MiniMax TTS 朗读本幕文案（生成器待接，接口已留）"
+  },
+  {
+   "id": "none",
+   "name": "无旁白",
+   "desc": "纯画面 + BGM + 字幕卡，适合氛围幕"
+  }
+ ],
+ "platforms": [
+  {
+   "id": "douyin",
+   "name": "抖音"
+  },
+  {
+   "id": "xhs",
+   "name": "小红书"
+  },
+  {
+   "id": "shipinhao",
+   "name": "视频号"
+  },
+  {
+   "id": "bilibili",
+   "name": "B站"
+  }
+ ],
+ "positions": [
+  {
+   "id": "top-left",
+   "name": "左上"
+  },
+  {
+   "id": "top-center",
+   "name": "顶部居中"
+  },
+  {
+   "id": "top-right",
+   "name": "右上"
+  },
+  {
+   "id": "center",
+   "name": "居中"
+  },
+  {
+   "id": "bottom-left",
+   "name": "左下(字幕上方)"
+  },
+  {
+   "id": "bottom-right",
+   "name": "右下(字幕上方)"
+  }
+ ]
+}

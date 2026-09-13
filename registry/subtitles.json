@@ -1,0 +1,25 @@
+{
+ "karaoke-gold": {
+  "font": "Smiley Sans",
+  "size": 74,
+  "primary": "&H0000D4FF",
+  "secondary": "&H00FFFFFF",
+  "outline_col": "&H00000000",
+  "border": 4,
+  "marginv": 340,
+  "max_chars": 12,
+  "desc": "v5 karaoke 规格平移：已读金(&H00D4FF00→RGB FFD400)、未读白、黑描边、逐字卡拉OK"
+ },
+ "plain-white": {
+  "font": "Smiley Sans",
+  "size": 62,
+  "primary": "&H00FFFFFF",
+  "secondary": "&H00FFFFFF",
+  "outline_col": "&H00000000",
+  "border": 3,
+  "marginv": 320,
+  "max_chars": 14,
+  "desc": "简洁白字（纪录片段落：白字黑描边，无逐字高亮）",
+  "karaoke": false
+ }
+}

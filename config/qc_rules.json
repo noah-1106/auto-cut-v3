@@ -1,0 +1,24 @@
+{
+  "project": "demo-project",
+  "updated": "2026-09-12",
+  "platform": "douyin",
+  "platforms": {
+    "douyin":   {"lufs_target": -16, "lufs_tol": 3.0},
+    "shipinhao": {"lufs_target": -14, "lufs_tol": 3.0},
+    "broadcast": {"lufs_target": -23, "lufs_tol": 2.0}
+  },
+  "rules": {
+    "R1_dead_tail_max": 0.8,
+    "R1_fix_target": 0.35,
+    "R2_min_tail": 0.25,
+    "R2_fix_target": 0.35,
+    "R3_silence_hole": 0.8,
+    "R5_flash_page_min": 0.5,
+    "R6_lufs_skip_below": -60,
+    "R8_filler_words": ["然后呢", "这样子", "就是说", "呃", "嗯", "这个这个", "对吧然后"],
+    "R8_single_fillers": ["呃", "嗯"],
+    "R9_repeat_ngram": 4,
+    "R9_repeat_gap": 12
+  },
+  "note": "QC 审片层阈值（per-project 可覆盖）。R6 锚点=EBU R128/平台响度标准，非拍脑袋；近静音段低于 R6_lufs_skip_below 直接跳过不判（gate floor 陷阱）。人工维护区，脚本只读。"
+}

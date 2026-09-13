@@ -1,0 +1,10 @@
+{
+ "knock": {
+  "file": "assets/sfx/knock.wav",
+  "desc": "敲击（墙面自查类场景）"
+ },
+ "ding": {
+  "file": "assets/sfx/ding.wav",
+  "desc": "提示叮（要点强调）"
+ }
+}
