@@ -1,24 +1,80 @@
 {
-  "crossDissolve": {
-    "type": "xfade",
-    "preset": "fade",
-    "duration": 0.5,
-    "name": "叠化",
-    "desc": "A 淡出 B 淡入 · 经典柔和"
-  },
-  "filmBurn": {
-    "type": "flash",
-    "preset": "fade",
-    "duration": 0.5,
-    "hold": 1.0,
-    "noise": 16,
-    "color": "white",
-    "name": "胶片烧转",
-    "desc": "过曝白闪 + 胶片颗粒 · 烧灼感遮切（v5 同名转场平移）",
-    "params_doc": {
-      "noise": "颗粒密度 6=数字干净 / 16=胶片甜区 / 28=脏旧拷贝",
-      "hold": "白闪峰值保持秒数",
-      "duration": "溶解时长（入/出各一段）"
-    }
+ "crossDissolve": {
+  "type": "xfade",
+  "preset": "fade",
+  "duration": 0.5,
+  "name": "叠化",
+  "desc": "A 淡出 B 淡入 · 经典柔和"
+ },
+ "filmBurn": {
+  "type": "flash",
+  "preset": "fade",
+  "duration": 0.5,
+  "hold": 1.0,
+  "noise": 16,
+  "color": "white",
+  "name": "胶片烧转",
+  "desc": "过曝白闪 + 胶片颗粒 · 烧灼感遮切（v5 同名转场平移）",
+  "params_doc": {
+   "noise": "颗粒密度 6=数字干净 / 16=胶片甜区 / 28=脏旧拷贝",
+   "hold": "白闪峰值保持秒数",
+   "duration": "溶解时长（入/出各一段）"
   }
+ },
+ "wipeRight": {
+  "type": "xfade",
+  "preset": "wiperight",
+  "duration": 0.5,
+  "name": "右推",
+  "desc": "新画面从右向左推入，横移类内容段落切换"
+ },
+ "slideLeft": {
+  "type": "xfade",
+  "preset": "slideleft",
+  "duration": 0.4,
+  "name": "左滑",
+  "desc": "轻快平移，清单/步骤类内容"
+ },
+ "fadeblack": {
+  "type": "xfade",
+  "preset": "fadeblack",
+  "duration": 0.6,
+  "name": "黑场过渡",
+  "desc": "经黑再入，章节感/话题转折"
+ },
+ "circleOpen": {
+  "type": "xfade",
+  "preset": "circleopen",
+  "duration": 0.5,
+  "name": "圆形展开",
+  "desc": "焦点揭示，关键画面强调"
+ },
+ "dissolve": {
+  "type": "xfade",
+  "preset": "dissolve",
+  "duration": 0.5,
+  "name": "像素溶解",
+  "desc": "颗粒感过渡，怀旧/工艺质感"
+ },
+ "smoothUp": {
+  "type": "xfade",
+  "preset": "smoothup",
+  "duration": 0.4,
+  "name": "上滑",
+  "desc": "竖版友好，步骤推进"
+ },
+ "zoomIn": {
+  "type": "xfade",
+  "preset": "zoomin",
+  "duration": 0.4,
+  "name": "急推",
+  "desc": "冲击感，强警示/重点强调"
+ },
+ "fadewhite": {
+  "type": "xfade",
+  "preset": "fadewhite",
+  "duration": 0.5,
+  "name": "白场过渡",
+  "desc": "经白再入，干净明快的话题切换"
+ }
 }

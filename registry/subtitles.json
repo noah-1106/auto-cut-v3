@@ -21,5 +21,65 @@
   "max_chars": 14,
   "desc": "简洁白字（纪录片段落：白字黑描边，无逐字高亮）",
   "karaoke": false
+ },
+ "plain-big-gold": {
+  "font": "Smiley Sans",
+  "size": 88,
+  "primary": "&H0000D4FF",
+  "secondary": "&H00F0F0F0",
+  "outline_col": "&H00202020",
+  "border": 4,
+  "marginv": 200,
+  "karaoke": true,
+  "name": "大字金色",
+  "desc": "大号金句强调，钩子/警示场景"
+ },
+ "kaiti-ink": {
+  "font": "LXGW WenKai",
+  "size": 66,
+  "primary": "&H00FFFFFF",
+  "secondary": "&H00888888",
+  "outline_col": "&H00101010",
+  "border": 3,
+  "marginv": 180,
+  "karaoke": true,
+  "name": "文楷墨色",
+  "desc": "文楷手写感，叙事/文化类内容"
+ },
+ "kaiti-warm": {
+  "font": "LXGW WenKai",
+  "size": 62,
+  "primary": "&H0080C4FF",
+  "secondary": "&H00E8E8E8",
+  "outline_col": "&H00301810",
+  "border": 3,
+  "marginv": 180,
+  "karaoke": true,
+  "name": "文楷暖橙",
+  "desc": "暖调文楷，家居/生活美学"
+ },
+ "zcool-pop": {
+  "font": "ZCOOL KuaiLe",
+  "size": 70,
+  "primary": "&H0044FFB0",
+  "secondary": "&H00FFFFFF",
+  "outline_col": "&H00101030",
+  "border": 4,
+  "marginv": 190,
+  "karaoke": true,
+  "name": "快乐体活泼",
+  "desc": "圆润活泼，轻科普/轻松话题"
+ },
+ "plain-quiet": {
+  "font": "Smiley Sans",
+  "size": 56,
+  "primary": "&H00E8E8E8",
+  "secondary": "&H00989898",
+  "outline_col": "&H00181818",
+  "border": 2,
+  "marginv": 160,
+  "karaoke": false,
+  "name": "极简静读",
+  "desc": "无卡拉OK静显小字，访谈/纪实感"
  }
 }
