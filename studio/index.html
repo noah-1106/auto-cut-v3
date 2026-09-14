@@ -252,12 +252,6 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 .achip.act{cursor:pointer}
 .achip.act:hover{border-color:var(--gold-line);color:var(--gold)}
 .packtag{font-size:10px;border-radius:6px;padding:1px 7px;border:1px solid var(--gold-line);color:var(--gold)}
-/* ── 审计表单（人读投影）── */
-.ablock{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-bottom:12px;max-width:780px}
-.ablock .ahead{font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px}
-.arow{display:flex;gap:12px;font-size:12.5px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.05)}
-.arow span{width:96px;flex:0 0 auto;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding-top:1px}
-.arow b{color:var(--txt);font-weight:400}
 /* ── 占位框（缺图/缺成片不出现裂图叉叉）── */
 .phbox{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--faint);
   background:repeating-linear-gradient(45deg,rgba(255,255,255,.025) 0 10px,transparent 10px 20px);
@@ -360,19 +354,6 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 </section>
 
 <!-- ═══════════ 操作页 · 创作台 ═══════════ -->
-<section id="s-diff">
-  <div class="note"><b class="k">草稿对比</b>——左=现存故事线，右=AI 草稿。勾选草稿幕 → 「采纳选中」合并进现存线（替换同序号/追加新幕），落盘后回创作台重渲。</div>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-    <label class="dim" style="font-size:12px">现存</label><select id="df-base" style="max-width:200px" onchange="renderDiff()"></select>
-    <label class="dim" style="font-size:12px">草稿</label><select id="df-draft" style="max-width:200px" onchange="renderDiff()"></select>
-    <button class="ghost" onclick="applySelected()">✓ 采纳选中 → 现存线</button>
-    <span class="statusline" id="dfstat"></span>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-    <div><div class="subsec">现存</div><div id="dfcolA"></div></div>
-    <div><div class="subsec">草稿</div><div id="dfcolB"></div></div>
-  </div>
-</section>
 <section id="s-create">
   <!-- 顶行三联：左=成片（预览+基本信息在下），中=大纲·贯穿元素（合并），右=封面 -->
   <div class="topline">
@@ -427,19 +408,6 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
   </div>
   <div id="packgroups"></div>
 </section>
-
-<!-- ═══════════ 操作页 · 审计 ═══════════ -->
-<section id="s-edl">
-  <div class="sec">审计 · 工程决策对账（人读表单）</div>
-  <div class="note">这条故事线的每一个工程决策，按幕对账：素材从哪来、台词是什么、效果挂在哪。下面的表单是<b class="k">给人看的投影</b>，改动请回创作台（人和 Agent 同一入口），这里只读。</div>
-  <div id="auditform"></div>
-  <details style="margin-top:18px">
-    <summary class="sec" style="cursor:pointer">工程原文 · plan.json / subtitle.ass（Agent 对账视图）</summary>
-    <pre id="plan" class="mono" style="font-size:11px;color:var(--dim);white-space:pre-wrap"></pre>
-    <div class="sec" style="margin-top:18px">subtitle.ass · 字幕轨</div>
-    <pre id="ass" class="mono" style="font-size:11px;color:var(--dim);white-space:pre-wrap"></pre>
-  </details>
-</section>
 </main>
 
 <script>
@@ -485,9 +453,9 @@ function setVideo(wrapId,src,phText,poster){
 /* ═══ 页面/签（按 id 定位，永不错位）═══ */
 const PAGES={
   config:{tabs:[['config','项目'],['registry','注册表'],['tune','模板工程台']]},
-  proj:{tabs:[['create','创作台'],['diff','草稿对比'],['library','素材库'],['edl','审计']]}
+  proj:{tabs:[['create','创作台'],['library','素材库']]}
 };
-const SECMAP={config:'s-config',registry:'s-registry',tune:'s-tune',create:'s-create',diff:'s-diff',library:'s-library',edl:'s-edl'};
+const SECMAP={config:'s-config',registry:'s-registry',tune:'s-tune',create:'s-create',library:'s-library'};
 
 function renderTabs(){
   const pg=PAGES[VIEW.page],t=$('tabs');t.innerHTML='';
@@ -534,7 +502,6 @@ async function newStory(){
   }catch(e){alert('创建失败：'+e);}
 }
 function showTab(id){
-  if(id==='diff'&&VIEW.page==='proj'){diffSelects();renderDiff();}
   VIEW.tab=id;
   document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.id===id));
   document.querySelectorAll('main>section').forEach(x=>x.classList.remove('active'));
@@ -882,7 +849,7 @@ function renderBeats(){
   $('beatcards').innerHTML=h;
 }
 /* ═══ 字幕轨：按旁白模式分流（dub=台词可编辑 / original=原声转写只读 / none=静音）═══
-   story 数据面保留：dub 台词源（pipeline 读它做 TTS+字幕）+ Agent 起草摘要存档（审计视图可见） */
+   story 数据面保留：dub 台词源（pipeline 读它做 TTS+字幕）+ Agent 起草摘要存档（创作台可见） */
 function subModeHint(b){
   const m=((b.narration||{}).mode)||'original';
   return m==='dub'?'配音台词 · TTS+卡拉OK':(m==='none'?'静音幕 · 无字幕':'原声转写 · 只读');
@@ -892,7 +859,7 @@ function subBody(b,i){
   if(m==='dub')
     return '<textarea oninput="DRAFT.beats['+i+'].story=this.value" title="dub 幕：这段文字就是配音台词=卡拉OK字幕（pipeline 按配音实测时长均分词轨）。按口语台词标准写；改后下次渲染生效">'+esc(b.story||'')+'</textarea>';
   if(m==='none')
-    return '<div class="sub-read" style="color:var(--faint)">静音幕——无字幕。已有文本仅作语义摘要存档（审计视图可见），不上画面。</div>';
+    return '<div class="sub-read" style="color:var(--faint)">静音幕——无字幕。已有文本仅作语义摘要存档（创作台可见），不上画面。</div>';
   const ws=beatSubWords(b);
   if(!ws.length)
     return '<div class="sub-read" style="color:var(--faint)">该素材窗口内暂无转写词轨——素材库跑转写后这里显示精确字幕</div>';
@@ -1034,59 +1001,6 @@ function collectStory(){
     if(curMeta.audio&&!out.meta.audio)out.meta.audio=curMeta.audio;
     if(curMeta.cover&&!out.meta.cover)out.meta.cover=curMeta.cover;}
   return out;
-}
-/* ═══ R2 · 草稿对比与逐幕采纳 ═══ */
-function diffSelects(){
-  const bs=$('df-base'), ds=$('df-draft');
-  const cur=VIEW.story||'';
-  bs.innerHTML=(P.stories||[]).map(s=>'<option value="'+esc(s)+'"'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join('');
-  const drafts=(P.stories||[]).filter(s=>/^aidraft/.test(s));
-  ds.innerHTML=drafts.map(s=>'<option value="'+esc(s)+'"'+(s===cur?'':'')+'>'+esc(s)+'</option>').join('');
-}
-async function loadStoryline(sid){
-  const r=await(await fetch('/api/project/'+VIEW.proj+'?story='+encodeURIComponent(sid))).json();
-  return r.storyline||{};
-}
-async function renderDiff(){
-  try{
-    const a=$('df-base').value, b=$('df-draft').value;
-    if(!a||!b){$('dfcolA').innerHTML='<div class="note">至少需要一条现存线与一条草稿线</div>';$('dfcolB').innerHTML='';return;}
-    const [SA,SB]=await Promise.all([loadStoryline(a),loadStoryline(b)]);
-    const rows=(S,side)=>(S.beats||[]).map((bt,i)=>{
-      const trk=(bt.tracks||[]).map(t=>(t.role||'A')+':'+(t.source_id||'—')+'@'+(t.src_in||0)+'+'+(t.duration||0)+'s').join('<br>');
-      const style='background:'+(side==='B'?'rgba(255,212,0,.05)':'transparent')+';border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px';
-      const chk=side==='B'?'<input type="checkbox" class="dfck" data-no="'+(bt.no||i+1)+'" checked style="width:auto;margin-right:6px">':'';
-      return '<div style="'+style+'">'+chk+'<b class="k">幕'+(bt.no||i+1)+'</b> <span class="dim">'+esc((bt.story||'').slice(0,42))+'</span><div class="dim" style="font-size:11px;margin-top:4px">'+trk+'</div></div>';
-    }).join('')||'<div class="note">空</div>';
-    $('dfcolA').innerHTML=rows(SA,'A');
-    $('dfcolB').innerHTML=rows(SB,'B');
-    $('dfstat').textContent='';
-  }catch(e){$('dfstat').textContent='✗ '+e;}
-}
-async function applySelected(){
-  const a=$('df-base').value, b=$('df-draft').value;
-  if(!a||!b)return;
-  const nos=[...document.querySelectorAll('.dfck:checked')].map(x=>parseInt(x.dataset.no));
-  if(!nos.length)return alert('先勾选要采纳的幕');
-  if(!confirm('把草稿「'+b+'」的第 '+nos.join('/')+' 幕采纳进「'+a+'」？\n现存线会保存一个新版本（原内容被替换的幕不保留）。'))return;
-  try{
-    const [SA,SB]=await Promise.all([loadStoryline(a),loadStoryline(b)]);
-    const bb=SB.beats||[], ab=SA.beats||[];
-    const merged=[...ab];
-    nos.forEach(no=>{
-      const src=bb.find(x=>(x.no||0)===no);
-      const idx=merged.findIndex(x=>(x.no||0)===no);
-      if(src&&idx>=0)merged[idx]=src;          // 替换同序号
-      else if(src)merged.push(src);            // 追加新幕
-    });
-    merged.sort((x,y)=>(x.no||0)-(y.no||0));
-    const sl={outline:SA.outline||'', meta:SA.meta||SB.meta||{}, beats:merged};
-    const r=await(await fetch('/api/storyline/'+VIEW.proj+'?story='+encodeURIComponent(a),
-      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sl)})).json();
-    if(r.ok){$('dfstat').textContent='✓ 已采纳 '+nos.length+' 幕 → '+a+'（已落盘，回创作台重渲）';
-      await openProj(VIEW.proj,a,true);}
-    else $('dfstat').textContent='✗ '+(r.err||'');
-  }catch(e){$('dfstat').textContent='✗ '+e;}
 }
 let FMTS={};
 function fmtOptions(cur){
@@ -1445,12 +1359,9 @@ async function saveCutText(i,val){
   }catch(e){setStatus('✗ '+e);}
 }
 
-/* ═══ 审计视图 ═══ */
-function auditRow(k,v){return '<div class="arow"><span>'+k+'</span><b>'+v+'</b></div>';}
-function auditBlock(title,rows){return '<div class="ablock"><div class="ahead">'+title+'</div>'+rows.join('')+'</div>';}
-function enumName(list,id){const o=(list||[]).find(x=>x.id===id);return o?(o.name||o.id):'—';}
+/* ═══ 创作台视图（监视器 + 元信息条；独立审计页退役 2026-09-15 Noah——工程对账已并入创作台各轨）═══ */
 function buildViews(){
-  const pl=P.plan||{},m=DRAFT.meta||{};
+  const pl=P.plan||{};
   setVideo('monwrap',P.files.out,'暂无成片 · 点「保存并重渲」生成');
   const st=P.story;
   const hasOut=((P.outs||[]).indexOf(st)>=0);
@@ -1458,40 +1369,6 @@ function buildViews(){
     '<span class="vstat">'+esc(pl.duration)+'s · '+pl.width+'×'+pl.height+' · '+((pl.words||[]).length)+' 词 · '+((pl.segments||[]).length)+' 幕 · '+(hasOut?'<span style="color:var(--ok)">✓ 已出片</span>':'<span style="color:var(--faint)">未出片</span>')+'</span>'+
     '<span class="render-row"><button class="primary" id="srbtn" onclick="saveAndRender()" style="height:28px;padding:0 14px;font-size:12px">▶ 保存并重渲</button>'+
     '<button class="ghost" onclick="previewStory()" style="height:28px;font-size:11px;padding:0 10px" title="成片已存在时在监视器重放">▷ 重放</button></span>';
-  const head=[
-    auditRow('故事线',esc(DRAFT.title||pl.title||'—')+' <span class="mono" style="color:var(--gold)">'+esc(st||'')+'</span>'),
-    auditRow('视频类型',esc(enumName(P.enums.video_types,m.type))),
-    auditRow('平台',esc(enumName(P.enums.platforms,m.platform))),
-    auditRow('人设',esc(nz(m.persona,'—'))),
-    auditRow('字幕风格',esc(nz(m.style.subtitle,'—'))),
-    auditRow('画幅氛围',esc(nz(m.style.grade,'—'))),
-    auditRow('BGM',esc((P.registry&&P.registry.bgm&&(P.registry.bgm[m.audio.bgm_id||'']||{}).name)||m.audio.bgm_id||'（无）')),
-    auditRow('BGM 音量',esc(String(nz(m.audio.bgm_volume,'—')))),
-    auditRow('封面',esc(nz(m.cover.strategy,'—'))+(m.cover.title_text?' ·「'+esc(m.cover.title_text)+'」':'')),
-    auditRow('大纲',esc(DRAFT.outline||'—')),
-    auditRow('成片状态',((P.outs||[]).indexOf(st)>=0)?'✓ 已出片':'— 未出片')
-  ];
-  const beats=(DRAFT.beats||[]).map(b=>{
-    const A=(b.tracks||[]).find(t=>t.role==='A')||{};
-    const srcName=A.source_id||((P.library.sources||[])[0]&&(P.library.sources||[])[0].id)||'n001';
-    const rows=[auditRow('台词/摘要',esc(b.story||'—'))];
-    rows.push(auditRow('A 轨 · 主画',esc(srcName)+' @ '+fmtT(nz(A.src_in,0))+' + '+fmtD(nz(A.duration,0))));
-    (b.tracks||[]).filter(t=>t.role==='B').forEach(t=>{
-      rows.push(auditRow('B 轨 · 叠画',esc(t.source_id||srcName)+' @ '+fmtT(nz(t.src_in,0))+' + '+fmtD(nz(t.duration,0))+' · '+esc(nz(t.pos,'top-right'))+' ×'+esc(String(nz(t.scale,0.3)))));
-    });
-    rows.push(auditRow('旁白',esc(enumName(P.enums.narration_modes,(b.narration||{}).mode||'original'))));
-    rows.push(auditRow('转场',esc(b.transition_out||'无')));
-    const stks=((b.effects||{}).stickers||[]);
-    rows.push(auditRow('贴纸',stks.length?stks.map(s=>esc(s.asset)+'@「'+esc(nz(s.at_word,'?'))+'」· '+fmtD(nz(s.duration,0))).join('；'):'无'));
-    const sfxs=((b.effects||{}).sfx||[]);
-    rows.push(auditRow('音效',sfxs.length?sfxs.map(s=>esc(s.asset)+'@'+fmtT(nz(s.at,0))).join('；'):'无'));
-    rows.push(auditRow('字幕',esc((b.subtitle&&b.subtitle.style)||'继承全局')));
-    rows.push(auditRow('音乐',((b.music||{}).inherit!==false)?'继承贯穿 BGM':esc(nz((b.music||{}).bgm,'独立设置'))));
-    return auditBlock('幕 #'+nz(b.no,'?')+' · '+esc(b.id||''),rows);
-  }).join('');
-  $('auditform').innerHTML=auditBlock('工程总览',head)+beats;
-  $('plan').textContent=JSON.stringify(pl,null,1);
-  $('ass').textContent=P.ass||'(无字幕——narration=none 或未转写)';
 }
 function sld(id,label,min,max,step,val){
   return '<div class="slider-row"><label>'+label+'</label><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" oninput="$(\''+id+'v\').textContent=this.value"><span class="val" id="'+id+'v">'+val+'</span></div>';

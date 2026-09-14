@@ -53,7 +53,7 @@ jobs:
       - name: 启动 studio + 全量 e2e
         shell: bash
         run: |
-          python3 studio.py >studio-ci.log 2>&1 &
+          python3 -u studio.py >studio-ci.log 2>&1 &  # -u 无缓冲：kill 时不重定向丢输出（上次 artifact 0 行的根因）
           STUDIO_PID=$!
           for i in $(seq 1 30); do
             curl -s localhost:8765/api/projects >/dev/null 2>&1 && break
