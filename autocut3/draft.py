@@ -284,6 +284,14 @@ def run(project, intent, packs=None, save=True):
     dossier, mats = build_dossier(packs)
     if len(dossier) < 40:
         raise RuntimeError("素材档案为空——先完成转写/画面识别")
+    # 缺陷台账消费（v2-①）：选段必须避开处置窗口——识别层喊过的问题，起草层必须听得见
+    try:
+        import disposition
+        disp = disposition.lines_for_prompt(project)
+    except ImportError:
+        disp = ""
+    if disp:
+        dossier = dossier + "\n\n" + disp
     tr = os.path.join(ROOT, "registry", "transitions.json")
     transitions = list(json.load(open(tr, encoding="utf-8")).keys()) if os.path.exists(tr) else []
     messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions)}]

@@ -1114,6 +1114,8 @@ async function rebuildDigest(){
 }
 function renderPack(){
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
+  // 缺陷台账（disposition.json）懒加载——素材卡 ⚠ 展示，Agent 生成的台账人直接可见
+  if(P&&P.name&&!P._disp){fetch('/files/projects/'+P.name+'/disposition.json').then(r=>r.ok?r.json():null).then(d=>{if(d&&d.materials){P._disp=d;renderPack();}}).catch(()=>{});}
   const fs=(P.pack_files||[]).filter(f=>!q||((f.transcript&&f.transcript.text)||'').toLowerCase().indexOf(q)>=0||(f.id||'').toLowerCase().indexOf(q)>=0);
   const groups={};
   fs.forEach(f=>{(groups[f.pack]=groups[f.pack]||[]).push(f);});
@@ -1159,6 +1161,8 @@ function packCard(f){
       (v.usage?'<div class="vusage">▸ 用途：'+esc(v.usage)+'</div>':'')+'</div>';
   }
   const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(d.type||'废')+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
+  const ditems=((P._disp&&P._disp.materials&&P._disp.materials[f.id])||{}).items||[];
+  const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">台账·'+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':'标记')+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
   const tags=(f.tags||[]).map(t2=>'<span class="packtag">'+esc(t2)+'</span>').join('');
   const vpend=kind!=='audio'&&((f.audit||{}).visual!=='done');
   return '<div class="mcard'+(f.usable?'':' usable-false')+'">'+
@@ -1168,7 +1172,7 @@ function packCard(f){
     '<span class="usebadge '+(f.usable?(rev==='pending-review'?'pending':'usable'):'waste')+'" title="点击切换拍摄层可用性" onclick="togglePackUsable(\''+esc(f.id)+'\')">'+
     (f.usable?(rev==='pending-review'?'◌ 待审':'✓ 可用'):'✕ 拍摄废片')+'</span></div>'+
     '<div class="ktag">'+esc(KLBL)+'</div>'+
-    trHtml+visHtml+defs+
+    trHtml+visHtml+defs+dispHtml+
     '<div class="defadd" style="display:flex;gap:6px;margin-top:6px">'+
     '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">＋ 缺陷</button></div>'+
     '<div class="audit">'+

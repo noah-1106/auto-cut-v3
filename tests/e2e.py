@@ -762,6 +762,81 @@ def t27_orchestrator():
         check("T27 管线编排器（状态推导/全链 done/mount 创作门）", False, "异常: %s" % str(e)[:120])
 
 
+# ---------------------------------------------------------------- T28 缺陷台账（M2）
+def t28_disposition():
+    # 回归：disposition 聚合器四类缺陷（重说/念稿指纹/视觉缺陷/黑区）注入必抓必留痕，
+    # 且 draft 提示词必须消费台账（识别层的问题起草层听得见——治"假环节"）。
+    # 黑区用合成 wav：0-2s 静音 + 2-3s 正弦（VAD 物理测量），词轨只覆盖 0-0.5s → 2-3s 无词覆盖=黑区。
+    import tempfile, shutil
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import disposition as DSP
+        import draft as D
+        tmp = tempfile.mkdtemp(prefix="t28_")
+        old_root, old_droot = DSP.ROOT, D.ROOT
+        try:
+            DSP.ROOT = D.ROOT = tmp
+            pk = os.path.join(tmp, "materials", "packs", "tp")
+            os.makedirs(os.path.join(pk, "thumbs"))
+            os.makedirs(os.path.join(tmp, "materials", ".audio_cache"))
+            os.makedirs(os.path.join(tmp, "projects", "tp", "materials"))
+            os.makedirs(os.path.join(tmp, "registry"))
+            json.dump({}, open(os.path.join(tmp, "registry", "transitions.json"), "w"))
+            json.dump({"packs": ["tp"]}, open(os.path.join(tmp, "projects", "tp", "materials", "library.json"), "w"))
+            # 词轨：0-0.5s 六个词（含 3-gram 重说）+ 念稿指纹 + 视觉缺陷
+            ws = [{"text": c, "start": round(i * 0.08, 2), "end": round(i * 0.08 + 0.08, 2)}
+                  for i, c in enumerate("甲乙丙甲乙丙")]
+            json.dump({"id": "tp", "files": [{"id": "TPM", "file": "tp.mp4", "kind": "video",
+                     "duration": 3.0, "usable": True,
+                     "transcript": {"text": "甲乙丙甲乙丙", "scripted_dup": 23, "words": ws},
+                     "visual": {"desc": "t", "content_type": "narration",
+                                "defects": [{"t": [0.2, 0.6], "type": "blur", "note": "手抖"}]}}]},
+                      open(os.path.join(pk, "pack.json"), "w"), ensure_ascii=False)
+            # 合成 wav：0-2s 静音，2-3s 正弦——对应黑区 [2,3]
+            wav = os.path.join(tmp, "materials", ".audio_cache", "x_tp.wav")
+            # 缓存路径规则 = md5(素材所在目录)[:8]_<basename>——素材在 packs/tp 下，直接复用 _wav_cache 生成
+            import hashlib
+            dh = hashlib.md5(pk.encode("utf-8")).hexdigest()[:8]
+            wav = os.path.join(tmp, "materials", ".audio_cache", dh + "_tp.wav")
+            r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+                                "-f", "lavfi", "-i", "aevalsrc='if(gte(t,2),sin(440*t),0)':s=16000:d=3",
+                                "-ac", "1", wav], capture_output=True, text=True)
+            assert r.returncode == 0 and os.path.exists(wav), "黑区夹具 wav 合成失败"
+            rep = DSP.build("tp")
+            m = rep["materials"]["TPM"]
+            types = [it["type"] for it in m["items"]]
+            ok_detect = (m["verdict"] == "avoid"
+                         and "retake-suspect" in types and "scripted-dup" in types
+                         and "visual-blur" in types
+                         and any(it["type"] == "black-zone" and it["t"] == [2.0, 3.0] for it in m["items"]))
+            ok_report = rep["summary"]["avoid"] == 1 and os.path.exists(os.path.join(tmp, "projects", "tp", "disposition.json"))
+            # 消费链：draft 提示词必须含台账（假 LLM 捕获 messages 断言）
+            cap = {}
+            old_llm = D.chat_llm
+            def fake_llm(msgs):
+                cap["content"] = msgs[0]["content"]
+                return json.dumps({"title": "t", "outline": "o", "audio": {},
+                                   "beats": [{"story": "s", "narration": {"mode": "original"},
+                                              "tracks": [{"role": "A", "source_id": "TPM", "src_in": 0, "duration": 2}],
+                                              "transition_out": None}]}, ensure_ascii=False)
+            D.chat_llm = fake_llm
+            try:
+                sid, _d, beats = D.run("tp", "测试意图", save=False)
+            finally:
+                D.chat_llm = old_llm
+            ok_prompt = ("缺陷台账" in cap.get("content", "") and "TPM" in cap["content"]
+                         and "retake-suspect" in cap["content"])
+            ok_run = bool(sid is None and beats)  # save=False → sid None，beats 有效
+            check("T28 缺陷台账（四类注入必抓/留痕/起草消费）",
+                  ok_detect and ok_report and ok_prompt and ok_run,
+                  "types=%s prompt含台账=%s" % (types, ok_prompt))
+        finally:
+            DSP.ROOT, D.ROOT = old_root, old_droot
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T28 缺陷台账（四类注入必抓/留痕/起草消费）", False, "异常: %s" % str(e)[:140])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -878,6 +953,7 @@ def main():
     t24b_proofread_words_sync()
     t26_voiceover_orchestration()
     t27_orchestrator()
+    t28_disposition()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
