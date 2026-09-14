@@ -10,13 +10,20 @@
 |---|---|---|---|---|---|
 | 1 | 转写 | transcribe.py | pack.json（词轨+文本） | 理解/起草/词轨 | 自动✓ |
 | 2 | 理解 | understand.py | digest（场景/资产/定位） | 起草 | 自动✓ |
-| 3 | 缺陷处理 | dossier 散件未挂链 | defects 台账 | 起草/裁剪 | **环节缺失 → v2-①** |
-| 4 | 起草 | draft.py | storylines/*.json | 渲染 | 自动✓ |
-| 5 | 裁剪 | 无正式模块（会话内手工） | dub 音频+验证报告 | 渲染 | **手工 → v2-③** |
-| 6 | 词轨 | vadwords.py | VAD 词轨 | 字幕/卡拉OK | 脚本未挂载 → v2-④ |
-| 7 | 渲染 | pipeline.py + video_gen | out-*.mp4 + subtitle.ass | 门禁/交付 | 自动✓ |
-| 8 | 门禁 | qc + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 | 散脚本未挂载 → v2-⑤ |
+| 3 | 缺陷台账 | disposition.py | disposition.json（四类缺陷+建议窗口） | 起草提示词/素材卡⚠ | 自动✓（2026-09-14 M2） |
+| 4 | 起草 | draft.py | storylines/*.json | 渲染 | 自动✓（消费缺陷台账） |
+| 5 | 裁剪 | dubfit 未建（会话内手工） | dub 音频+验证报告 | 渲染 | **手工 → v2-③** |
+| 6 | 词轨 | vadwords.py | VAD 词轨 | 字幕/卡拉OK | 自动✓（2026-09-14 编排器挂载） |
+| 7 | 渲染 | pipeline.py + video_gen | out-*.mp4 + subtitle.ass | 门禁/交付 | 自动✓（硬解优先：mac=videotoolbox/win=nvenc·qsv，回退 libx264） |
+| 8 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 | 自动✓（2026-09-14 M3：听觉/冻结/页同步入列） |
 | 9 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 | 自动✓ |
+
+**管线编排器（2026-09-14 M1 落地）**：`autocut3/orchestrate.py` 从文件推导 13 环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
+```bash
+python3 autocut3/orchestrate.py myproj              # 看状态（13 环节 ✓/○/✗/· + 下一动作）
+python3 autocut3/orchestrate.py myproj --advance    # 推进到下一道门（素材段全自动；故事线门需 --intent；mount 是创作决定门）
+```
+Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，人随时看得见。
 
 **人机契约**：缺陷处置是技术修复决策（判据量化：dup 指纹/能量包络/静音阈值），Agent 按规则全自动执行并留痕，**不设事前人工确认**；人拥有规则制定权（改 config）和成片终审权（可选）。
 
@@ -29,20 +36,25 @@
 5. **dub 裁剪闭环**：裁出音频必须 dubgate 复检（首词=story 首字 / 末词含句尾 / 相似≥0.9），不过闸不渲染
 6. **门禁三域**：文本域（G1 说了什么）+ 时间域（G2t 什么时候说的）+ 听觉域（响度/静音洞）——"文本对"≠"时间对"（事故：46% 字符错位>1s 照样过文本门禁）
 7. **修复闭环**：修 A 暴露 B 是常态，门禁复跑到全绿才算收敛；修复必须带回归锚进 tests/e2e.py，没锚=没修完
+8. **跨平台纪律（Mac/Windows）**：文件锁一律走 `autocut3/flock.py`（POSIX=flock / Windows=msvcrt，禁直接 import fcntl）；ffmpeg 解析走 `ffmpeg_path()`（env → bin/ffmpeg(.exe) → PATH，禁裸 `"bin/ffmpeg"` 相对路径）；渲染编码走 `hw_encoder()`（平台探测，软编 libx264 只做回退）
 
 ## 当前状态与进行中
 
-- v3 稳定运行（HEAD 见 git log）；维护者项目 v6 成片已交付（57.1s / 门禁三域过 / -17.1 LUFS）
-- **v2 管线改造立项中**：六件事 = ①defects 台账 ②处置策略引擎 ③dubfit 裁剪自动化 ④vadwords 挂载 ⑤门禁挂载 ⑥听觉 QC——设计稿 `docs/pipeline-v2.md`，已知缺口即上表"状态"列非✓项
+- v3 稳定运行；维护者项目 v6 成片已交付（57.1s / 门禁三域过 / -17.1 LUFS）
+- **2026-09-14 接管首批落地（M1-M5 全部完成）**：管线编排器（orchestrate.py + /api/status + 前端进度条）｜缺陷处置链（disposition.py 四类缺陷→起草消费→素材卡⚠）｜QC 双域补位（R7 听觉/R4 冻结/R10 页同步）｜前端收敛（试渲去硬编码/字幕样张真兑现/渲染实时进度+系统通知）｜资产策展（12 槽位爆款语义音效 + 4 条真实 BGM 替换占位，Mixkit 免费商用，许可与来源清单随包）｜跨平台（flock.py 跨平台锁 + 平台感知 ffmpeg/硬解编码链，Mac/Windows 双端）
+- **已知遗留**：dubfit.py 裁剪自动化（v2-③）未建，配音裁剪仍是会话内手工；本地 TTS（Audio8-TTS，Apache 2.0）接入中
+- 代码托管：GitHub 私有库（Noah 账号），config/services.json 已永久 gitignore（历史已清除，key 走环境变量或 api_key_file）
 
 ## 快速上手
 
 ### 0. 前置（一次性）
 ```bash
-# ffmpeg 6.0+ 放进 bin/（或改 PATH；libass/libx264 编译项必需）
-bin/ffmpeg -version        # 验证
-# 云端服务 key 填入 config/services.json（ASR/视觉/LLM 目前用 minimax；也可 local-faster-whisper，见 requirements.lock.txt）
+# ffmpeg 6.0+：mac 放 bin/ffmpeg，Windows 放 bin/ffmpeg.exe，或装进 PATH（libass/libx264 编译项必需）
+bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
+# 云端服务 key：config/services.json 填 api_key_env（环境变量名，推荐）或 api_key_file（指向 {"api_key":"..."} 的文件）
+#   此文件已 gitignore 永不入库。ASR 可选 local-faster-whisper 免 key 本地转写
 ```
+平台支持：macOS 与 Windows 双端（Python 3.10+，零 pip 依赖；本地 TTS 的 onnxruntime venv 是可选组件，见下文"本地 TTS"）。
 
 ### 1. 启动 Studio（人侧）
 ```bash
@@ -75,10 +87,11 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 
 ```
 studio.py            # 后端全部路由（人/Agent 同权 HTTP）
-studio/index.html    # 前端单页
-autocut3/            # 流水线模块：transcribe(转写) understand(画面) draft(AI起草)
-                     #   pipeline(成片) video_gen(渲染) qc(质检) proofread(校对)
-                     #   vadwords(VAD词轨) dubgate(配音门禁) dossier(素材档案)
+studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
+autocut3/            # 流水线模块：orchestrate(编排器) transcribe(转写) understand(画面)
+                     #   draft(AI起草) disposition(缺陷台账) pipeline(成片) video_gen(AI生成口)
+                     #   qc(质检R1-R10) proofread(校对) vadwords(VAD词轨) dubgate(配音门禁)
+                     #   dossier(素材档案) flock(跨平台锁) tts(配音合成)
 registry/            # 注册表：效果系统的单一事实源（*.json 纯数据）
                      #   bgm/subtitles/transitions/sfx/stickers=效果；enums/formats=语义枚举(只读)
 assets/              # 效果素材本体（registry 的 file 字段指向这里）
@@ -86,7 +99,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线改造立项）
-tests/               # e2e.py(32项全量) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(35项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -94,6 +107,7 @@ bin/                 # ffmpeg 6.0+（自备，不入 git）
 
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
 Agent 起草时读同一张注册表选 BGM/转场；字幕样式、贴纸、音效按 id 引用。**改注册表即改下一次渲染，无需动代码。**
+音效=12 槽位社交媒体爆款语义（转场嗖/强调击打/提示叮/悬疑渐强/喜剧弹弓/倒计时/快门/成功短奏/错误蜂鸣/低频轰击/弹出泡泡/尴尬蟋蟀），全部 Mixkit 免费商用，来源与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，终审试听备选同清单。
 
 ## 单节点独立运行
 
