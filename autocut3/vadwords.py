@@ -12,7 +12,8 @@
 """
 import argparse, json, os, re, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-FF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin", "ffmpeg")
+import asr  # 平台解析链 ffmpeg_path/ffprobe_path（硬规则 8：禁裸 bin/ffmpeg 相对路径）
+FF = asr.ffmpeg_path()
 
 
 def vad_spans(src, ss=0.0, t=None, noise="-32dB", min_speech=0.30):
@@ -37,7 +38,7 @@ def vad_spans(src, ss=0.0, t=None, noise="-32dB", min_speech=0.30):
     # 语音段 = 补集
     dur = t
     if dur is None:
-        q = subprocess.run([os.path.join(os.path.dirname(FF), "ffprobe"), "-v", "error",
+        q = subprocess.run([asr.ffprobe_path(), "-v", "error",
                             "-show_entries", "format=duration", "-of", "csv=p=0", src],
                            capture_output=True, text=True)
         dur = float(q.stdout.strip())

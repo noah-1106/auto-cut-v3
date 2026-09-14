@@ -19,10 +19,11 @@
 import argparse, base64, json, os, subprocess, sys, time, urllib.request, urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from asr import load_services, resolve_key  # noqa: E402
+from asr import load_services, resolve_key, ffmpeg_path as _ffmpeg_path, ffprobe_path as _ffprobe_path  # noqa: E402 平台解析链（硬规则 8）
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FF = os.path.join(ROOT, "bin", "ffmpeg")
+FF = _ffmpeg_path()
+FFP = _ffprobe_path()
 GEN_PACK = "ai-generated"
 
 
@@ -148,7 +149,7 @@ def retrieve(project, task_id, file_id):
     fname = os.path.basename(mp4)
     dest = os.path.join(pk_dir, fname)
     os.replace(mp4, dest)
-    r = subprocess.run([os.path.join(ROOT, "bin", "ffprobe"), "-v", "error",
+    r = subprocess.run([FFP, "-v", "error",
                         "-show_entries", "format=duration:stream=width,height", "-of", "json", dest],  # probe 目的地（先移后探=永远探空）
                        capture_output=True, text=True)
     meta = json.loads(r.stdout or "{}")

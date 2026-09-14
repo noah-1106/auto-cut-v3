@@ -15,8 +15,10 @@
 import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FFP = os.path.join(ROOT, "bin", "ffprobe")
-FF = os.path.join(ROOT, "bin", "ffmpeg")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from asr import ffmpeg_path as _ffmpeg_path, ffprobe_path as _ffprobe_path  # 平台解析链（硬规则 8）
+FFP = _ffprobe_path()
+FF = _ffmpeg_path()
 
 def load(p):
     with open(p, encoding="utf-8") as f:

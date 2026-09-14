@@ -13,7 +13,8 @@
 import json, os, time, urllib.request
 
 ARK = os.path.expanduser(os.environ.get("AUTOCUT_AUDIO8_HOME", "~/.local/share/autocut3/audio8"))
-VENV_PY = os.path.join(ARK, "venv", "bin", "python")
+_VENV_BIN = os.path.join(ARK, "venv", "Scripts" if os.name == "nt" else "bin")
+VENV_PY = os.path.join(_VENV_BIN, "python.exe" if os.name == "nt" else "python")
 RT_DIR = os.path.join(ARK, "runtime", "onnx_runtime")
 MODEL_DIR = os.path.join(ARK, "model")
 VOICES_DIR = os.path.join(ARK, "voices")
@@ -53,7 +54,7 @@ def ensure_server(timeout_s=180):
                ARKTTS_REGISTRATION_DIR=os.path.join(MODEL_DIR, "registration"),
                ARKTTS_PRECISION="int4", ARKTTS_CODEC_PRECISION="fp16",
                PORT=str(PORT), ARKTTS_THREADS=os.environ.get("ARKTTS_THREADS", "5"),
-               PATH=os.path.join(ARK, "venv", "bin") + os.pathsep + os.environ.get("PATH", ""))
+               PATH=_VENV_BIN + os.pathsep + os.environ.get("PATH", ""))
     log = open(os.path.join(ARK, "service.log"), "ab")
     # 启动方式对齐上游 run_server.sh：service.py 只定义 app，必须由 uvicorn 拉起
     subprocess.Popen([VENV_PY, "-m", "uvicorn", "arktts_runtime.service:app",
