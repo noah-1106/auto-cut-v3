@@ -16,6 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MINIMAX_KEY: ${{ secrets.MINIMAX_KEY }}
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
 
