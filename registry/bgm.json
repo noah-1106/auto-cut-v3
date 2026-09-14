@@ -2,23 +2,35 @@
  "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：PUT /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。",
  "bgm_n001": {
   "file": "assets/music/bgm_n001.mp3",
-  "name": "默认轻快",
-  "desc": "现役默认底乐，中速不抢人声"
+  "name": "轻快民谣",
+  "desc": "Mixkit「Tears of Joy」Michael Ramir C.（Folk Pop，2:20）——默认轻快底乐（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
+  "loop": true,
+  "source": "https://assets.mixkit.co/music/839/839.mp3",
+  "license": "https://mixkit.co/license/#musicFree"
  },
  "bgm_n002_light": {
   "file": "assets/music/bgm_n002_light.mp3",
-  "name": "轻快叮当",
-  "desc": "高频段轻快律动，适合快节奏干货口播（占位合成音）"
+  "name": "流行舞步",
+  "desc": "Mixkit「One More Dance」Arulo（Pop，1:40）——快节奏干货口播（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
+  "loop": true,
+  "source": "https://assets.mixkit.co/music/288/288.mp3",
+  "license": "https://mixkit.co/license/#musicFree"
  },
  "bgm_n003_deep": {
   "file": "assets/music/bgm_n003_deep.mp3",
-  "name": "低频沉稳",
-  "desc": "低频铺底，适合警示/干货检核类内容（占位合成音）"
+  "name": "暗涌氛围",
+  "desc": "Mixkit「Echoes」Andrew Ev（Atmospheres，3:46）——警示/检核类低频铺底（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
+  "loop": true,
+  "source": "https://assets.mixkit.co/music/188/188.mp3",
+  "license": "https://mixkit.co/license/#musicFree"
  },
  "bgm_n004_soft": {
   "file": "assets/music/bgm_n004_soft.mp3",
-  "name": "柔和叙事",
-  "desc": "柔和慢律动，适合情感/收尾段（占位合成音）"
+  "name": "山谷落日",
+  "desc": "Mixkit「Valley Sunset」A. M.（Ambient，2:14）——情感/收尾柔和叙事（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
+  "loop": true,
+  "source": "https://assets.mixkit.co/music/127/127.mp3",
+  "license": "https://mixkit.co/license/#musicFree"
  },
  "bgm_u001_upbeat": {
   "file": "assets/music/bgm_upbeat_backbeat.mp3",

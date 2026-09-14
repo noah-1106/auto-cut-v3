@@ -741,15 +741,43 @@ def t26_voiceover_orchestration():
 # ---------------------------------------------------------------- T27 管线编排器（M1）
 def t27_orchestrator():
     # 回归：orchestrate.status 文件态推导（与 /api/status/CLI 同源）——
-    # ①结构完整（13 环节+合法状态）②全链跑通的 fixture 必须全 done/na 且无 next
+    # ①结构完整（13 环节+合法状态）②全链产物齐备的合成树必须全 done/na 且无 next
     # ③空项目的下一动作=mount ④advance 不越创作门（mount 是创作决策，全自动只到门）
+    # 注：全绿断言用补丁 ROOT 的合成文件树——live 项目在套件中途被各用例改故事线/渲染，
+    #     freshness（out 新于故事线）必然被破坏，断言 live 全绿=测试设计缺陷（2026-09-14 实锤）
+    import tempfile
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import orchestrate as ORCH
-        st = ORCH.status(PROJ)
-        ok_struct = (st["project"] == PROJ and len(st["steps"]) == 13
-                     and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
-        ok_done = all(s["status"] in ("done", "na") for s in st["steps"]) and st["next"] is None
+        ok_struct = ok_done = ok_gate = False
+        old_root = ORCH.ROOT
+        tmp = tempfile.mkdtemp(prefix="t27_")
+        try:
+            ORCH.ROOT = tmp
+            pk = os.path.join(tmp, "materials", "packs", "p1")
+            os.makedirs(pk)
+            words = [{"text": "测", "start": 0.0, "end": 0.3}]
+            json.dump({"files": [{"id": "M1", "kind": "video", "audit": {"transcript": "done", "visual": "done", "proofread": "auto-done"},
+                                  "transcript": {"words": words}}], "digest": {"theme": "t"}},
+                      open(os.path.join(pk, "pack.json"), "w", encoding="utf-8"), ensure_ascii=False)
+            pd = os.path.join(tmp, "projects", "full")
+            os.makedirs(os.path.join(pd, "materials"))
+            os.makedirs(os.path.join(pd, "storylines"))
+            json.dump({"packs": ["p1"]}, open(os.path.join(pd, "materials", "library.json"), "w"))
+            json.dump({}, open(os.path.join(pd, "project.json"), "w"))
+            json.dump({}, open(os.path.join(pd, "dossier.json"), "w"))
+            json.dump({"materials": {}, "summary": {}}, open(os.path.join(pd, "disposition.json"), "w"))
+            json.dump({"beats": [{"no": 1, "narration": {"mode": "original", "words": words}}]},
+                      open(os.path.join(pd, "storylines", "s.json"), "w", encoding="utf-8"), ensure_ascii=False)
+            json.dump({"verdict": "pass"}, open(os.path.join(pd, "qc-report.json"), "w"))
+            open(os.path.join(pd, "out-s.mp4"), "wb").write(b"x")  # mtime 最新=out 新于故事线
+            st = ORCH.status(pd)
+            ok_struct = (st["project"] == "full" and len(st["steps"]) == 13
+                         and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
+            ok_done = all(s["status"] in ("done", "na") for s in st["steps"]) and st["next"] is None
+        finally:
+            ORCH.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
         api("/api/project-create/", method="POST", body={"name": "e2eorch", "title": "编排测试", "format": "vertical"})
         try:
             st2 = ORCH.status("e2eorch")
@@ -760,7 +788,7 @@ def t27_orchestrator():
             api("/api/project-delete/e2eorch", method="POST")
         check("T27 管线编排器（状态推导/全链 done/mount 创作门）",
               ok_struct and ok_done and ok_gate,
-              "steps=%d next=%s | 空项目 next=%s" % (len(st["steps"]), st["next"], st2["next"]))
+              "struct=%s done=%s gate=%s" % (ok_struct, ok_done, ok_gate))
     except Exception as e:
         check("T27 管线编排器（状态推导/全链 done/mount 创作门）", False, "异常: %s" % str(e)[:120])
 

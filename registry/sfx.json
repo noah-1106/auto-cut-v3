@@ -1,92 +1,63 @@
 {
- "knock": {
-  "name": "敲击",
-  "desc": "木质敲击",
-  "file": "assets/sfx/knock.wav"
- },
- "ding": {
-  "name": "叮",
-  "desc": "提示音",
-  "file": "assets/sfx/ding.wav"
- },
- "whoosh_n": {
-  "name": "嗖·戏剧",
-  "desc": "横移转场垫音（cinematic 戏剧感）",
-  "file": "assets/sfx/uisfx/whoosh_n.mp3"
- },
- "whoosh_s": {
-  "name": "嗖·轻快",
-  "desc": "轻快横移/切换垫音（soft 轻质感）",
-  "file": "assets/sfx/uisfx/whoosh_s.mp3"
- },
- "snap_c": {
-  "name": "脆响·戏剧",
-  "desc": "词点强调/定格式落锤（cinematic）",
-  "file": "assets/sfx/uisfx/snap_c.mp3"
- },
- "snap_s": {
-  "name": "脆响·轻快",
-  "desc": "词点强调轻版（soft）",
-  "file": "assets/sfx/uisfx/snap_s.mp3"
- },
- "success_c": {
-  "name": "成功·戏剧",
-  "desc": "成果展示/步骤完成（cinematic）",
-  "file": "assets/sfx/uisfx/success_c.mp3"
- },
- "success_s": {
-  "name": "成功·轻快",
-  "desc": "成果展示轻版（soft）",
-  "file": "assets/sfx/uisfx/success_s.mp3"
- },
- "error_c": {
-  "name": "错误·戏剧",
-  "desc": "反例/禁止/纠错时刻（cinematic）",
-  "file": "assets/sfx/uisfx/error_c.mp3"
- },
- "error_s": {
-  "name": "错误·轻快",
-  "desc": "反例提示轻版（soft）",
-  "file": "assets/sfx/uisfx/error_s.mp3"
- },
- "warn_c": {
-  "name": "警示·戏剧",
-  "desc": "安全隐患/重点警示（cinematic）",
-  "file": "assets/sfx/uisfx/warn_c.mp3"
- },
- "warn_s": {
-  "name": "警示·轻快",
-  "desc": "轻警示（soft）",
-  "file": "assets/sfx/uisfx/warn_s.mp3"
- },
- "notify_c": {
-  "name": "提示·戏剧",
-  "desc": "信息点提示（cinematic）",
-  "file": "assets/sfx/uisfx/notify_c.mp3"
- },
- "notify_s": {
-  "name": "提示·轻快",
-  "desc": "信息点轻提示（soft）",
-  "file": "assets/sfx/uisfx/notify_s.mp3"
- },
- "levelup_c": {
-  "name": "升级·戏剧",
-  "desc": "进阶/升级时刻（cinematic）",
-  "file": "assets/sfx/uisfx/levelup_c.mp3"
- },
- "levelup_s": {
-  "name": "升级·轻快",
-  "desc": "进阶轻版（soft）",
-  "file": "assets/sfx/uisfx/levelup_s.mp3"
- },
- "reward_c": {
-  "name": "奖励·戏剧",
-  "desc": "福利/彩蛋/奖励时刻（cinematic）",
-  "file": "assets/sfx/uisfx/reward_c.mp3"
- },
- "reward_s": {
-  "name": "奖励·轻快",
-  "desc": "奖励轻版（soft）",
-  "file": "assets/sfx/uisfx/reward_s.mp3"
- }
+  "_comment": "音效注册表（2026-09-14 M5 整换）：12 槽位=社交媒体爆款语义，全部来自 Mixkit 免费商用库（许可见 assets/sfx/viral/LICENSE-mixkit.txt，来源清单 sources-manifest.json）。已统一响度归一到 -16 LUFS / TP -1.5，ffmpeg 波形质检无削波。导入：PUT /api/registry-upload/sfx/<id>。",
+  "whoosh": {
+    "name": "转场·嗖",
+    "desc": "快节奏横移/切换转场垫音（cinematic fast whoosh，社交媒体通用转场音）",
+    "file": "assets/sfx/viral/whoosh.mp3"
+  },
+  "hit": {
+    "name": "强调·击打",
+    "desc": "词点强调/定格式落锤（strong punch impact，短促有力）",
+    "file": "assets/sfx/viral/hit.mp3"
+  },
+  "ding": {
+    "name": "提示·叮",
+    "desc": "信息点/正确答案提示音（correct answer tone，清脆不刺耳）",
+    "file": "assets/sfx/viral/ding.mp3"
+  },
+  "riser": {
+    "name": "悬疑·渐强",
+    "desc": "悬念拉起/揭晓前铺垫（cinematic trailer riser）",
+    "file": "assets/sfx/viral/riser.mp3"
+  },
+  "boing": {
+    "name": "喜剧·弹弓",
+    "desc": "出糗/反差喜剧时刻（boing hit，卡通弹跳）",
+    "file": "assets/sfx/viral/boing.mp3"
+  },
+  "countdown": {
+    "name": "倒计时",
+    "desc": "三步倒计时/开始发令（sport start bleeps）",
+    "file": "assets/sfx/viral/countdown.mp3"
+  },
+  "camera": {
+    "name": "相机·快门",
+    "desc": "拍照/定格/截图时刻（camera shutter click）",
+    "file": "assets/sfx/viral/camera.mp3"
+  },
+  "success": {
+    "name": "成功·短奏",
+    "desc": "成果展示/步骤完成（game success alert，上扬短奏）",
+    "file": "assets/sfx/viral/success.mp3"
+  },
+  "error": {
+    "name": "错误·蜂鸣",
+    "desc": "反例/禁止/纠错时刻（game show wrong answer buzz）",
+    "file": "assets/sfx/viral/error.mp3"
+  },
+  "boom": {
+    "name": "重锤·低频",
+    "desc": "重磅结论/视觉冲击（movie impact intro，Vine 式低频轰击）",
+    "file": "assets/sfx/viral/boom.mp3"
+  },
+  "pop": {
+    "name": "弹出·泡泡",
+    "desc": "弹窗/条目弹出/轻快切换（bubble pop up alert）",
+    "file": "assets/sfx/viral/pop.mp3"
+  },
+  "cricket": {
+    "name": "尴尬·蟋蟀",
+    "desc": "冷场/静默尴尬时刻（single cricket screech）",
+    "file": "assets/sfx/viral/cricket.mp3"
+  }
 }

@@ -263,7 +263,8 @@ class H(BaseHTTPRequestHandler):
             transition_ids = list((jload(f"{ROOT}/registry/transitions.json", {}) or {}).keys())
             enums["stickers"] = [{"id": k, **{kk: vv for kk, vv in v.items() if kk in ("desc", "pos", "duration")}}
                                  for k, v in (jload(f"{ROOT}/registry/stickers.json", {}) or {}).items()]
-            enums["sfx"] = [{"id": k, "desc": v.get("desc", "")} for k, v in (jload(f"{ROOT}/registry/sfx.json", {}) or {}).items()]
+            enums["sfx"] = [{"id": k, "desc": v.get("desc", "")} for k, v in (jload(f"{ROOT}/registry/sfx.json", {}) or {}).items()
+                            if not k.startswith("_") and isinstance(v, dict)]
             library = jload(f"{p}/materials/library.json", {})
             pack_files = []
             for pid in library.get("packs", []):

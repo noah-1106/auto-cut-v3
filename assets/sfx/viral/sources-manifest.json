@@ -1,0 +1,33 @@
+{
+  "_comment": "音效来源清单（审计用）：槽位 → Mixkit 条目 id/标题/直链。全部为 Mixkit 免费商用许可（https://mixkit.co/license/）。下载时间 2026-09-14。",
+  "license": "Mixkit SFX Free License — https://mixkit.co/license/",
+  "items": {
+    "whoosh":   {"mixkit_id": 1492, "title": "Cinematic whoosh fast transition", "url": "https://mixkit.co/free-sound-effects/whoosh/"},
+    "hit":      {"mixkit_id": 2155, "title": "Impact of a strong punch", "url": "https://mixkit.co/free-sound-effects/punch/"},
+    "ding":     {"mixkit_id": 2870, "title": "Correct answer tone", "url": "https://mixkit.co/free-sound-effects/notification/"},
+    "riser":    {"mixkit_id": 790,  "title": "Cinematic trailer riser", "url": "https://mixkit.co/free-sound-effects/discover/riser/"},
+    "boing":    {"mixkit_id": 2894, "title": "Boing hit sound", "url": "https://mixkit.co/free-sound-effects/discover/boing/"},
+    "countdown":{"mixkit_id": 918,  "title": "Sport start bleeps", "url": "https://mixkit.co/free-sound-effects/discover/countdown/"},
+    "camera":   {"mixkit_id": 1133, "title": "Camera shutter click", "url": "https://mixkit.co/free-sound-effects/camera/"},
+    "success":  {"mixkit_id": 2039, "title": "Game success alert", "url": "https://mixkit.co/free-sound-effects/discover/success/"},
+    "error":    {"mixkit_id": 950,  "title": "Game show wrong answer buzz", "url": "https://mixkit.co/free-sound-effects/error/"},
+    "boom":     {"mixkit_id": 2902, "title": "Movie impact intro presentation", "url": "https://mixkit.co/free-sound-effects/boom/"},
+    "pop":      {"mixkit_id": 2357, "title": "Bubble pop up alert notification", "url": "https://mixkit.co/free-sound-effects/pop/"},
+    "cricket":  {"mixkit_id": 1780, "title": "Single cricket screech", "url": "https://mixkit.co/free-sound-effects/discover/cricket/"}
+  },
+  "audition_alternates": {
+    "_comment": "Noah 终审试听备选（同槽位候选，assets 未入册，可按听感替换）",
+    "whoosh":   [{"mixkit_id": 1491, "title": "Arrow whoosh"}, {"mixkit_id": 1489, "title": "Air woosh"}],
+    "hit":      [{"mixkit_id": 2047, "title": "Martial arts fast punch"}, {"mixkit_id": 2161, "title": "Air in a hit"}],
+    "ding":     [{"mixkit_id": 938, "title": "Uplifting bells notification"}, {"mixkit_id": 933, "title": "Bell notification"}],
+    "riser":    [{"mixkit_id": 1144, "title": "Short space stutter intro riser"}, {"mixkit_id": 632, "title": "Cinematic drama riser"}],
+    "boing":    [{"mixkit_id": 2895, "title": "Metallic boing hit"}],
+    "countdown":[{"mixkit_id": 916, "title": "Clock countdown bleeps"}],
+    "camera":   [{"mixkit_id": 1430, "title": "Camera shutter hard click"}, {"mixkit_id": 1438, "title": "Vintage camera shutter"}],
+    "success":  [{"mixkit_id": 2865, "title": "Success software tone"}, {"mixkit_id": 270, "title": "Fantasy game success notification"}],
+    "error":    [{"mixkit_id": 954, "title": "Wrong long buzzer"}, {"mixkit_id": 948, "title": "Wrong answer bass buzzer"}],
+    "boom":     [{"mixkit_id": 2759, "title": "Arcade game explosion"}, {"mixkit_id": 1143, "title": "Cinematic whoosh deep impact"}],
+    "pop":      [{"mixkit_id": 2354, "title": "Message pop alert"}, {"mixkit_id": 2358, "title": "Long pop"}],
+    "cricket":  [{"mixkit_id": 1780, "title": "Single cricket screech（已是短音；长环境音候选 1789 Summer night crickets loop）"}]
+  }
+}
