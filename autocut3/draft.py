@@ -124,6 +124,34 @@ def build_dossier(packs):
     return "\n".join(rows), mats
 
 
+def _reg(name):
+    import os
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "registry", name)
+    try:
+        with open(f, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _effect_catalog():
+    """效果注册表 → 提示词段落（2026-09-15 Noah #11：字幕样式/贴纸/音效此前未进提示词，
+    draft 输出恒为空——Agent 无从得知可选效果。id+中文名+语义描述，LLM 按幕选用）。"""
+    def _lines(rn, fmt):
+        reg = _reg(rn)
+        return [fmt(k, v) for k, v in reg.items() if not k.startswith("_")]
+    _fmt = lambda k, v: "%s(%s%s)" % (k, (v.get("name", "") + "：") if v.get("name") else "",
+                                      (v.get("desc") or v.get("name") or "")[:30])
+    subs = _lines("subtitles.json", _fmt)
+    stks = _lines("stickers.json", _fmt)
+    sfxs = _lines("sfx.json", _fmt)
+    return ("[效果注册表]（按幕选用；拿不准就留空，禁止编造表外 id）\n"
+            "字幕样式 subtitle.style：%s\n"
+            "贴纸 effects.stickers（词点触发，at_word=该幕台词里的触发词）：%s\n"
+            "音效 effects.sfx（时刻触发，at=幕内秒）：%s"
+            % ("、".join(subs) or "（无）", "、".join(stks) or "（无）", "、".join(sfxs) or "（无）"))
+
+
 def build_prompt(dossier, intent, transitions):
     return """你是装修口播短视频的故事线起草师。基于素材档案起草一条新故事线。
 
@@ -131,6 +159,8 @@ def build_prompt(dossier, intent, transitions):
 %s
 
 [用户意图]
+%s
+
 %s
 
 [硬约束]
@@ -143,14 +173,19 @@ def build_prompt(dossier, intent, transitions):
 7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
 8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
    禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
+9. 效果按幕选用（字幕风格/贴纸/音效，见效果注册表）：每幕至多 1 个字幕样式、2 个贴纸、2 个音效；
+   只选与幕内容语义匹配的（强调用 hit、提示用 ding、转场处才用 whoosh），宁缺毋滥
 
 [输出] 只输出合法 JSON（无 markdown 代码块、无解释）：
 {"title":"故事线标题","outline":"这条线在讲什么（2-3句）",
 "beats":[{"story":"该幕口播台词（可直接念的第一人称口语）",
 "tracks":[{"role":"A","source_id":"素材id","src_in":起点秒,"duration":时长秒,"requirement":"选用理由一句话"},
 {"role":"B","source_id":"素材id","src_in":0,"duration":秒,"pos":"top-right","scale":0.3,"requirement":"叠画理由"}],
-"narration":{"mode":"original"},"transition_out":null}],
-"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, ", ".join(transitions) or "（无转场注册）",
+"narration":{"mode":"original"},"transition_out":null,
+"subtitle":{"style":"字幕样式id 或省略"},
+"effects":{"stickers":[{"asset":"贴纸id","at_word":"触发词","duration":1.2,"pos":"top-center"}],
+"sfx":[{"asset":"音效id","at":0.0,"duration":0.4}]}}],
+"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
     ", ".join("%s(%s：%s)" % (k, v.get("name", ""), (v.get("desc") or "")[:24]) for k, v in _bgm_reg().items() if not k.startswith("_")) or "（无 BGM 注册，bgm_id 填 null）")
 
 
@@ -245,9 +280,26 @@ def validate(draft, mats, transitions):
         if not any(t["role"] == "A" for t in tracks):
             tracks[0]["role"] = "A"
         to = b.get("transition_out")
+        # 效果选择透传（2026-09-15 Noah #11）：注册表白名单校验后保留 LLM 选择——
+        # 曾恒空丢弃（假消费）：提示词没喂注册表 + validate 重建 beats 时空 effects/subtitle
+        _subs = _reg("subtitles.json")
+        _stks = _reg("stickers.json")
+        _sfxs = _reg("sfx.json")
+        _eff = b.get("effects") or {}
+        _stickers = [{"asset": s.get("asset"), "at_word": str(s.get("at_word") or "")[:12],
+                      "duration": min(6.0, max(0.3, float(s.get("duration") or 1.2))),
+                      "pos": s.get("pos") if s.get("pos") in
+                      ("top-left", "top-center", "top-right", "center", "bottom-left", "bottom-right") else "top-center"}
+                     for s in (_eff.get("stickers") or [])[:2] if s.get("asset") in _stks]
+        _sfxl = [{"asset": s.get("asset"), "at": max(0.0, float(s.get("at") or 0)),
+                  "duration": min(3.0, max(0.1, float(s.get("duration") or 0.4)))}
+                 for s in (_eff.get("sfx") or [])[:2] if s.get("asset") in _sfxs]
+        _sub = b.get("subtitle") or {}
+        _substyle = _sub.get("style") if _sub.get("style") in _subs else None
         beats.append({"story": str(b.get("story") or "")[:120], "tracks": tracks,
                       "narration": {"mode": "original"}, "music": {"inherit": True},
-                      "effects": {"stickers": [], "sfx": []}, "subtitle": {},
+                      "effects": {"stickers": _stickers, "sfx": _sfxl},
+                      "subtitle": ({"style": _substyle} if _substyle else {}),
                       "transition_out": to if to in transitions else None})
     return beats
 

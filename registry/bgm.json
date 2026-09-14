@@ -1,12 +1,20 @@
 {
- "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：PUT /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。",
+ "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：PUT /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。segments（2026-09-15）：可选曲段落 [{name,in,out,desc}]，out=null=到曲尾；幕级 music.segment / 全局 meta.audio.bgm_segment 引用段落名，配合 loop 标志做段落循环。当前各曲默认只有「整条」，细段落待试听审计后补（不虚构音乐结构）。",
  "bgm_n001": {
   "file": "assets/music/bgm_n001.mp3",
   "name": "轻快民谣",
   "desc": "Mixkit「Tears of Joy」Michael Ramir C.（Folk Pop，2:20）——默认轻快底乐（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
   "loop": true,
   "source": "https://assets.mixkit.co/music/839/839.mp3",
-  "license": "https://mixkit.co/license/#musicFree"
+  "license": "https://mixkit.co/license/#musicFree",
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_n002_light": {
   "file": "assets/music/bgm_n002_light.mp3",
@@ -14,7 +22,15 @@
   "desc": "Mixkit「One More Dance」Arulo（Pop，1:40）——快节奏干货口播（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
   "loop": true,
   "source": "https://assets.mixkit.co/music/288/288.mp3",
-  "license": "https://mixkit.co/license/#musicFree"
+  "license": "https://mixkit.co/license/#musicFree",
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_n003_deep": {
   "file": "assets/music/bgm_n003_deep.mp3",
@@ -22,7 +38,15 @@
   "desc": "Mixkit「Echoes」Andrew Ev（Atmospheres，3:46）——警示/检核类低频铺底（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
   "loop": true,
   "source": "https://assets.mixkit.co/music/188/188.mp3",
-  "license": "https://mixkit.co/license/#musicFree"
+  "license": "https://mixkit.co/license/#musicFree",
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_n004_soft": {
   "file": "assets/music/bgm_n004_soft.mp3",
@@ -30,30 +54,70 @@
   "desc": "Mixkit「Valley Sunset」A. M.（Ambient，2:14）——情感/收尾柔和叙事（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
   "loop": true,
   "source": "https://assets.mixkit.co/music/127/127.mp3",
-  "license": "https://mixkit.co/license/#musicFree"
+  "license": "https://mixkit.co/license/#musicFree",
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_u001_upbeat": {
   "file": "assets/music/bgm_upbeat_backbeat.mp3",
   "name": "轻快节拍",
   "desc": "46s 律动底拍——快节奏/活力内容循环用",
-  "loop": true
+  "loop": true,
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_c001_chill": {
   "file": "assets/music/bgm_chill_be_chillin.mp3",
   "name": "松弛律动",
   "desc": "202s 慵懒律动——vlog/生活流底乐",
-  "loop": true
+  "loop": true,
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_i001_corp": {
   "file": "assets/music/bgm_corporate_inspiration.mp3",
   "name": "企业励志",
   "desc": "138s 渐进励志——干货/成长类叙事",
-  "loop": true
+  "loop": true,
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  },
  "bgm_a001_advert": {
   "file": "assets/music/bgm_brand_advertime.mp3",
   "name": "广告时段",
   "desc": "134s 商业质感——推广/品牌向",
-  "loop": true
+  "loop": true,
+  "segments": [
+   {
+    "name": "整条",
+    "in": 0,
+    "out": null,
+    "desc": "全曲（默认，曲位=时间轴位）"
+   }
+  ]
  }
 }

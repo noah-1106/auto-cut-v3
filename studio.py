@@ -430,6 +430,27 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(unquote(self.path, encoding="utf-8"))  # 同 do_GET
         if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/"):
             return self._handle_voice(u)
+        if u.path.startswith("/api/cover-gen/"):
+            name = u.path.split("/")[3]
+            if not _safe(name):
+                return self._json({"err": "bad project"}, 400)
+            try:
+                body = json.loads((self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}").decode("utf-8") or "{}")
+                prompt = str(body.get("prompt") or "").strip()
+            except Exception:
+                return self._json({"err": "bad body"}, 400)
+            if not prompt:
+                return self._json({"err": "prompt 为空"}, 400)
+            pd = f"{ROOT}/projects/{name}"
+            if not os.path.isdir(pd):
+                return self._json({"err": "no such project"}, 404)
+            try:
+                import image_gen
+                cdir = os.path.join(pd, "cover"); os.makedirs(cdir, exist_ok=True)
+                image_gen.gen_image(prompt, os.path.join(cdir, "generated.jpg"), aspect_ratio="9:16")
+            except Exception as e:
+                return self._json({"err": str(e)[:200]}, 500)
+            return self._json({"ok": True, "note": "已落 cover/generated.jpg——封面策略选「AI 生成封面」后随渲染生效"})
         if u.path.startswith("/api/library/") and "/clip/" in u.path:
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）

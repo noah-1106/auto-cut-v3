@@ -464,6 +464,7 @@ function updateSaveChip(){
   c.textContent=DIRTY?'● 未保存（自动保存中…）':'✓ 已自动保存';
 }
 let PULSE=null, CLI_RENDER_SHOWN=null;  // PULSE: /api/pulse 基线；CLI 渲染已展示到的百分比
+let PV_BUSY=false;  // 幕预览渲染中：抑制 PULSE 数据热重载（重建 DOM 会把预览条/滚动位置顶掉——Noah #9 渲染跳动实锤）
 
 function setStatus(s){$('status').textContent=s;}
 function fmtT(s){s=Math.round((+s)*10)/10;if(isNaN(s))return'?';const m=Math.floor(s/60);let r=Math.round((s-m*60)*10)/10;if(r>=60){m+=1;r=0}return m+':'+(r<10?'0':'')+r.toFixed(1);}
@@ -690,14 +691,18 @@ async function voiceRegister(){
   }catch(e){$('voice-hint').textContent='✗ '+e;}
 }
 async function voiceTest(name){
-  $('voice-hint').textContent='试听合成中…';
+  const t0=Date.now();
+  const tick=setInterval(()=>{$('voice-hint').textContent='试听合成中…（已 '+Math.round((Date.now()-t0)/1000)+'s，本地 CPU 推理）';},1000);
   try{
     const text=prompt('试听文本','大家好，今天继续讲装修避坑。')||'';
     if(!text)return;
     const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text))).json();
-    if(r.ok){$('voice-hint').textContent='✓ 试听已生成';new Audio(r.url).play();}
+    if(r.ok){$('voice-hint').textContent='✓ 试听已生成，加载播放中…';new Audio(r.url).play()
+      .then(()=>{$('voice-hint').textContent='✓ 试听播放中（生成 '+Math.round((Date.now()-t0)/1000)+'s）';})
+      .catch(()=>{$('voice-hint').textContent='✓ 试听已生成（浏览器拦截自动播放，点页面任意处再听）';});}
     else $('voice-hint').textContent='✗ '+((r.err||r.error)||'试听失败');
   }catch(e){$('voice-hint').textContent='✗ '+e;}
+  clearInterval(tick);
 }
 async function voiceDel(name){
   if(!confirm('删除音色 '+name+'？'))return;
@@ -810,6 +815,26 @@ function regList(rn){
 function optHtml(list,cur){
   return (list||[]).map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.name||o.id)+'</option>').join('');
 }
+function bgmTrackId(b){  // 该幕生效的 BGM id（继承→全局，独立→幕级）
+  return ((b.music||{}).inherit!==false)?(DRAFT.meta.audio.bgm_id||null):((b.music||{}).bgm||null);
+}
+function segOptsHtml(bid,cur){
+  const conf=((P.registry||{}).bgm||{})[bid];
+  const segs=(conf&&conf.segments)||[];
+  return optHtml([{id:'',name:'（整条）'}].concat(segs.map(s=>({id:s.name,name:s.name+(s.desc?'：'+s.desc:'')}))),cur||'');
+}
+function segSelectHtml(bid,cur,i){
+  if(!(((P.registry||{}).bgm||{})[bid]||{}).segments)return '<span style="font-size:10px;color:var(--faint)">该曲无段落</span>';
+  return '<select title="选用曲内段落（注册表 segments）" onchange="DRAFT.beats['+i+'].music.segment=this.value||null;markDirty()">'+segOptsHtml(bid,cur)+'</select>';
+}
+function musicRow(b,i){
+  const mi=(b.music||{}).inherit!==false, mu=b.music||{};
+  return '<div class="trow"><label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+(mi?'checked':'')+' onchange="DRAFT.beats['+i+'].music.inherit=this.checked;renderBeats()"> 继承贯穿 BGM</label>'+
+    (mi?'':'<select onchange="DRAFT.beats['+i+'].music.bgm=this.value||null;renderBeats()" title="幕级换曲（注册表）">'+
+      optHtml([{id:'',name:'（此幕无 BGM）'}].concat(regList('bgm')),mu.bgm||'')+'</select>')+'</div>'+
+    '<div class="trow"><span style="font-size:10px;color:var(--faint)">段落</span>'+segSelectHtml(bgmTrackId(b),mu.segment||'',i)+
+    '<label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+((mu.loop!==false)?'checked':'')+' onchange="DRAFT.beats['+i+'].music.loop=this.checked;markDirty()" title="段/曲短于幕时循环盖满；取消=播完即静音"> 循环</label></div>';
+}
 function buildCreator(){
   const m=DRAFT.meta,en=P.enums||{};
   $('outline').value=DRAFT.outline||'';
@@ -818,13 +843,19 @@ function buildCreator(){
     '<div class="mf"><label>人设</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
     '<div class="mf"><label>平台</label><select onchange="DRAFT.meta.platform=this.value">'+optHtml(en.platforms,m.platform)+'</select></div>'+
     '<div class="mf"><label>字幕风格</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
-    '<div class="mf"><label>BGM</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null" title="全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表">'+optHtml([{id:'',name:'（无 BGM）'}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
+    '<div class="mf"><label>BGM</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表">'+optHtml([{id:'',name:'（无 BGM）'}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
+    (m.audio.bgm_id?'<div class="mf"><label>BGM 段落</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="贯穿曲默认段落；幕级音乐轨可再覆盖">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
+    (m.audio.bgm_id?'<div class="mf"><label>BGM 循环</label><select onchange="DRAFT.meta.audio.bgm_loop=this.value===\'\'?null:this.value===\'true\'" title="段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音"><option value="">自动</option><option value="true"'+(m.audio.bgm_loop===true?' selected':'')+'>循环</option><option value="false"'+(m.audio.bgm_loop===false?' selected':'')+'>不循环</option></select></div>':'')+
     '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22"></div>'+
     '<div class="mf"><label>画幅氛围</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:'自然'},{id:'warm',name:'暖调'},{id:'cool',name:'冷调'}],m.style.grade)+'</select></div>';
   $('coverops').innerHTML=
-    '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
+    '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="output-frame=成片抽帧（含字幕全要素）/ first-frame=素材首帧 / beat-frame=指定幕抽帧 / ai-generated=AI 生成图 / upload=已上传图">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
     '<div class="mf"><label>封面标题</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value"></div>'+
-    '<div><button class="ghost" onclick="$(\'covfile\').click()">⬆ 上传封面</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>';
+    ((m.cover.strategy==='beat-frame')?
+      '<div class="mf"><label>幕号</label><input type="text" style="width:56px" value="'+esc(String(m.cover.beat_no||1))+'" onchange="DRAFT.meta.cover.beat_no=parseInt(this.value)||1"></div>'+
+      '<div class="mf"><label>幕内秒</label><input type="text" style="width:56px" value="'+esc(String(m.cover.at||0))+'" onchange="DRAFT.meta.cover.at=parseFloat(this.value)||0"></div>':'')+
+    '<div><button class="ghost" onclick="$(\'covfile\').click()">⬆ 上传封面</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>'+
+    '<div><button class="ghost" onclick="genCover()">✨ AI 生成封面</button></div>';
   const cw=$('coverwrap');
   cw.innerHTML='<img alt="封面" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#000;min-height:120px;object-fit:cover">';
   const cim=cw.querySelector('img');
@@ -918,7 +949,6 @@ function beatCard(b,i){
     '<span class="lbl">时刻</span><input type="text" value="'+esc(nz(s.at,0))+'" onchange="upEff('+i+',\'sfx\','+k+',\'at\',this.value)">'+
     '<span class="lbl">时长</span><input type="text" value="'+esc(nz(s.duration,0.4))+'" onchange="upEff('+i+',\'sfx\','+k+',\'duration\',this.value)">'+
     '<button class="x" onclick="delEff('+i+',\'sfx\','+k+')">✕</button></div>').join('');
-  const mi=(b.music&&b.music.inherit!==false);
   // 八轨分区：每轨一个 lane，标签头 + 内容，区分明确
   const laneSub=(t,body,act)=>'<div class="lane"><div class="lane-t">'+t+(act||'')+'</div>'+body+'</div>';
   return '<div class="beat" style="animation-delay:'+Math.min(i*0.05,0.4)+'s">'+
@@ -929,20 +959,18 @@ function beatCard(b,i){
       '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>幕预览</div></div>')+
     laneSub('字幕轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">'+subModeHint(b)+'</span>',
       subBody(b,i)+
-      '<div class="trow" style="margin-top:8px"><input type="text" placeholder="字幕风格（留空=继承全局）" value="'+esc((b.subtitle&&b.subtitle.style)||'')+'" oninput="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}"></div>')+
+      '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="幕级字幕样式（注册表）；留空=继承全局">'+optHtml([{id:'',name:'（跟随全局）'}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
     laneSub('视频轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">A 定时长 · B 叠加</span>',
       trks,'<button class="act" onclick="addTrack('+i+')">＋ B 轨</button>')+
     laneSub('旁白轨',
       '<div class="trow"><select onchange="DRAFT.beats['+i+'].narration.mode=this.value;renderBeats()" title="切换后字幕轨随之分流：dub=台词可编辑 / original=原声转写只读 / none=静音无字幕">'+optHtml(en.narration_modes,(b.narration||{}).mode||'original')+'</select></div>')+
     laneSub('转场轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">本幕→下一幕</span>',
-      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">（无）</option>'+((P.transition_ids||[]).map(t=>'<option'+(t===(b.transition_out||'')?' selected':'')+'>'+esc(t)+'</option>').join(''))+'</select></div>')+
+      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">（无）</option>'+((P.transition_ids||[]).map(t=>{const tn=((P.registry||{}).transitions||{})[t];return '<option value="'+esc(t)+'"'+(t===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+t+'）':t)+'</option>';}).join(''))+'</select></div>')+
     laneSub('贴纸轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">词点触发</span>',
       (stks||'<div class="empty">无</div>'),'<button class="act" onclick="addEff('+i+',\'stickers\')">＋ 贴纸</button>')+
     laneSub('音效轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">时刻触发</span>',
       (sfx||'<div class="empty">无</div>'),'<button class="act" onclick="addEff('+i+',\'sfx\')">＋ 音效</button>')+
-    laneSub('音乐轨',
-      '<div class="trow"><label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+(mi?'checked':'')+' onchange="DRAFT.beats['+i+'].music.inherit=this.checked"> 继承贯穿 BGM</label>'+
-      (mi?'':'<span style="font-size:10px;color:var(--faint)">独立设置（bgm id 由 Agent/审计填）</span>')+'</div>')+
+    laneSub('音乐轨', musicRow(b,i))+
     '</div>';
 }
 function addBeat(){addBeatAt((DRAFT.beats||[]).length);}
@@ -990,7 +1018,9 @@ function collectStory(){
         src_in:+nz(t.src_in,0),duration:+nz(t.duration,3),
         pos:t.pos,scale:+nz(t.scale,0.3),op:t.op||'overlay-pip',requirement:t.requirement||''})),
       music:{inherit:b.music?b.music.inherit!==false:true,
-             bgm:(b.music&&b.music.inherit===false)?(b.music.bgm||null):null},
+             bgm:(b.music&&b.music.inherit===false)?(b.music.bgm||null):null,
+             segment:(b.music&&b.music.segment)||null,   // 段落/循环序列化保真（2026-09-15）：白名单重建曾丢字段
+             loop:(b.music&&b.music.loop!==undefined)?b.music.loop:null},
       effects:{
         stickers:(b.effects.stickers||[]).map(s=>({asset:nz(s.asset,''),at_word:nz(s.at_word,''),duration:+nz(s.duration,1.2),pos:nz(s.pos,'top-center')})),
         sfx:(b.effects.sfx||[]).map(s=>({asset:nz(s.asset,''),at:+nz(s.at,0),duration:+nz(s.duration,0.4)}))},
@@ -1178,8 +1208,22 @@ async function uploadCover(inp){
     const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();
   }catch(e){setStatus('✗ '+e);}
 }
+async function genCover(){
+  const p=prompt('封面图提示词（竖版 9:16，建议注明：风格/场景/无文字）','竖版短视频封面底图：现代简约客厅，浅木色地板，暖光，无文字无人物');
+  if(!p)return;
+  setStatus('✨ 封面生成中（image-01，约 10-30s）…');
+  try{
+    const r=await(await fetch('/api/cover-gen/'+P.name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:p})})).json();
+    if(r.ok){
+      DRAFT.meta.cover.strategy='ai-generated';
+      setStatus('✓ '+r.note);
+      const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src='projects/'+P.name+'/cover/generated.jpg?t='+Date.now();
+      buildCreator();
+    }else setStatus('✗ '+(r.err||'生成失败'));
+  }catch(e){setStatus('✗ '+e);}
+}
 async function previewBeat(no){
-  const btn=$('pvbtn-'+no);btn.disabled=true;btn.textContent='渲染中…';
+  const btn=$('pvbtn-'+no);btn.disabled=true;btn.textContent='渲染中…';PV_BUSY=true;
   try{
     await saveStory(true);
     const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
@@ -1188,6 +1232,7 @@ async function previewBeat(no){
       setStatus('✓ 幕 #'+no+' 独立预览（'+esc(VIEW.story||'main')+'）');}
     else setStatus('✗ 幕渲染失败：'+(r.log||''));
   }catch(e){setStatus('✗ '+e);}
+  PV_BUSY=false;
   btn.disabled=false;btn.textContent='▶ 幕预览';
 }
 
@@ -1257,7 +1302,7 @@ function packCard(f){
       ((v.ocr||[]).length?'<div class="ocrchips">'+v.ocr.map(o=>'<span class="ocrchip">『'+esc(o)+'』</span>').join('')+'</div>':'')+
       (v.usage?'<div class="vusage">▸ 用途：'+esc(v.usage)+'</div>':'')+'</div>';
   }
-  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(d.type||'废')+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
+  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">人工·'+esc(d.type||'标记')+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
   const ditems=((P._disp&&P._disp.materials&&P._disp.materials[f.id])||{}).items||[];
   const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">台账·'+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':'标记')+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
   const tags=(f.tags||[]).map(t2=>'<span class="packtag">'+esc(t2)+'</span>').join('');
@@ -1534,7 +1579,7 @@ async function pulsePoll(){
   }else if(VIEW.page==='proj'&&P){
     const s=sigOf(P.name);
     const changed=PULSE&&PULSE.projSigs&&(PULSE.projSigs[P.name]!==undefined)&&PULSE.projSigs[P.name]!==s;
-    if(changed&&!DIRTY&&VIEW.tab!=='create'){  // 创作台正在编辑时不打扰（DIRTY 守卫）
+    if(changed&&!DIRTY&&VIEW.tab!=='create'&&!PV_BUSY&&CLI_RENDER_SHOWN===null){  // 创作台正在编辑/预览/渲染中时不打扰（DIRTY/PV_BUSY/渲染守卫）
       try{
         if(P.library!==undefined&&VIEW.tab==='library'){const lib=await(await fetch('/api/library/'+P.name)).json();P.library=lib;renderPack();renderCuts();}
         await refreshPills();

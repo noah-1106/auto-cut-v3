@@ -1,74 +1,85 @@
 {
-  "_note": "2026-09-14 重建：原文件（含真实 key）在 GitHub 上库前的历史清除中丢失，此为占位骨架。填法：把各段 api_key_env 指向你 shell 里 export 的变量名（推荐），或填 api_key_file 指向一个 {\"api_key\": \"...\"} 的 key 文件。base_url 以服务商控制台为准。此文件已 gitignore，永不入库。",
-  "llm": {
-    "provider": "minimax",
-    "backends": {
-      "minimax": {
-        "base_url": "https://api.minimaxi.com/v1",
-        "model": "MiniMax-M3",
-        "timeout_s": 300,
-        "api_key_env": "MINIMAX_KEY"
-      }
-    }
-  },
-  "vision": {
-    "provider": "minimax",
-    "backends": {
-      "minimax": {
-        "base_url": "https://api.minimaxi.com/v1",
-        "model": "MiniMax-M3",
-        "timeout_s": 300,
-        "api_key_env": "MINIMAX_KEY"
-      }
-    }
-  },
-  "asr": {
-    "provider": "minimax",
-    "backends": {
-      "minimax": {
-        "base_url": "https://api.minimaxi.com/v1",
-        "model": "asr-1.0",
-        "timeout_s": 90,
-        "max_audio_s": 480,
-        "api_key_env": "MINIMAX_KEY"
-      },
-      "local-faster-whisper": {
-        "model": "small",
-        "device": "cpu",
-        "compute_type": "int8",
-        "api_key_env": "MINIMAX_KEY"
-      }
-    }
-  },
-  "tts": {
-    "provider": "minimax",
-    "backends": {
-      "minimax": {
-        "base_url": "https://api.minimaxi.com/v1",
-        "model": "speech-2.8-turbo",
-        "voice_id": "male-qn-qingse",
-        "speed": 1.0,
-        "timeout_s": 60,
-        "api_key_env": "MINIMAX_KEY"
-      },
-      "local-audio8": {
-        "voice": "narrator_default",
-        "desc": "本地 Audio8-TTS-Preview-0.6B（Apache 2.0 ONNX INT4，零样本克隆）；参考音色 narrator_default 注册于 ~/.local/share/autocut3/audio8/voices/",
-        "api_key_env": "MINIMAX_KEY"
-      }
-    }
-  },
-  "video": {
-    "provider": "minimax",
-    "backends": {
-      "minimax": {
-        "base_url": "https://api.minimaxi.com/v1",
-        "model": "MiniMax-H3",
-        "duration": 6,
-        "resolution": "768P",
-        "timeout_s": 60,
-        "api_key_env": "MINIMAX_KEY"
-      }
-    }
+ "_note": "2026-09-14 重建：原文件（含真实 key）在 GitHub 上库前的历史清除中丢失，此为占位骨架。填法：把各段 api_key_env 指向你 shell 里 export 的变量名（推荐），或填 api_key_file 指向一个 {\"api_key\": \"...\"} 的 key 文件。base_url 以服务商控制台为准。此文件已 gitignore，永不入库。",
+ "llm": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "model": "MiniMax-M3",
+    "timeout_s": 300,
+    "api_key_env": "MINIMAX_KEY"
+   }
   }
+ },
+ "vision": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "model": "MiniMax-M3",
+    "timeout_s": 300,
+    "api_key_env": "MINIMAX_KEY"
+   }
+  }
+ },
+ "asr": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "model": "asr-1.0",
+    "timeout_s": 90,
+    "max_audio_s": 480,
+    "api_key_env": "MINIMAX_KEY"
+   },
+   "local-faster-whisper": {
+    "model": "small",
+    "device": "cpu",
+    "compute_type": "int8",
+    "api_key_env": "MINIMAX_KEY"
+   }
+  }
+ },
+ "tts": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "model": "speech-2.8-turbo",
+    "voice_id": "male-qn-qingse",
+    "speed": 1.0,
+    "timeout_s": 60,
+    "api_key_env": "MINIMAX_KEY"
+   },
+   "local-audio8": {
+    "voice": "narrator_default",
+    "desc": "本地 Audio8-TTS-Preview-0.6B（Apache 2.0 ONNX INT4，零样本克隆）；参考音色 narrator_default 注册于 ~/.local/share/autocut3/audio8/voices/",
+    "api_key_env": "MINIMAX_KEY"
+   }
+  }
+ },
+ "video": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimaxi.com/v1",
+    "model": "MiniMax-H3",
+    "duration": 6,
+    "resolution": "768P",
+    "timeout_s": 60,
+    "api_key_env": "MINIMAX_KEY"
+   }
+  }
+ },
+ "image": {
+  "provider": "minimax",
+  "backends": {
+   "minimax": {
+    "base_url": "https://api.minimax.chat/v1",
+    "api_key_env": "MINIMAX_KEY",
+    "model": "image-01",
+    "timeout_s": 180
+   }
+  }
+ }
 }
