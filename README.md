@@ -44,6 +44,14 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 - **2026-09-14 接管首批落地（M1-M5 全部完成）**：管线编排器（orchestrate.py + /api/status + 前端进度条）｜缺陷处置链（disposition.py 四类缺陷→起草消费→素材卡⚠）｜QC 双域补位（R7 听觉/R4 冻结/R10 页同步）｜前端收敛（试渲去硬编码/字幕样张真兑现/渲染实时进度+系统通知）｜资产策展（12 槽位爆款语义音效 + 4 条真实 BGM 替换占位，Mixkit 免费商用，许可与来源清单随包）｜跨平台（flock.py 跨平台锁 + 平台感知 ffmpeg/硬解编码链，Mac/Windows 双端）
 - **2026-09-14 新素材包冷启动验收（v2 总验收）**：全新素材包 19 条 → 成片两条（aidraft 原声 40.0s / aidraft2 本地 TTS 配音 37.6s），QC deliverable 0 blocker，全程零会话内人工急救。冷启动实锤修复两处管线缺口：①draft LLM 正文截断（finish_reason=length 旧代码当成功交付 → extract_json 炸；现升档重试 T32 锚）②dub 配音超幕视频时长旧链 atrim 掐断句子+词轨越界 bleed 成 R5 字幕页倒置（现 A 轨自动延展盖满配音+owords 幕内钳制，T12 断言改盖满语义）
 - **2026-09-14 字幕文本源修复（Noah 实锤）**：story 字段原是"这一幕讲什么"的分镜摘要，被 vadwords 铺进字幕后字幕=总结腔（dub 版更严重——TTS 把摘要逐字念出）。修复：original 幕词轨文本改取素材窗口 transcript（proofread 校对后 ASR，VAD 仍管时间），窗口无词回退 story；draft 提示词强约束 story=可直接朗读的口播台词（禁画面调度词）。T33 锚。aidraft 重渲+aidraft3 新配音版（43.2s）已产出
+- **2026-09-15 Noah 前端功能问答批量落地（11 项全修）**：
+  ①旁白词汇表统一（enums tts→dub——曾双向错：storyline mode=dub 前端回退显示"视频原声"，手选"AI 旁白"存 tts 又静默渲原声；T34 钉死）
+  ②BGM 段落系统（bgm.json segments + 幕级/全局段落选择 + 段落 loop/apad + 前端段落下拉；T35 渲染锚，细段落待试听审计后补不虚构）
+  ③draft 效果注册表（字幕样式/贴纸/音效进提示词 + validate 白名单透传——曾恒空丢弃假消费；T36 锚）
+  ④QC 环节幕样张自检（逐幕 render_beat 独立验证，全片过≠单幕过；产物 previews/beat-*.mp4 供人/Agent 抽查）
+  ⑤封面四途径补齐（beat-frame 幕号/秒输入 + AI 生成封面 image_gen.py/image-01 真路由 + output-frame 枚举补登）
+  ⑥幕级字幕风格下拉（曾手填）/转场显示中文名/素材台账收敛（人工缺陷并入 disposition 聚合，单一视图）
+  ⑦渲染防跳（预览/渲染中 PULSE 暂停热重载）/幕预览降质提速（540×960·1.5M，实测 7.5s/幕）/音色试听计时+线程数按核数
 - **已知遗留**：本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）；aidraft2 成片 R6 响度 -27.7 LUFS 偏轻（warn 不拦交付，平台会自行归一，终审核对混音比例）
 - 代码托管：GitHub 私有库（Noah 账号），config/services.json 已永久 gitignore（历史已清除，key 走环境变量或 api_key_file）
 
@@ -118,15 +126,17 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线改造立项）
-tests/               # e2e.py(39项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域/T30 声纹/T31 dubfit) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(44项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域/T30 声纹/T31 dubfit/T34 词汇表/T35 BGM段落/T36 效果注册表) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
 ## 注册表（效果系统）
 
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
-Agent 起草时读同一张注册表选 BGM/转场；字幕样式、贴纸、音效按 id 引用。**改注册表即改下一次渲染，无需动代码。**
+Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（2026-09-15 起全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。**改注册表即改下一次渲染，无需动代码。**
+BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环；当前各曲默认"整条"，细段落待试听审计补。
 音效=12 槽位社交媒体爆款语义（转场嗖/强调击打/提示叮/悬疑渐强/喜剧弹弓/倒计时/快门/成功短奏/错误蜂鸣/低频轰击/弹出泡泡/尴尬蟋蟀），全部 Mixkit 免费商用，来源与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，终审试听备选同清单。
+AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）；AI 视频素材走 video_gen.py。
 
 ## 单节点独立运行
 
@@ -138,7 +148,8 @@ python3 autocut3/vadwords.py    myproj --story main       # VAD 词轨重生成
 python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动化（dub 幕）
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
-python3 tests/e2e.py                                       # 39 项全量回归
+python3 autocut3/pipeline.py    myproj beat 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
+python3 tests/e2e.py                                       # 44 项全量回归
 python3 tests/audit.py                                     # 代码审计器
 ```
 
