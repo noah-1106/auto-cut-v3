@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           cp config/services.ci.json config/services.json
-          python3 -c "import json; d=json.load(open('config/services.json')); assert all('api_key_env' in be for s in d.values() if isinstance(s,dict) for be in (s.get('backends') or {}).values()), 'key 必须全走 env'; print('services.json OK（无硬编码 key）')"
+          python3 -c "import json; d=json.load(open('config/services.json', encoding='utf-8')); assert all('api_key_env' in be for s in d.values() if isinstance(s,dict) for be in (s.get('backends') or {}).values()), 'key 必须全走 env'; print('services.json OK（无硬编码 key）')"
 
       - name: 启动 studio + 全量 e2e
         shell: bash
