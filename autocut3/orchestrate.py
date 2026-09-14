@@ -351,6 +351,21 @@ def advance(project, intent=None, story=None, only=None):
             print("  QC: " + r["one_line"])
             if r["verdict"] == "blocked":
                 raise RuntimeError("QC blocked——按 qc-report.json 的 suggested_fix 修复后重渲")
+            # 幕样张自检（2026-09-15 Noah #9/#11：Agent 要知道可以渲幕检查——此处钉进流程）：
+            # 逐幕独立渲染（build_beat_cmd 与全片渲染是两条代码路径，全片过≠单幕过），
+            # 产物 previews/beat-*.mp4 供人/Agent 抽查；任一幕失败=拦截
+            sid0 = story or _latest_story(pdir)
+            import pipeline
+            plan0 = pipeline.build_plan(pdir, sid0)
+            bad = []
+            for seg in plan0["segments"]:
+                rb = subprocess.run([py, os.path.join(ac, "pipeline.py"), "beat", name,
+                                     str(seg.get("no")), sid0], capture_output=True, text=True)
+                if rb.returncode != 0:
+                    bad.append("幕%s: %s" % (seg.get("no"), (rb.stdout or rb.stderr or "")[-120:]))
+            if bad:
+                raise RuntimeError("幕样张渲染失败（%d 幕）——\n" % len(bad) + "\n".join(bad))
+            print("  幕样张: %d 幕 ✓ → previews/beat-*.mp4" % len(plan0["segments"]))
         elif key == "aigen":
             continue  # 预留槽位
         # 每步推进后重算状态；失败下一步的判据会自然反映
