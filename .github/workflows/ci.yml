@@ -63,3 +63,14 @@ jobs:
           STATUS=$?
           kill $STUDIO_PID 2>/dev/null || true
           exit $STATUS
+
+      - name: 失败诊断产物（studio.log + 项目渲染日志，只上传不公开 key）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-${{ matrix.os }}
+          path: |
+            /tmp/studio.log
+            projects/
+            !projects/**/src.mp4
+          retention-days: 7
