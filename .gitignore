@@ -22,3 +22,4 @@ assets/preview/
 # 密钥与本地配置（真实 API key，永不入库）
 config/services.json
 config/services.*.json
+!config/services.ci.json
