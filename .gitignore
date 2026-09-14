@@ -4,14 +4,16 @@ __pycache__/
 nohup.out
 # 项目工作区整体不入库（2026-09-15 Noah 指令）：故事线/报告/封面/成片=私人项目数据
 # 或随时可重渲的派生物，与代码库无关；本地文件保留，git 只跟踪源码+注册表+资产
-projects/
+projects/*
+!projects/.gitkeep
+# TTS 参考音色/运行时（2026-09-15 Noah 指令不放仓库）：声纹数据在仓库外
+# ~/.local/share/autocut3/audio8/（venv+模型+voices 全在那）；试听产物走 assets/preview/（下方已 ignore）
+assets/preview/
 # 素材库（任意层级的 materials 目录——根目录 packs 与项目内都在内）
 materials/
 projects/*/materials/
 # ffmpeg 二进制（自备 6.0+）
 bin/
-# 字幕样张等运行时缓存（/api/sub-preview 按需生成，随时可重建）
-assets/preview/
 # 密钥与本地配置（真实 API key，永不入库）
 config/services.json
 config/services.*.json
