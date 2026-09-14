@@ -53,7 +53,7 @@ jobs:
       - name: 启动 studio + 全量 e2e
         shell: bash
         run: |
-          python3 studio.py >/tmp/studio.log 2>&1 &
+          python3 studio.py >studio-ci.log 2>&1 &
           STUDIO_PID=$!
           for i in $(seq 1 30); do
             curl -s localhost:8765/api/projects >/dev/null 2>&1 && break
@@ -64,13 +64,13 @@ jobs:
           kill $STUDIO_PID 2>/dev/null || true
           exit $STATUS
 
-      - name: 失败诊断产物（studio.log + 项目渲染日志，只上传不公开 key）
+      - name: 失败诊断产物（studio 日志 + 项目渲染日志，只上传不公开 key）
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: diag-${{ matrix.os }}
           path: |
-            /tmp/studio.log
+            studio-ci.log
             projects/
             !projects/**/src.mp4
           retention-days: 7
