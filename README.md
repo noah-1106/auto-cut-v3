@@ -56,6 +56,23 @@ bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
 ```
 平台支持：macOS 与 Windows 双端（Python 3.10+，零 pip 依赖；本地 TTS 的 onnxruntime venv 是可选组件，见下文"本地 TTS"）。
 
+### 0.5 本地 TTS（Audio8-TTS，可选组件，2026-09-14 接入）
+
+默认配音供应商已切到本地 [Audio8-TTS-Preview-0.6B](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4)（Apache 2.0 开源，ONNX INT4 CPU 推理，~1GB 内存）——零 pip 依赖的核心管线不受影响，运行时独立装在 `~/.local/share/autocut3/audio8/`（venv + 模型权重），适配层 `autocut3/tts_audio8.py` 只经 HTTP(127.0.0.1:8024) 通信、服务按需自启。
+
+```bash
+# 一次性安装（模型 ~1GB，HF 被墙时脚本走 hf-mirror）：
+#   git clone Audio8_TTS 到 ~/.local/share/autocut3/audio8/runtime，
+#   python3.12 -m venv ~/.local/share/autocut3/audio8/venv，
+#   pip install -r onnx_runtime/requirements.txt + tokenizers（上游漏标），
+#   下载 ONNX-INT4 仓库全部 *.onnx(.data) 到 ~/.local/share/autocut3/audio8/model
+python3 autocut3/tts_audio8.py status                    # 运行时/服务/音色三态
+# 注册参考音色（零样本克隆硬契约：参考音频 0.5-30s + 逐字稿一字不差）
+python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"
+python3 autocut3/tts.py synth --text "..." --out x.mp3   # provider=local-audio8 走本地
+```
+换回云端：config/services.json 的 `tts.provider` 改回 `"minimax"`。
+
 ### 1. 启动 Studio（人侧）
 ```bash
 python3 studio.py                 # http://127.0.0.1:8765

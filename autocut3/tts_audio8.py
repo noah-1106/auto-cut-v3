@@ -50,10 +50,15 @@ def ensure_server(timeout_s=180):
     os.makedirs(VOICES_DIR, exist_ok=True)
     env = dict(os.environ,
                ARKTTS_MODEL_DIR=MODEL_DIR, ARKTTS_VOICES_DIR=VOICES_DIR,
+               ARKTTS_REGISTRATION_DIR=os.path.join(MODEL_DIR, "registration"),
+               ARKTTS_PRECISION="int4", ARKTTS_CODEC_PRECISION="fp16",
                PORT=str(PORT), ARKTTS_THREADS=os.environ.get("ARKTTS_THREADS", "5"),
                PATH=os.path.join(ARK, "venv", "bin") + os.pathsep + os.environ.get("PATH", ""))
     log = open(os.path.join(ARK, "service.log"), "ab")
-    subprocess.Popen([VENV_PY, "-m", "arktts_runtime.service"], cwd=RT_DIR, env=env,
+    # 启动方式对齐上游 run_server.sh：service.py 只定义 app，必须由 uvicorn 拉起
+    subprocess.Popen([VENV_PY, "-m", "uvicorn", "arktts_runtime.service:app",
+                      "--app-dir", RT_DIR, "--host", "127.0.0.1", "--port", str(PORT)],
+                     cwd=RT_DIR, env=env,
                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     t0 = time.time()
     while time.time() - t0 < timeout_s:
@@ -68,7 +73,8 @@ def voices():
     if not _health():
         return []
     try:
-        return _get("/api/voices")
+        r = _get("/api/voices")
+        return r.get("voices", []) if isinstance(r, dict) else r
     except Exception:
         return []
 
@@ -80,7 +86,7 @@ def synth(text, out_wav, voice=None, max_new_tokens=1024, timeout_s=600):
         vs = voices()
         if not vs:
             raise RuntimeError("Audio8 无已注册参考音色——先 register_voice()（零样本克隆需要参考音频+逐字稿）")
-        voice = vs[0] if isinstance(vs[0], str) else vs[0].get("name")
+        voice = vs[0].get("name") if isinstance(vs[0], dict) else vs[0]
     body = json.dumps({"text": text, "voice_name": voice, "max_new_tokens": max_new_tokens}).encode("utf-8")
     req = urllib.request.Request(BASE + "/api/tts", data=body,
                                  headers={"Content-Type": "application/json"})
