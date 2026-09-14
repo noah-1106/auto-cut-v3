@@ -37,6 +37,7 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 6. **门禁三域**：文本域（G1 说了什么）+ 时间域（G2t 什么时候说的）+ 听觉域（响度/静音洞）——"文本对"≠"时间对"（事故：46% 字符错位>1s 照样过文本门禁）
 7. **修复闭环**：修 A 暴露 B 是常态，门禁复跑到全绿才算收敛；修复必须带回归锚进 tests/e2e.py，没锚=没修完
 8. **跨平台纪律（Mac/Windows）**：文件锁一律走 `autocut3/flock.py`（POSIX=flock / Windows=msvcrt，禁直接 import fcntl）；ffmpeg 解析走 `ffmpeg_path()`（env → bin/ffmpeg(.exe) → PATH，禁裸 `"bin/ffmpeg"` 相对路径）；渲染编码走 `hw_encoder()`（平台探测，软编 libx264 只做回退）
+9. **滤镜串内嵌路径=相对路径+无引号**（2026-09-15 Windows CI 实锤）：ffmpeg 7+ 新解析器把选项值里的盘符冒号（`D:`）当选项分隔符——引号/转义/正斜杠化都救不了；只有值内零特殊字符才稳（`-filter_complex` 里的路径一律 `os.path.relpath(p, ROOT)`，subprocess 统一 `cwd=ROOT`，现成实现 `pipeline._ass_spec()`；argv 里的 `-i` 路径不受此限）
 
 ## 当前状态与进行中
 
