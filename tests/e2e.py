@@ -1110,6 +1110,75 @@ def t32_draft_truncation_retry():
               False, "异常: %s" % str(e)[:140])
 
 
+# ---------------------------------------------------------------- T33 original 幕字幕文本=素材台词（非 story 摘要）
+def t33_vadwords_transcript_text():
+    # 回归锚：Noah 实锤——story 是"这一幕讲什么"的分镜摘要，被 vadwords 铺进 VAD 段后
+    # 字幕=总结腔。锚：original 幕词轨文本=素材窗口 transcript 文本（时间仍 VAD 物理测量），
+    # 窗口无词回退 story；dub 幕保持 story 文本（=TTS 念稿）。
+    import tempfile, shutil
+    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import vadwords
+        tmp = tempfile.mkdtemp(prefix="t33_")
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp)
+            os.makedirs("materials/packs/p1")
+            os.makedirs("projects/t33/materials")
+            os.makedirs("projects/t33/storylines")
+            # M1 有转写词（0.5-3.5s 三词）；M2 无 transcript（回退通道）
+            files = []
+            for mid, words in (("M1", [{"text": "找", "start": 0.5, "end": 1.5},
+                                       {"text": "平", "start": 1.5, "end": 2.5},
+                                       {"text": "。", "start": 2.5, "end": 3.5}]),
+                               ("M2", None)):
+                mp4 = os.path.join("materials/packs/p1", mid + ".mp4")
+                r = subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi",
+                                    "-i", "sine=frequency=440:duration=4", "-c:a", "aac", mp4],
+                                   capture_output=True, text=True)
+                assert r.returncode == 0, "夹具合成失败"
+                f = {"id": mid, "file": mid + ".mp4", "kind": "video", "transcript": {}}
+                if words:
+                    f["transcript"] = {"text": "找平。", "words": words}
+                files.append(f)
+            json.dump({"files": files}, open("materials/packs/p1/pack.json", "w", encoding="utf-8"),
+                      ensure_ascii=False)
+            json.dump({"packs": ["p1"]}, open("projects/t33/materials/library.json", "w"))
+            sl = {"beats": [
+                {"no": 1, "story": "分镜摘要：这一幕讲找平工艺", "narration": {"mode": "original"},
+                 "tracks": [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 4}]},
+                {"no": 2, "story": "回退通道摘要", "narration": {"mode": "original"},
+                 "tracks": [{"role": "A", "source_id": "M2", "src_in": 0, "duration": 4}]}]}
+            json.dump(sl, open("projects/t33/storylines/t33.json", "w", encoding="utf-8"),
+                      ensure_ascii=False)
+            old_argv = sys.argv
+            sys.argv = ["vadwords.py", "t33", "--story", "t33"]
+            try:
+                vadwords.main()
+            finally:
+                sys.argv = old_argv
+            sl2 = json.load(open("projects/t33/storylines/t33.json"))
+            rep = json.load(open("projects/t33/vad-report.json"))
+            w1 = "".join(w["t"] for w in sl2["beats"][0]["narration"]["words"])
+            w2 = "".join(w["t"] for w in sl2["beats"][1]["narration"]["words"])
+            tf = {r["no"]: r.get("text_from") for r in rep}
+            ok_tr = w1 == "找平。" and tf.get(1) == "transcript"   # 素材台词进字幕，摘要被逐出
+            ok_fb = w2 == "回退通道摘要" and tf.get(2) == "story"  # 无词窗口回退 story
+            # 时间必须仍由 VAD 物理测量产出（语音段非空且词落在段内）
+            ws1 = sl2["beats"][0]["narration"]["words"]
+            ok_vad = bool(rep[0]["spans"]) and all(any(s - 0.01 <= w_["s"] and w_["e"] <= e + 0.01
+                                                     for s, e in rep[0]["spans"]) for w_ in ws1[:3])
+            check("T33 original 幕字幕文本=素材台词（VAD 管时间/transcript 管文本/空窗回退 story）",
+                  ok_tr and ok_fb and ok_vad, "tr=%s fb=%s vad=%s" % (ok_tr, ok_fb, ok_vad))
+        finally:
+            os.chdir(old_cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T33 original 幕字幕文本=素材台词（VAD 管时间/transcript 管文本/空窗回退 story）",
+              False, "异常: %s" % str(e)[:140])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1231,6 +1300,7 @@ def main():
     t30_voice_api()
     t31_dubfit()
     t32_draft_truncation_retry()
+    t33_vadwords_transcript_text()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

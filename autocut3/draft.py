@@ -141,10 +141,12 @@ def build_prompt(dossier, intent, transitions):
 5. transition_out 只能取：%s，或 null
 6. 第一幕优先用带开场钩子台词的素材；空镜/环境素材适合做 B 轨叠画或转场幕
 7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
+8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
+   禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
 
 [输出] 只输出合法 JSON（无 markdown 代码块、无解释）：
 {"title":"故事线标题","outline":"这条线在讲什么（2-3句）",
-"beats":[{"story":"这一幕讲什么（1-2句）",
+"beats":[{"story":"该幕口播台词（可直接念的第一人称口语）",
 "tracks":[{"role":"A","source_id":"素材id","src_in":起点秒,"duration":时长秒,"requirement":"选用理由一句话"},
 {"role":"B","source_id":"素材id","src_in":0,"duration":秒,"pos":"top-right","scale":0.3,"requirement":"叠画理由"}],
 "narration":{"mode":"original"},"transition_out":null}],

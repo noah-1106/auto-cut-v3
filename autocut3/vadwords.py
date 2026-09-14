@@ -76,6 +76,7 @@ def main():
         if nar.get("mode") == "none": continue
         story = re.sub(r"\s", "", b.get("story") or "")
         if not story: continue
+        text_from = "story"  # dub 幕：story=口播台词（draft --dub 用它 TTS，天然同文本）
         if nar.get("mode") == "dub":
             src = nar["audio"]
             src = src if os.path.isabs(src) else os.path.join(pdir, src)
@@ -91,17 +92,29 @@ def main():
                 for f in pj.get("files", []):
                     if f["id"] == A.get("source_id"):
                         src = os.path.join("materials", "packs", pk, f["file"])
+                        ftrans = f.get("transcript") or {}
             if not src:
                 print("幕%s: 素材未找到，跳过" % b.get("no")); continue
             ss, t = float(A.get("src_in") or 0), float(A.get("duration") or 0)
             spans, dur = vad_spans(src, ss=ss, t=t)
             audio_desc = "%s[%s+%s]" % (os.path.basename(src), ss, t)
+            # 字幕文本=素材实拍台词（proofread 校对后 ASR），story 摘要不进字幕——
+            # VAD 只管时间（物理测量），文本管"人物实际说了什么"（2026-09-14 Noah 实锤：
+            # story 是"这一幕讲什么"的分镜摘要，被铺进字幕=总结腔字幕）。
+            # 窗口无词（空镜/未转写）→ 回退 story 字符，不留空白字幕。
+            tw = [w for w in (ftrans.get("words") or [])
+                  if w.get("end", 0) > ss and w.get("start", 0) < ss + t]
+            wtext = "".join(w.get("text", "") for w in tw).strip()
+            if wtext:
+                story = re.sub(r"\s", "", wtext)
+                text_from = "transcript"
         chars = [(ch, 0, 0) for ch in story]
         words = allocate(chars, spans)
         speech = sum(e - s for s, e in spans)
         nar["words"] = [{"t": ch, "s": round(s, 2), "e": round(e, 2)} for ch, s, e in words]
         report.append({"no": b.get("no"), "audio": audio_desc, "spans": [[round(s,2), round(e,2)] for s, e in spans],
-                       "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0})
+                       "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0,
+                       "text_from": text_from})
         print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]))
     json.dump(sl, open(sfile, "w"), ensure_ascii=False, indent=1)
     json.dump(report, open(os.path.join(pdir, "vad-report.json"), "w"), ensure_ascii=False, indent=1)
