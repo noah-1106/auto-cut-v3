@@ -81,5 +81,65 @@
   "karaoke": false,
   "name": "极简静读",
   "desc": "无卡拉OK静显小字，访谈/纪实感"
+ },
+ "band-bold": {
+  "font": "Smiley Sans",
+  "size": 92,
+  "primary": "&H00FFFFFF",
+  "secondary": "&H00606060",
+  "outline_col": "&H00000000",
+  "border": 5,
+  "marginv": 140,
+  "karaoke": true,
+  "name": "底部色条·发布会",
+  "desc": "v1 band 平移：大号白字+粗黑边贴底（原为色条+大字发布会关键词感，ASS 近似为贴底大字）"
+ },
+ "neon-cyan": {
+  "font": "Smiley Sans",
+  "size": 74,
+  "primary": "&H00FFFF30",
+  "secondary": "&H00888888",
+  "outline_col": "&H00301010",
+  "border": 4,
+  "marginv": 320,
+  "karaoke": true,
+  "name": "霓虹青",
+  "desc": "v1 neon 平移：亮青主色+深褐描边（霓虹辉光气质）"
+ },
+ "highlight-yellow": {
+  "font": "ZCOOL KuaiLe",
+  "size": 72,
+  "primary": "&H0022E6FF",
+  "secondary": "&H00FFFFFF",
+  "outline_col": "&H00502010",
+  "border": 4,
+  "marginv": 300,
+  "karaoke": true,
+  "name": "荧光笔",
+  "desc": "v1 highlight 平移：荧光黄逐字涂抹（手绘高亮气质）"
+ },
+ "pop-round": {
+  "font": "ZCOOL KuaiLe",
+  "size": 78,
+  "primary": "&H00FFFFFF",
+  "secondary": "&H00FFC080",
+  "outline_col": "&H00401040",
+  "border": 6,
+  "marginv": 280,
+  "karaoke": true,
+  "name": "弹跳圆边",
+  "desc": "v1 pop 平移：圆润快乐体+特粗描边（描边弹跳气质）"
+ },
+ "grad-duo": {
+  "font": "Smiley Sans",
+  "size": 70,
+  "primary": "&H00FF70B0",
+  "secondary": "&H0030E0FF",
+  "outline_col": "&H00202020",
+  "border": 3,
+  "marginv": 300,
+  "karaoke": true,
+  "name": "双色渐变",
+  "desc": "v1 gradtext 平移：已读粉/未读青大反差（渐变呼吸的 karaoke 表达）"
  }
 }

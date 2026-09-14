@@ -10,5 +10,65 @@
   "pos": "top-right",
   "duration": 1.2,
   "desc": "推荐角标"
+ },
+ "ganhuo": {
+  "file": "assets/stickers/auto/ganhuo.png",
+  "pos": "top-center",
+  "duration": 1.2,
+  "desc": "干货强调（词点触发）"
+ },
+ "huadian": {
+  "file": "assets/stickers/auto/huadian.png",
+  "pos": "top-center",
+  "duration": 1.2,
+  "desc": "划重点（词点触发）"
+ },
+ "gaoneng": {
+  "file": "assets/stickers/auto/gaoneng.png",
+  "pos": "top-center",
+  "duration": 1.4,
+  "desc": "前方高能预警"
+ },
+ "zhuyi": {
+  "file": "assets/stickers/auto/zhuyi.png",
+  "pos": "top-center",
+  "duration": 1.3,
+  "desc": "注意（黄底便签）"
+ },
+ "guanzhu": {
+  "file": "assets/stickers/auto/guanzhu.png",
+  "pos": "top-right",
+  "duration": 1.5,
+  "desc": "关注引导"
+ },
+ "shoucang": {
+  "file": "assets/stickers/auto/shoucang.png",
+  "pos": "top-right",
+  "duration": 1.5,
+  "desc": "收藏引导"
+ },
+ "dianzan": {
+  "file": "assets/stickers/auto/dianzan.png",
+  "pos": "top-right",
+  "duration": 1.5,
+  "desc": "点赞引导"
+ },
+ "caidan": {
+  "file": "assets/stickers/auto/caidan.png",
+  "pos": "bottom-center",
+  "duration": 1.3,
+  "desc": "彩蛋预告"
+ },
+ "jiazai": {
+  "file": "assets/stickers/auto/jiazai.png",
+  "pos": "bottom-center",
+  "duration": 1.0,
+  "desc": "加载中（节奏垫）"
+ },
+ "jinju": {
+  "file": "assets/stickers/auto/jinju.png",
+  "pos": "center",
+  "duration": 1.6,
+  "desc": "金句强调（居中大字）"
  }
 }

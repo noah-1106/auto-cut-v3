@@ -76,5 +76,26 @@
   "duration": 0.5,
   "name": "白场过渡",
   "desc": "经白再入，干净明快的话题切换"
+ },
+ "whipPan": {
+  "type": "xfade",
+  "preset": "smoothright",
+  "duration": 0.3,
+  "name": "甩镜",
+  "desc": "快速横移+平滑模糊 · 节奏感段落切换（v1 同名转场平移，Remotion→xfade 语义映射）"
+ },
+ "zoomThrough": {
+  "type": "xfade",
+  "preset": "zoomin",
+  "duration": 0.4,
+  "name": "缩放穿越",
+  "desc": "冲屏→推近 · 运镜感（v1 同名转场平移，xfade zoomin 映射）"
+ },
+ "clockWipe": {
+  "type": "xfade",
+  "preset": "radial",
+  "duration": 0.5,
+  "name": "时钟擦除",
+  "desc": "径向扫开 · 复古电视感（v1 clockWipe 语义，xfade radial 近似——无时钟扇形 preset，如实标注）"
  }
 }

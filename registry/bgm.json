@@ -19,5 +19,29 @@
   "file": "assets/music/bgm_n004_soft.mp3",
   "name": "柔和叙事",
   "desc": "柔和慢律动，适合情感/收尾段（占位合成音）"
+ },
+ "bgm_u001_upbeat": {
+  "file": "assets/music/bgm_upbeat_backbeat.mp3",
+  "name": "轻快节拍",
+  "desc": "46s 律动底拍——快节奏/活力内容循环用",
+  "loop": true
+ },
+ "bgm_c001_chill": {
+  "file": "assets/music/bgm_chill_be_chillin.mp3",
+  "name": "松弛律动",
+  "desc": "202s 慵懒律动——vlog/生活流底乐",
+  "loop": true
+ },
+ "bgm_i001_corp": {
+  "file": "assets/music/bgm_corporate_inspiration.mp3",
+  "name": "企业励志",
+  "desc": "138s 渐进励志——干货/成长类叙事",
+  "loop": true
+ },
+ "bgm_a001_advert": {
+  "file": "assets/music/bgm_brand_advertime.mp3",
+  "name": "广告时段",
+  "desc": "134s 商业质感——推广/品牌向",
+  "loop": true
  }
 }
