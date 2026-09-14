@@ -9,6 +9,12 @@ projects/*
 # TTS 参考音色/运行时（2026-09-15 Noah 指令不放仓库）：声纹数据在仓库外
 # ~/.local/share/autocut3/audio8/（venv+模型+voices 全在那）；试听产物走 assets/preview/（下方已 ignore）
 assets/preview/
+# 过去的测试内容（2026-09-15 Noah 指令历史清史）：PoC 实证样张/视觉 A/B 实验/旧脚手架，
+# 本地保留随时可查，永不回库
+docs/poc/
+docs/ab-vision-*/
+docs/00-萃取范围界定.md
+autocut3/_attic/
 # 素材库（任意层级的 materials 目录——根目录 packs 与项目内都在内）
 materials/
 projects/*/materials/
