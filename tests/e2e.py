@@ -837,6 +837,73 @@ def t28_disposition():
         check("T28 缺陷台账（四类注入必抓/留痕/起草消费）", False, "异常: %s" % str(e)[:140])
 
 
+# ---------------------------------------------------------------- T29 QC 听觉/冻结/页同步（M3）
+def t29_qc_av_sync():
+    # 回归：R7 静音洞+音量骤变（silencedetect/volumedetect 物理探针）、R4 冻结帧
+    # （含 EOF 截断冻结补到片尾）、R10 页同步（plan 词轨重放 vs ASS，注入偏移必报）。
+    # 全合成媒体，离线。探针判据曾被"输入类型错（dict 喂给 build_pages）"整段打折——锚必须打真输入。
+    import tempfile, shutil
+    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import qc
+        rules = qc.load_rules()
+        tmp = tempfile.mkdtemp(prefix="t29_")
+        try:
+            def synth(name, args):
+                p = os.path.join(tmp, name)
+                r = subprocess.run([FF, "-y", "-loglevel", "error"] + args + [p],
+                                   capture_output=True, text=True)
+                assert r.returncode == 0 and os.path.exists(p), "夹具合成失败: %s" % name
+                return p
+            hole = synth("hole.mp4", ["-f", "lavfi", "-i",
+                          "aevalsrc='if(lt(t,1),sin(440*t),if(lt(t,3.5),0,sin(440*t)))':s=16000:d=6", "-c:a", "aac"])
+            jump = synth("jump.mp4", ["-f", "lavfi", "-i",
+                          "aevalsrc='if(lt(t,5),0.08*sin(440*t),sin(440*t))':s=16000:d=10", "-c:a", "aac"])
+            freeze = synth("freeze.mp4", ["-f", "lavfi", "-i", "color=c=red:s=320x240:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+                            "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", "-shortest"])
+            v = qc.check_audio_output(hole, rules)
+            ok_hole = any(x["evidence"].get("holes") and x["evidence"]["holes"][0] == [1.0, 3.5] for x in v)
+            v2 = qc.check_audio_output(jump, rules)
+            ok_jump = any(x["evidence"].get("jumps") for x in v2)
+            v4 = qc.check_freeze(freeze, rules)
+            ok_freeze = v4[0]["evidence"].get("freezes") == [[0.0, 4.0]]  # EOF 截断补到片尾
+            # R10：24 字词轨重放分页；ASS 整体 +0.8s → 中位偏移超阈必报；对齐版必过
+            sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+            import pipeline
+            chars = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸子丑寅卯"
+            words = [{"t": c, "s": round(i * 0.2, 1), "e": round(i * 0.2 + 0.2, 1)}
+                     for i, c in enumerate(chars)]
+            pages = pipeline.build_pages([(w["t"], w["s"], w["e"]) for w in words], 12)
+            starts = [pg[0][1] for pg in pages]
+            pp = os.path.join(tmp, "proj")
+            os.makedirs(pp)
+            json.dump({"subtitle_style": "karaoke-gold", "meta": {"style": {}}, "words": words},
+                      open(os.path.join(pp, "plan-t.json"), "w"), ensure_ascii=False)
+            def ass_with(shift):
+                def ts(s):
+                    cs = int(round(s * 100))
+                    return "%d:%02d:%02d.%02d" % (cs // 360000, cs % 360000 // 6000, cs % 6000 // 100, cs % 100)
+                lines = ["[Events]", "Format: Start, End, Text"]
+                for st_ in starts:
+                    lines.append("Dialogue: 0,%s,%s,Karaoke,,0,0,0,,x" % (ts(st_ + shift), ts(st_ + shift + 1)))
+                return "\n".join(lines)
+            open(os.path.join(pp, "subtitle-t.ass"), "w", encoding="utf-8").write(ass_with(0.8))
+            bad = qc.check_page_sync(pp, "t", rules)
+            open(os.path.join(pp, "subtitle-t.ass"), "w", encoding="utf-8").write(ass_with(0.0))
+            good = qc.check_page_sync(pp, "t", rules)
+            ok_r10 = (bad[0]["severity"] == "warn" and abs(bad[0]["evidence"].get("median_offset", 0) - 0.8) < 0.05
+                      and good[0]["severity"] == "info")
+            check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向）",
+                  ok_hole and ok_jump and ok_freeze and ok_r10,
+                  "hole=%s jump=%s freeze=%s r10=%s" % (ok_hole, ok_jump, ok_freeze, ok_r10))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向）", False, "异常: %s" % str(e)[:140])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -954,6 +1021,7 @@ def main():
     t26_voiceover_orchestration()
     t27_orchestrator()
     t28_disposition()
+    t29_qc_av_sync()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

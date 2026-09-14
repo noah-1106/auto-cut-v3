@@ -9,11 +9,13 @@
   R1 死尾巴    出点 > 末实词尾+max        blocker auto_fix(收缩)
   R2 尾音咬字  出点 < 末实词尾+min        blocker auto_fix(延展)；素材物理顶格 → info 豁免
   R3 静音洞    窗口内词间隔 > hole         warn   suggest(重选段)
+  R4 冻结帧    成片整段静止 > freeze_min   info   suggest(查素材/转场)（freezedetect 已接入）
   R5 字幕页    相邻重叠 / 闪断页<min       blocker(重叠) auto_fix=重渲 / warn(闪断) suggest(合并)
   R6 响度      integrated LUFS 偏离平台锚  warn   suggest(loudnorm 两遍)；近静音跳过
+  R7 听觉     成片静音洞>hole / 相邻段响度差>jump  warn suggest（物理测量探针，不消费 ASR 时间戳）
   R8 填充词    词轨命中填充词表            info   human(标记，剪否由人/Agent 定)
   R9 重说      窗口内相邻 n-gram 重复      warn   suggest(剪重复段)
-  R4 冻结帧    skipped（freezedetect 待接入，如实声明）
+  R10 页同步   ASS 页时刻 vs plan 词轨重放页 中位偏移>shift  warn suggest（G2t 入列——确定性同函数重放，非 ASR 参照）
 
 用法：
   python3 autocut3/qc.py <project> [--story aidraft] [--no-deep]
@@ -214,6 +216,145 @@ def check_lufs(video, rules):
         return [_V("R6", "warn", "human", {}, note="响度探测异常: %s" % str(e)[:80])]
 
 
+# ---------- R7：听觉域（成片物理测量——不消费 ASR 时间戳，v2-⑥）----------
+def check_audio_output(video, rules):
+    """成片音频：静音洞（silencedetect 补集）+ 分段响度骤变（volumedetect）。"""
+    if not video or not os.path.exists(video):
+        return [_V("R7", "warn", "human", {"video": video}, note="成片不存在，跳过听觉检查")]
+    ff = asr.ffmpeg_path()
+    if not ff:
+        return [_V("R7", "warn", "human", {}, note="无 ffmpeg，跳过听觉检查")]
+    out = []
+    try:
+        p = subprocess.run([ff, "-hide_banner", "-i", video, "-vn",
+                            "-af", "silencedetect=noise=-35dB:d=0.5", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=120)
+        sil = []
+        cur = None
+        for line in (p.stderr or "").splitlines():
+            m = re.search(r"silence_start: ([\d.]+)", line)
+            if m:
+                cur = float(m.group(1))
+            m = re.search(r"silence_end: ([\d.]+)", line)
+            if m and cur is not None:
+                sil.append((cur, float(m.group(1))))
+                cur = None
+        hole_max = rules.get("R7_hole", 1.5)
+        holes = [(s, e) for s, e in sil if e - s > hole_max]
+        if holes:
+            out.append(_V("R7", "warn", "suggest",
+                          {"holes": [[round(s, 1), round(e, 1)] for s, e in holes[:6]],
+                           "n": len(holes), "max": round(max(e - s for s, e in holes), 2)},
+                          fix="成片存在 >%.1fs 静音洞 %d 处——检查该时段是否缺 BGM/音效或误裁人声" % (hole_max, len(holes))))
+    except Exception as e:
+        out.append(_V("R7", "warn", "human", {}, note="静音探针异常: %s" % str(e)[:80]))
+    try:
+        # 分段 mean_volume 对账：相邻段差 > jump → 音量骤变（离麦/设备变化在成片上的残留）
+        seg = float(rules.get("R7_seg", 5.0))
+        dur = asr.media_duration(video) or 0
+        means = []
+        t = 0.0
+        while t + 1 < dur:
+            r = subprocess.run([ff, "-hide_banner", "-nostats", "-ss", str(t), "-t", str(seg),
+                                "-i", video, "-vn", "-af", "volumedetect", "-f", "null", "-"],
+                               capture_output=True, text=True, timeout=60)
+            m = re.search(r"mean_volume: (-?[\d.]+)", r.stderr or "")
+            if m:
+                means.append((t, float(m.group(1))))
+            t += seg
+        jump = rules.get("R7_jump", 8.0)
+        jumps = [(means[k][0], round(means[k][1] - means[k + 1][1], 1))
+                 for k in range(len(means) - 1) if abs(means[k][1] - means[k + 1][1]) > jump]
+        if jumps:
+            out.append(_V("R7", "warn", "suggest",
+                          {"jumps": [[round(a, 1), d] for a, d in jumps[:6]], "seg": seg},
+                          fix="相邻 %.0fs 段响度差 >%.0fdB %d 处——音量骤变（离麦/素材来源切换），建议增益归一" % (seg, jump, len(jumps))))
+    except Exception as e:
+        out.append(_V("R7", "warn", "human", {}, note="响度分段探针异常: %s" % str(e)[:80]))
+    return out
+
+
+# ---------- R4：冻结帧（freezedetect 接入，替换 skipped 声明）----------
+def check_freeze(video, rules):
+    if not video or not os.path.exists(video):
+        return [_V("R4", "info", "human", {"video": video}, note="成片不存在，冻结帧检查 skipped")]
+    ff = asr.ffmpeg_path()
+    if not ff:
+        return [_V("R4", "info", "human", {}, note="无 ffmpeg，冻结帧检查 skipped")]
+    try:
+        p = subprocess.run([ff, "-hide_banner", "-i", video, "-vf",
+                            "freezedetect=noise=0.001:duration=%.1f" % rules.get("R4_freeze_min", 2.0),
+                            "-map", "0:v", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=180)
+        freezes = []
+        start = None
+        for line in (p.stderr or "").splitlines():
+            m = re.search(r"freeze_start: ([\d.]+)", line)
+            if m:
+                start = float(m.group(1))
+            m = re.search(r"freeze_duration: ([\d.]+)", line)
+            if m and start is not None:
+                freezes.append([round(start, 1), round(start + float(m.group(1)), 1)])
+                start = None
+        if start is not None:
+            # EOF 截断：冻结持续到片尾时本构建不吐 freeze_end/duration——补到素材时长
+            freezes.append([round(start, 1), round(asr.media_duration(video) or start, 1)])
+        if freezes:
+            return [_V("R4", "info", "suggest",
+                       {"freezes": freezes[:6], "n": len(freezes)},
+                       fix="检测到冻结帧（静止画面）——若是空镜素材属正常，否则检查素材/转场")]
+        return [_V("R4", "info", "human", {}, note="冻结帧检查通过（无 ≥%.1fs 静止段）" % rules.get("R4_freeze_min", 2.0))]
+    except Exception as e:
+        return [_V("R4", "info", "human", {}, note="冻结帧探针异常，skipped: %s" % str(e)[:80])]
+
+
+# ---------- R10：页同步（G2t 入列——plan 词轨重放页 vs ASS 实际页，确定性零 ASR 参照）----------
+def check_page_sync(pdir, sid, rules):
+    """用 pipeline.build_pages 对 plan 词轨做确定性重放，与 ASS 实际页逐页对时。
+    中位偏移 > shift → warn。字幕页时间错的 detector（错幕/错行/时轴错位全都会在此显形）。"""
+    import statistics
+    plan = None
+    for cand in (f"{pdir}/plan-{sid}.json" if sid else None,
+                 f"{pdir}/plan.json",
+                 f"{pdir}/plan-{sid}.json"):
+        if cand and os.path.exists(cand):
+            plan = json.load(open(cand, encoding="utf-8"))
+            break
+    ass_path = os.path.join(pdir, "subtitle-%s.ass" % sid)
+    if not plan or not os.path.exists(ass_path):
+        return [_V("R10", "info", "human", {},
+                   note="plan/ASS 不齐，页同步检查 skipped（先渲染再检）")]
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import pipeline
+        style = (plan.get("meta") or {}).get("style", {}) or {}
+        regs = json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8"))
+        st = regs.get(plan.get("subtitle_style", ""), {})
+        pages = pipeline.build_pages(
+            [(w["t"], w["s"], w["e"]) for w in plan.get("words") or []],
+            int(st.get("max_chars", 12)))
+        expected = [pg[0][1] for pg in pages]
+        actual = []
+        for ln in open(ass_path, encoding="utf-8"):
+            m = re.match(r"Dialogue: 0,([\d:.]+),", ln.strip())
+            if m:
+                actual.append(_ass_t(m.group(1)))
+        n = min(len(expected), len(actual))
+        if n == 0:
+            return [_V("R10", "info", "human", {}, note="页数为零，页同步 skipped")]
+        offs = sorted(actual[k] - expected[k] for k in range(n))
+        med = statistics.median(offs)
+        shift = rules.get("R10_shift", 0.5)
+        ev = {"pages": n, "median_offset": round(med, 2),
+              "p90_abs": round(sorted(abs(o) for o in offs)[int(n * 0.9) - 1 if n >= 10 else n - 1], 2)}
+        if abs(med) > shift:
+            return [_V("R10", "warn", "suggest", ev,
+                       fix="字幕页中位偏移 %.2fs（阈 %.1fs）——词轨与 ASS 时轴错位，查 vadwords 词轨或重渲" % (med, shift))]
+        return [_V("R10", "info", "human", ev, note="页同步通过（中位偏移 %.2fs）" % round(med, 2))]
+    except Exception as e:
+        return [_V("R10", "warn", "human", {}, note="页同步检查异常: %s" % str(e)[:80])]
+
+
 # ---------- 主入口 ----------
 def run(pid, story=None, deep=True, write=True):
     pdir = os.path.join(ROOT, "projects", pid)
@@ -253,14 +394,28 @@ def run(pid, story=None, deep=True, write=True):
         violations += check_ass(os.path.join(pdir, "subtitle-%s.ass" % sid), rules)
     except Exception as e:
         violations.append(_V("R5", "warn", "human", {}, note="ASS 检查异常: %s" % str(e)[:80]))
+    try:
+        violations += check_page_sync(pdir, sid, rules)
+    except Exception as e:
+        violations.append(_V("R10", "warn", "human", {}, note="页同步检查异常: %s" % str(e)[:80]))
+    out_mp4 = os.path.join(pdir, "out-%s.mp4" % sid)
     if deep:
         try:
-            violations += check_lufs(os.path.join(pdir, "out-%s.mp4" % sid), rules)
+            violations += check_lufs(out_mp4, rules)
         except Exception as e:
             violations.append(_V("R6", "warn", "human", {}, note="响度检查异常: %s" % str(e)[:80]))
-    violations.append({"rule": "R4", "severity": "info", "action": "human",
-                       "evidence": {}, "note": "冻结帧检查 skipped（freezedetect 待接入）",
-                       "suggested_fix": None, "status": "skipped"})
+        try:
+            violations += check_audio_output(out_mp4, rules)
+        except Exception as e:
+            violations.append(_V("R7", "warn", "human", {}, note="听觉检查异常: %s" % str(e)[:80]))
+        try:
+            violations += check_freeze(out_mp4, rules)
+        except Exception as e:
+            violations.append(_V("R4", "info", "human", {}, note="冻结帧检查异常，skipped: %s" % str(e)[:80]))
+    else:
+        violations.append({"rule": "R4/R6/R7", "severity": "info", "action": "human",
+                           "evidence": {}, "note": "深检关闭（--no-deep），听觉/响度/冻结帧 skipped",
+                           "suggested_fix": None, "status": "skipped"})
 
     def sev_order(v):
         return {"blocker": 0, "warn": 1, "info": 2}.get(v.get("severity"), 3)
