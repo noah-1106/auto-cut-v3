@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "defects": [
+    {
+      "type": "retake-suspect",
+      "detect": "transcribe._dup_len 指纹（同一文本段 ≥12 字重复出现）",
+      "policy": "auto-pick",
+      "action": "自动选内容完整的净 take 作音轨源，废 take 段剪除；处置写 disposition 日志",
+      "evidence": ["pack.json transcript.words", "dup 指纹坐标"]
+    },
+    {
+      "type": "mute-hole",
+      "detect": "vadwords VAD 静音段 >1.5s 且处于句中（dub 音频本体测量）",
+      "policy": "auto-cut",
+      "action": "剪除静音洞 + 词轨按剩余时长比例平移；词轨↔文本一致性校验必须过",
+      "evidence": ["silencedetect 时间戳", "dB 实测值"]
+    },
+    {
+      "type": "black-zone",
+      "detect": "能量包络有语音（volumedetect ≥-35dB）但词轨无文本覆盖（口令/嘟囔）",
+      "policy": "auto-cut",
+      "action": "掐掉该区间（b1 拍摄口令事故的根治规则）",
+      "evidence": ["能量包络采样点", "词轨窗口对照"]
+    },
+    {
+      "type": "volume-jump",
+      "detect": "dub 音频相邻段 mean_volume 差 >8dB（离麦/设备变化）",
+      "policy": "auto-gain",
+      "action": "低段增益补偿到目标响度；补偿后仍 <8dB 异常则剪除该段",
+      "evidence": ["分段 volumedetect dB"]
+    },
+    {
+      "type": "head-bitten",
+      "detect": "dubgate D1：裁出音频本体 ASR 首词 ≠ story 首字",
+      "policy": "auto-recut",
+      "action": "静音谷重定位回退裁点，重裁后复检；两轮不过闸标 needs-human",
+      "evidence": ["ASR 首词 vs story[0]", "裁点坐标"]
+    },
+    {
+      "type": "tail-truncated",
+      "detect": "dubgate D2：末词窗口（最后4词）不含 story 尾字",
+      "policy": "auto-extend",
+      "action": "出点延至下一静音谷重裁，复检；b4 吞'格布'事故的规则化",
+      "evidence": ["ASR 末4词 vs story 尾部"]
+    },
+    {
+      "type": "timestamp-drift",
+      "detect": "素材词轨 vs 波形对账超差（任意环节发现）",
+      "policy": "always-vad",
+      "action": "弃用该素材 ASR 时间戳，全程 VAD 物理测量铺排（M0328 偏 3s 实锤后立的永久规则）",
+      "evidence": ["对账采样差值"]
+    }
+  ],
+  "gate": {
+    "policy": "any-fail-blocks-render",
+    "note": "⑥⑨ 门禁消费本表；处置全部留痕 disposition 日志，不需事前人工确认"
+  }
+}
