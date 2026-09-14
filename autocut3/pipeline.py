@@ -31,18 +31,30 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         tl0 = float(s["tl_in"])
         tl1 = float(segs[i + 1]["tl_in"]) if i + 1 < len(segs) else float(total) + 0.3
         seg_words = []
-        dubp = s.get("dub")  # {path,text,dur}
+        dubp = s.get("dub")  # {path,text,dur,words_from:{source_id,src_in}}
         if dubp:
-            words_dub = (dubp.get("text") or "").strip()
-            if words_dub:
-                dur = float(dubp.get("dur") or 0)
-                if dur <= 0:
-                    dur = float(s["dur"])
-                chars = list(words_dub.replace(" ", ""))
-                step = dur / max(1, len(chars))
-                for k, ch in enumerate(chars):
-                    ws = round(tl0 + k * step, 1)
-                    seg_words.append({"t": ch, "s": ws, "e": round(ws + step, 1)})
+            dur = float(dubp.get("dur") or 0)
+            if dur <= 0:
+                dur = float(s["dur"])
+            seg_words = []
+            # 真实词轨优先（2026-09-14 维护者项目）：配音音频从素材词级锚点裁出，词轨同源平移——
+            # 字字有真实时间戳，断句分页/逐字卡拉OK全对齐。均分只作无词轨来源时的回退。
+            wf = dubp.get("words_from") or {}
+            src_words = (packpool.get(wf.get("source_id")) or {}).get("words", []) if wf.get("source_id") else []
+            t0 = float(wf.get("src_in") or 0)
+            if src_words:
+                for w in src_words:
+                    if w["start"] >= t0 - 0.05 and w["end"] <= t0 + dur + 0.05:
+                        ws = round(w["start"] - t0 + tl0, 1)
+                        seg_words.append({"t": w["text"], "s": ws, "e": round(w["end"] - t0 + tl0, 1)})
+            if not seg_words:
+                words_dub = (dubp.get("text") or "").strip()
+                if words_dub:
+                    chars = list(words_dub.replace(" ", ""))
+                    step = dur / max(1, len(chars))
+                    for k, ch in enumerate(chars):
+                        ws = round(tl0 + k * step, 1)
+                        seg_words.append({"t": ch, "s": ws, "e": round(ws + step, 1)})
         else:
             sid = act.get("source_id")
             if sid and sid in packpool:
@@ -276,7 +288,8 @@ def build_plan(project_dir, sid=None):
                                     "-show_entries", "format=duration", "-of", "csv=p=0", df],
                                    capture_output=True, text=True)
                 dub_f = {"path": df, "text": (b.get("story") or "").strip(),
-                         "dur": round(float(r.stdout.strip() or 0), 1)}
+                         "dur": round(float(r.stdout.strip() or 0), 1),
+                         "words_from": (b.get("narration") or {}).get("words_from")}
             else:
                 print(f"警告: 幕{i+1} 配音文件缺失（{df}），本幕回退原声", flush=True)
         seg = {"id": b.get("id", f"b{i+1}"), "no": b.get("no", i + 1),
@@ -518,6 +531,14 @@ def build_cover(plan, project_dir, sfx=""):
     cover_dir = f"{project_dir}/cover"
     os.makedirs(cover_dir, exist_ok=True)
     out = f"{cover_dir}/cover{sfx}.jpg"
+    if strategy == "output-frame":
+        # 渲染完成后从成片抽帧（2026-09-14：封面必须=发布产物本体的帧，含字幕/调色/贴纸全要素）
+        op = os.path.join(project_dir, f"out{sfx}.mp4")
+        if os.path.exists(op):
+            subprocess.run([FF, "-y", "-loglevel", "error", "-ss", str(float(c.get("at", 0.4))),
+                            "-i", op, "-frames:v", "1", "-q:v", "2", out], capture_output=True)
+            return out if os.path.exists(out) else None
+        return None
     if strategy == "first-frame" and plan["segments"]:
         s = plan["segments"][0]
         # 封面源：拼接源片 src.mp4（n001 遗留）→ 回退首 A 轨源文件（纯素材包项目）
