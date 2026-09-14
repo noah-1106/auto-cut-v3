@@ -1202,6 +1202,80 @@ def t34_narration_vocab_guard():
           ids == ["dub", "none", "original"], "enums=%s" % ids)
 
 
+def t35_bgm_segment_render():
+    # 回归锚（2026-09-15 Noah #7）：BGM 段落选择+段落 loop 真渲染。
+    # 判别设计：2s 曲 = [0-0.2 静音 | 0.2-0.9 蜂鸣 | 0.9-2 静音]，段落 hook=0.2-0.9，loop=false，幕长 4s——
+    # 正确路径=aloop 不启用/apad 补静音 → 1.5s 后恒静；若错回整条语义（stream_loop 整曲循环）→ 蜂鸣每 2s 重复出现。
+    reg_p = os.path.join(ROOT, "registry", "bgm.json")
+    mp3 = os.path.join(ROOT, "assets", "music", "_t35.mp3")
+    old_reg = open(reg_p, encoding="utf-8").read()
+    try:
+        reg = json.loads(old_reg)
+        reg["bgm_t35seg"] = {"file": "assets/music/_t35.mp3", "name": "T35", "loop": True,
+                             "segments": [{"name": "hook", "in": 0.2, "out": 0.9, "desc": "蜂鸣段"},
+                                          {"name": "整条", "in": 0, "out": None}]}
+        json.dump(reg, open(reg_p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        r = subprocess.run([FFMPEG, "-y", "-loglevel", "error",
+                            "-f", "lavfi", "-i", "sine=frequency=440:duration=0.7",
+                            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",  # 2s 底
+                            "-filter_complex",
+                            "[0:a]adelay=200:all=1[beep];[1:a]atrim=0:2[base];[base][beep]amix=inputs=2:normalize=0,volume=8[a]",
+                            "-map", "[a]", "-c:a", "libmp3lame", mp3], capture_output=True, text=True)
+        assert os.path.exists(mp3), "夹具合成失败: %s" % r.stderr[-200:]
+        sl = {"title": "T35", "outline": "t",
+              "meta": {"format": "portrait", "audio": {"bgm": "", "bgm_volume": 0.9}},
+              "beats": [{"no": 1, "id": "m1", "story": "t",
+                         "narration": {"mode": "none"},
+                         "music": {"inherit": False, "bgm": "bgm_t35seg", "segment": "hook", "loop": False},
+                         "tracks": [{"role": "A", "source_id": "M0109", "cut_index": None,
+                                     "src_in": 0, "duration": 4.0, "requirement": "t"}],
+                         "effects": {"stickers": [], "sfx": []}, "subtitle": {}, "transition_out": None}]}
+        api("/api/storyline/" + PROJ + "?story=e2ebgm35", method="POST", body=sl)
+        st, d = api("/api/render/" + PROJ + "?flash=0.6&grain=16&hold=1.0&duration=0.5&story=e2ebgm35", method="POST")
+        out = os.path.join(ROOT, "projects", PROJ, "out-e2ebgm35.mp4")
+        if not (st == 200 and d.get("ok") and os.path.exists(out)):
+            check("T35 BGM 段落渲染（段落窗口+不循环→apad 补静音）", False, json.dumps(d, ensure_ascii=False)[:150])
+            return
+        r2 = subprocess.run([FFMPEG, "-ss", "1.5", "-t", "2.5", "-i", out,
+                             "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
+        m2 = re.search(r"mean_volume: (-?[\d.]+)", r2.stderr)
+        mv = float(m2.group(1)) if m2 else 0.0
+        # 1.5s 后必须近静音：蜂鸣只响一次（0.2-0.9s）→ 若整曲循环 bug 会再次蜂鸣（mean 显著抬升）
+        check("T35 BGM 段落渲染（段落窗口+不循环→apad 补静音）", mv <= -45,
+              "1.5-4s 均值 %.1fdB（≤-45 为段）" % mv)
+    finally:
+        open(reg_p, "w", encoding="utf-8").write(old_reg)
+        api("/api/storyline-delete/" + PROJ + "?story=e2ebgm35", method="POST")
+        if os.path.exists(mp3):
+            os.remove(mp3)
+
+
+def t36_draft_effect_registry():
+    # 回归锚（2026-09-15 Noah #11）：效果注册表进提示词 + LLM 选择经 validate 白名单透传。
+    # 曾双重假消费：提示词没喂注册表 + validate 重建 beats 时恒空 effects/subtitle。
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import draft
+    p = draft.build_prompt("素材档案x", "意图y", ["cut"])
+    _k = lambda reg: next(k for k in reg if not k.startswith("_"))
+    subs = draft._reg("subtitles.json"); sfxs = draft._reg("sfx.json"); stks = draft._reg("stickers.json")
+    ok_prompt = ("效果注册表" in p and _k(subs) in p and _k(sfxs) in p and _k(stks) in p)
+    beats = draft.validate({"beats": [{"story": "s", "transition_out": None,
+                                      "tracks": [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 3}],
+                                      "subtitle": {"style": _k(subs)},
+                                      "effects": {"stickers": [{"asset": _k(stks), "at_word": "坑",
+                                                                "duration": 1.2, "pos": "top-center"},
+                                                               {"asset": "编造贴纸", "at_word": "x"}],
+                                                  "sfx": [{"asset": _k(sfxs), "at": 0.1, "duration": 0.4},
+                                                          {"asset": "编造音效"}]}}]},
+                           {"M1": {"usable": True, "duration": 10, "kind": "video"}}, ["cut"])
+    b = beats[0]
+    ok_pass = (b["subtitle"].get("style") in subs and len(b["effects"]["stickers"]) == 1
+               and len(b["effects"]["sfx"]) == 1 and b["effects"]["sfx"][0]["asset"] in sfxs)
+    check("T36 效果注册表进提示词+LLM 选择白名单透传", ok_prompt and ok_pass,
+          "prompt=%s 透传 sub=%s stk=%d sfx=%d" % (ok_prompt, bool(b["subtitle"].get("style")),
+                                                   len(b["effects"]["stickers"]), len(b["effects"]["sfx"])))
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1325,6 +1399,8 @@ def main():
     t32_draft_truncation_retry()
     t33_vadwords_transcript_text()
     t34_narration_vocab_guard()
+    t35_bgm_segment_render()
+    t36_draft_effect_registry()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

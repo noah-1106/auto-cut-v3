@@ -39,6 +39,11 @@
  ],
  "cover_strategies": [
   {
+   "id": "output-frame",
+   "name": "成片抽帧",
+   "desc": "渲染完成后从成片抽帧——封面=发布产物本体（含字幕/调色/贴纸全要素）"
+  },
+  {
    "id": "first-frame",
    "name": "首帧封面",
    "desc": "取第一幕素材入点帧 + 标题叠加",

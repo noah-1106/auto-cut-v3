@@ -401,7 +401,9 @@ def build_plan(project_dir, sid=None):
                "tracks": seg_tracks,
                "effects": b.get("effects", {}),
                "music": {"inherit": (b.get("music") or {}).get("inherit", True),
-                         "bgm": (b.get("music") or {}).get("bgm")},  # 幕级 BGM 声明（2026-09-14 接通前端音乐轨开关）
+                         "bgm": (b.get("music") or {}).get("bgm"),
+                         "segment": (b.get("music") or {}).get("segment"),
+                         "loop": (b.get("music") or {}).get("loop")},  # 幕级 BGM 声明（2026-09-14 接通前端音乐轨开关；segment/loop 2026-09-15）
                "narration": (b.get("narration") or {}).get("mode") or "original"}
         tr_id = b.get("transition_out")
         if tr_id and i < len(beats) - 1 and m.get("duration"):
@@ -465,6 +467,8 @@ def build_plan(project_dir, sid=None):
         plan["bgm_id"] = bid
     elif audio.get("bgm") or audio.get("bgm_default"):
         plan["bgm"] = os.path.join(ROOT, audio.get("bgm_default") or audio.get("bgm"))
+    plan["bgm_segment"] = audio.get("bgm_segment") or None   # 全局贯穿曲段落（2026-09-15）
+    plan["bgm_loop"] = audio.get("bgm_loop")                 # None=按曲长自动
     if audio.get("bgm_volume") is not None:
         plan["bgm_volume"] = float(audio["bgm_volume"])
     plan["meta"] = story.get("meta", {})
@@ -616,25 +620,45 @@ def build_cmd(plan, ass_path, out_path):
     # inherit=false+bgm=null → 该幕无 BGM（人声/旁白裸奔）。连续同源幕合为一组共享 input，
     # 组段按音频链时轴（a_starts 同源逻辑）切齐后 concat——组间硬切，组首尾各自淡入淡出。
     # 曲长 < 段长自动循环（-stream_loop），afade 收尾由 atrim 精确截断。
+    # 段落化（2026-09-15 Noah 问答 #7）：music.segment / meta.audio.bgm_segment 引用注册表
+    # segments 段落名——组渲染改为「取段落窗口 + aloop 段落循环 / apad 不足补静音」，
+    # 不再用曲位=时间轴位语义；loop 标志（幕级 music.loop / 全局 bgm_loop）覆盖注册表默认。
     _reg_bgm = load(f"{ROOT}/registry/bgm.json") if os.path.exists(f"{ROOT}/registry/bgm.json") else {}
     def _bgm_src(seg):
         mu = seg.get("music") or {}
         if mu.get("inherit", True):
-            return ("global", plan.get("bgm")) if plan.get("bgm") else (None, None)
+            if not plan.get("bgm"):
+                return (None, None, None)
+            _seg = mu.get("segment") or plan.get("bgm_segment")   # 幕级覆盖贯穿曲段落（Noah #7）
+            _lp = mu.get("loop") if mu.get("loop") is not None else plan.get("bgm_loop")
+            return (("global", _seg, _lp), plan.get("bgm"), (plan.get("bgm_id"), _seg, _lp))
         bid = mu.get("bgm")
         conf = _reg_bgm.get(bid) if bid else None
         if conf and os.path.exists(os.path.join(ROOT, conf["file"])):
-            return (bid, os.path.join(ROOT, conf["file"]))
-        return (None, None)  # 独立换曲 id 无效 → 如实静音（不打断渲染，QC 可查）
-    _bgm_groups = []  # [key, file, [seg_idx,...]]
+            return ((bid, mu.get("segment"), mu.get("loop")),
+                    os.path.join(ROOT, conf["file"]), (bid, mu.get("segment"), mu.get("loop")))
+        return (None, None, None)  # 独立换曲 id 无效 → 如实静音（不打断渲染，QC 可查）
+    def _seg_window(conf_id, segname, loop_ovr):
+        """注册表段落 → {in, out, loop}；段落名无效如实告警回退整条。"""
+        conf = _reg_bgm.get(conf_id) or {}
+        in0, out0 = 0.0, None
+        if segname:
+            s = next((x for x in (conf.get("segments") or []) if x.get("name") == segname), None)
+            if s:
+                in0, out0 = float(s.get("in") or 0), s.get("out")
+            else:
+                print("警告: BGM %s 无段落「%s」——回退整条" % (conf_id, segname))
+        loop = conf.get("loop", True) if loop_ovr is None else bool(loop_ovr)
+        return in0, (float(out0) if out0 is not None else None), loop
+    _bgm_groups = []  # [key, file, src3, [seg_idx,...]]
     for _si, _seg in enumerate(plan["segments"]):
-        _k, _f = _bgm_src(_seg)
+        _k, _f, _src = _bgm_src(_seg)
         if _bgm_groups and _bgm_groups[-1][0] == _k:
-            _bgm_groups[-1][2].append(_si)
+            _bgm_groups[-1][3].append(_si)
         else:
-            _bgm_groups.append([_k, _f, [_si]])
+            _bgm_groups.append([_k, _f, _src, [_si]])
     _bgm_chain = []
-    for _gi, (_k, _fp, _sidx) in enumerate(_bgm_groups):
+    for _gi, (_k, _fp, _src, _sidx) in enumerate(_bgm_groups):
         _g0 = a_starts[_sidx[0]]
         _last = plan["segments"][_sidx[-1]]
         _g1 = a_starts[_sidx[-1]] + float(_last["dur"]) - (_overlap_d(plan, plan["segments"][_sidx[-1] - 1]) if _sidx[-1] else 0.0)
@@ -649,12 +673,30 @@ def build_cmd(plan, ass_path, out_path):
         import re as _re
         _mm = _re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", _r.stderr or "")
         _m_dur = (int(_mm.group(1)) * 3600 + int(_mm.group(2)) * 60 + float(_mm.group(3))) if _mm else 0
+        _vol = plan.get('bgm_volume', 0.22)
+        _in0, _out0, _loop = _seg_window(*_src)
+        if _in0 > 0 or _out0 is not None:
+            if not _m_dur:  # probe 失败拿不到曲长 → 段落窗口无从定位，如实回退整条语义
+                print("警告: BGM %s 时长探测失败——段落「%s」回退整条" % (_src[0], _src[1]))
+                _in0, _out0 = 0.0, None
+        if _in0 > 0 or _out0 is not None:
+            # 段落窗口：取 [in0,out0) 段，loop=true 且段短于组 → aloop 循环盖满；否则 apad 补静音
+            _end = _out0 if (_out0 is not None and _out0 > _in0) else _m_dur
+            _seglen = max(0.3, _end - _in0)
+            inputs += ["-i", _fp]
+            bgm_idx = ni; ni += 1
+            _mid = (f"aloop=loop=-1:size=2147483647,atrim=0:{_glen:.2f}," if (_loop and _seglen < _glen)
+                    else f"apad,atrim=0:{_glen:.2f},")
+            fc.append(f"[{bgm_idx}:a]atrim=start={_in0:.2f}:end={_end:.2f},asetpts=PTS-STARTPTS,"
+                      + _mid + f"volume={_vol},"
+                      f"afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, _glen - 1):.2f}:d=1.0[bg{_gi}]")
+            _bgm_chain.append(f"[bg{_gi}]")
+            continue
         if _m_dur and _m_dur < _glen:
             inputs += ["-stream_loop", "-1", "-i", _fp]
         else:
             inputs += ["-i", _fp]
         bgm_idx = ni; ni += 1
-        _vol = plan.get('bgm_volume', 0.22)
         fc.append(f"[{bgm_idx}:a]atrim=start={_g0:.2f}:end={_g1:.2f},asetpts=PTS-STARTPTS,volume={_vol},"
                   f"afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, _glen - 1):.2f}:d=1.0[bg{_gi}]")
         _bgm_chain.append(f"[bg{_gi}]")
@@ -749,6 +791,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         cur = f"bs{k}"
     fonts = os.path.join(ROOT, "assets", "fonts")
     fc.append(f"[{cur}]subtitles=filename='{ass_path}':fontsdir='{fonts}'[vout]")
+    fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
     fc.append(f"[{a_idx}:a]atrim=0:{dur},asetpts=PTS-STARTPTS[vc]")
     mix = "[vc]"; n_in = 1
     for k, sfx in enumerate((seg.get("effects") or {}).get("sfx") or []):
@@ -761,8 +804,8 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         mix += f"[sx{k}]"; n_in += 1
     fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0[amix]")
     return [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
-        "-filter_complex", ";".join(fc), "-map", "[vout]", "-map", "[amix]", "-t", f"{dur}",
-        "-c:v", hw_encoder(), "-b:v", "4M", "-c:a", "aac", "-b:a", "128k", out_path]
+        "-filter_complex", ";".join(fc), "-map", "[voutp]", "-map", "[amix]", "-t", f"{dur}",
+        "-c:v", hw_encoder(), "-b:v", "1.5M", "-c:a", "aac", "-b:a", "96k", out_path]
 
 def render_beat(plan, project_dir, beat_no, sid=None):
     sfx, _rs = art_suffix(project_dir, sid)
