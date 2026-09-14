@@ -1,0 +1,64 @@
+name: ci
+# Windows/mac 双端等价性实证（2026-09-14 Noah 提议）：每 push 到 main 在
+# windows-latest + ubuntu-latest 跑全量 e2e（41 项，含真实云端 LLM/ASR/TTS 冒烟）。
+# MiniMax key 走 repository secret（MINIMAX_KEY），永不入库。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      MINIMAX_KEY: ${{ secrets.MINIMAX_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: ffmpeg（Windows：gyan essentials 解压进 bin/）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath .
+          $d = (Get-ChildItem -Directory -Filter "ffmpeg-*" | Select-Object -First 1).FullName
+          New-Item -ItemType Directory -Path bin | Out-Null
+          Copy-Item "$d\bin\*.exe" bin\
+          bin\ffmpeg.exe -version | Select-Object -First 1
+
+      - name: ffmpeg（Ubuntu：apt + 软链 bin/）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          mkdir -p bin
+          ln -s "$(command -v ffmpeg)" bin/ffmpeg
+          ln -s "$(command -v ffprobe)" bin/ffprobe
+          bin/ffmpeg -version | head -1
+
+      - name: services.json（CI 模板：key 全走 env，TTS 走云端）
+        shell: bash
+        run: |
+          cp config/services.ci.json config/services.json
+          python3 -c "import json; d=json.load(open('config/services.json')); assert all('api_key_env' in be for s in d.values() if isinstance(s,dict) for be in (s.get('backends') or {}).values()), 'key 必须全走 env'; print('services.json OK（无硬编码 key）')"
+
+      - name: 启动 studio + 全量 e2e
+        shell: bash
+        run: |
+          python3 studio.py >/tmp/studio.log 2>&1 &
+          STUDIO_PID=$!
+          for i in $(seq 1 30); do
+            curl -s localhost:8765/api/projects >/dev/null 2>&1 && break
+            sleep 1
+          done
+          python3 tests/e2e.py
+          STATUS=$?
+          kill $STUDIO_PID 2>/dev/null || true
+          exit $STATUS

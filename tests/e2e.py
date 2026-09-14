@@ -26,7 +26,19 @@
 import argparse, json, os, re, shutil, subprocess, sys, time, urllib.request, urllib.error  # re: T16 volumedetect 解析
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FF = os.path.join(ROOT, "bin", "ffprobe")
+
+
+def _tool(name):
+    """跨平台工具解析：仓内 bin/（mac 无后缀/win .exe）→ PATH（硬规则 8 同链）。"""
+    for c in (os.path.join(ROOT, "bin", name), os.path.join(ROOT, "bin", name + ".exe")):
+        if os.path.exists(c):
+            return c
+    import shutil
+    return shutil.which(name) or name
+
+
+FF = _tool("ffprobe")     # 历史变量名=ffprobe（T12/T16 探时长用）
+FFMPEG = _tool("ffmpeg")
 BASE = "http://localhost:8765"
 PROJ = "e2e-fixture"  # E2E 夹具专属名（tests/fixtures.py 合成+跑完即删，与用户素材零命名空间交集）
 PASS, FAIL = [], []
@@ -104,7 +116,7 @@ def t5_upload():
     src_rot = os.path.join(ROOT, "materials", "packs", "e2e-fixture", "ROT01.MP4")
     import tempfile
     fd, tmp = tempfile.mkstemp(suffix=".mp4"); os.close(fd)
-    rc = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+    rc = subprocess.run([FFMPEG, "-y", "-loglevel", "error",
                          "-ss", "0", "-t", "1.5",
                          "-i", src_rot, "-c:v", "copy", "-an", tmp],
                         capture_output=True, text=True)
@@ -168,7 +180,7 @@ def t6_sfx():
     if ok:
         # 窄窗 max 对账：ding@1s vs 基线窗
         def vmax(t0, dur=0.4):
-            r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-hide_banner", "-ss", str(t0), "-t", str(dur),
+            r = subprocess.run([FFMPEG, "-hide_banner", "-ss", str(t0), "-t", str(dur),
                                 "-i", outp, "-vn", "-af", "volumedetect", "-f", "null", "-"],
                                capture_output=True, text=True)
             mm = re.search(r"max_volume: (-?[\d.]+) dB", r.stderr)
@@ -215,7 +227,7 @@ def t7_sticker():
         # 故「同刻跨渲染帧差」在无贴纸时刻≈编码噪声(≈0)，有贴纸时刻≈贴纸像素差。
         # （v1 的"同时跨刻"对照量的是运动噪声，与贴纸差不可比——设计缺陷，非实现缺陷）
         def snap(mp, t, png):
-            subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+            subprocess.run([FFMPEG, "-y", "-loglevel", "error",
                             "-ss", str(t), "-i", mp, "-frames:v", "1", png], capture_output=True)
             return png
         import tempfile
@@ -223,7 +235,7 @@ def t7_sticker():
         def cross(t):
             a = snap(outs[1], t, os.path.join(_snapdir, "e2e_a.png"))
             b = snap(outs[0], t, os.path.join(_snapdir, "e2e_b.png"))
-            r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-hide_banner",
+            r = subprocess.run([FFMPEG, "-hide_banner",
                                 "-i", a, "-i", b,
                                 "-filter_complex", "[0:v]crop=900:320:90:30[x];[1:v]crop=900:320:90:30[y];"
                                                    "[x][y]blend=all_mode=difference,signalstats,metadata=print:file=-",
@@ -376,13 +388,13 @@ def _t12_render(dub_src):
     ok = st == 200 and d.get("ok") and os.path.exists(out)
     dur = 0.0
     if ok:
-        r = subprocess.run([os.path.join(ROOT, "bin", "ffprobe"), "-v", "error",
+        r = subprocess.run([FF, "-v", "error",
                             "-show_entries", "format=duration", "-of", "csv=p=0", out],
                            capture_output=True, text=True)
         dur = float(r.stdout.strip() or 0)
     # 2026-09-14 dub 盖满语义（新素材包冷启动修复）：配音 > 幕视频时长 → A 轨延展盖满配音，
     # 成片 ≈ 配音实测长 + 幕2 4s——不再 atrim 掐断句子（旧断言 8s=掐断语义，已废）
-    rd = subprocess.run([os.path.join(ROOT, "bin", "ffprobe"), "-v", "error",
+    rd = subprocess.run([FF, "-v", "error",
                          "-show_entries", "format=duration", "-of", "csv=p=0", dub_src],
                         capture_output=True, text=True)
     dub_dur = float(rd.stdout.strip() or 0)
@@ -424,7 +436,7 @@ def t16_narration_modes():
             return
 
         def seg_mv(ss, tt):
-            r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-ss", str(ss), "-t", str(tt),
+            r = subprocess.run([FFMPEG, "-ss", str(ss), "-t", str(tt),
                                 "-i", out, "-af", "volumedetect", "-f", "null", "-"],
                                capture_output=True, text=True)
             m2 = re.search(r"mean_volume: (-?[\d.]+)", r.stderr)
@@ -836,7 +848,7 @@ def t28_disposition():
             import hashlib
             dh = hashlib.md5(pk.encode("utf-8")).hexdigest()[:8]
             wav = os.path.join(tmp, "materials", ".audio_cache", dh + "_tp.wav")
-            r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+            r = subprocess.run([FFMPEG, "-y", "-loglevel", "error",
                                 "-f", "lavfi", "-i", "aevalsrc='if(gte(t,2),sin(440*t),0)':s=16000:d=3",
                                 "-ac", "1", wav], capture_output=True, text=True)
             assert r.returncode == 0 and os.path.exists(wav), "黑区夹具 wav 合成失败"
@@ -881,7 +893,7 @@ def t29_qc_av_sync():
     # （含 EOF 截断冻结补到片尾）、R10 页同步（plan 词轨重放 vs ASS，注入偏移必报）。
     # 全合成媒体，离线。探针判据曾被"输入类型错（dict 喂给 build_pages）"整段打折——锚必须打真输入。
     import tempfile, shutil
-    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    FF = FFMPEG
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import qc
@@ -966,7 +978,7 @@ def t31_dubfit():
     #（故事线未知字段透传，硬规则 4）/ 不过 exit 1 + dubgate-report 落盘（编排器 dubgate 环节读它）。
     # ASR 全程打桩（离线）：fit.mp3 复检词轨 vs src.wav 原始词轨 按文件名分派。
     import tempfile, shutil
-    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    FF = FFMPEG
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import dubfit, asr
@@ -1116,7 +1128,7 @@ def t33_vadwords_transcript_text():
     # 字幕=总结腔。锚：original 幕词轨文本=素材窗口 transcript 文本（时间仍 VAD 物理测量），
     # 窗口无词回退 story；dub 幕保持 story 文本（=TTS 念稿）。
     import tempfile, shutil
-    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    FF = FFMPEG
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import vadwords
@@ -1184,7 +1196,7 @@ def t25_rmw_smoke():
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
     try:
         import subprocess as _sp
-        r = _sp.run(["/usr/bin/python3", os.path.join(ROOT, "tests", "rmw_smoke.py")],
+        r = _sp.run([sys.executable, os.path.join(ROOT, "tests", "rmw_smoke.py")],
                     capture_output=True, text=True, timeout=120)
         out = r.stdout.strip().split("\n")
         ok = r.returncode == 0
