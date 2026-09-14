@@ -76,11 +76,14 @@ def load(p):
     with open(p, encoding="utf-8") as f:
         return json.load(f)
 
-def _fpath(p):
-    """滤镜内嵌路径必须正斜杠（2026-09-15 Windows CI 实证）：-filter_complex 里
-    D:\\a\\... 的反斜杠被 ffmpeg 解析为转义符→整图 Error parsing（mac/ubuntu 正斜杠没事）。
-    argv 里的 -i 路径不受影响，只改注进滤镜串的。"""
-    return p.replace("\\", "/")
+def _ass_spec(ass_path):
+    """subtitles 滤镜规格（ffmpeg 7+ 新解析器兼容，2026-09-15 Windows CI 实证）：
+    绝对路径含盘符冒号（D:），冒号在选项值里无论引号/转义都被新解析器劈开
+    （av_get_token 剥引号后 ff_filter_opt_parse 按裸冒号切选项）。
+    解法=相对路径+无引号（值里只剩 / - _ . 全非特殊字符），subprocess 统一 cwd=ROOT。
+    ffmpeg 6/9、mac/win 全兼容。"""
+    rel = os.path.relpath(ass_path, ROOT).replace("\\", "/")
+    return f"subtitles=filename={rel}:fontsdir=assets/fonts"
 
 # ---------------------------------------------------------------- 解说轨
 def remap_words(cuts, acts, segs, total, packpool=None):
@@ -594,8 +597,7 @@ def build_cmd(plan, ass_path, out_path):
         o, e = win; pk = float(plan["flash_peak"])
         fc.append(f"[{cur}]eq=eval=frame:brightness='if(between(t,{o:.2f},{e:.2f}),{pk:.2f}*sin((t-{o:.2f})/{e-o:.2f}*PI),0)'[fx]")
         cur = "fx"
-    fonts = os.path.join(ROOT, "assets", "fonts")
-    fc.append(f"[{cur}]subtitles=filename='{_fpath(ass_path)}':fontsdir='{_fpath(fonts)}'[vout]")
+    fc.append(f"[{cur}]{_ass_spec(ass_path)}[vout]")
     # 音频：原声链（dub 幕换配音轨）+ BGM + 音效
     for j, (lbl, a_idx, seg) in enumerate(beat_v):
         if seg.get("dub"):  # 配音幕：配音轨进链，原声弃用；配音短于画面则尾部静音补齐
@@ -795,8 +797,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         x, y = pos_xy(stk.get("pos") or conf.get("pos", "top-center"), w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
         fc.append(f"[{cur}][{sidx}:v]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
-    fonts = os.path.join(ROOT, "assets", "fonts")
-    fc.append(f"[{cur}]subtitles=filename='{_fpath(ass_path)}':fontsdir='{_fpath(fonts)}'[vout]")
+    fc.append(f"[{cur}]{_ass_spec(ass_path)}[vout]")
     fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
     fc.append(f"[{a_idx}:a]atrim=0:{dur},asetpts=PTS-STARTPTS[vc]")
     mix = "[vc]"; n_in = 1
@@ -828,12 +829,12 @@ def render_beat(plan, project_dir, beat_no, sid=None):
     ass, _np = build_ass(mini, pv, f"beat_{tag}{beat_no}.ass")  # 解包元组(路径,页数)
     out = f"{pv}/beat_{tag}{beat_no}.mp4"
     cmd = build_beat_cmd(plan, seg, ass, out)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码失败回退软编（跨平台降级铁律，不限定 videotoolbox——win 的 nvenc/qsv 同理）
         cmd[cmd.index("-c:v") + 1] = "libx264"
         cmd[cmd.index("-b:v")] = "-crf"; cmd[cmd.index("4M")] = "20"
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     if r.returncode != 0:
         print("BEAT FAIL:", r.stderr[-600:]); sys.exit(1)
     print(f"BEAT OK: {out} ({os.path.getsize(out)//1024}KB)")
@@ -871,7 +872,7 @@ def render(plan, project_dir, sid=None):
     cmd = build_cmd(plan, ass, out) + ["-progress", "pipe:1", "-nostats"]
     print("STAGE ffmpeg", flush=True)
     _status(stage="ffmpeg", pct=0)
-    r = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    r = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=ROOT)  # cwd=ROOT：滤镜串内嵌相对路径（_ass_spec）的解析锚点
     errbuf = []
     threading.Thread(target=lambda: [errbuf.append(l) for l in r.stderr], daemon=True).start()
     total = float(plan.get("duration") or 0)
@@ -897,7 +898,7 @@ def render(plan, project_dir, sid=None):
         cmd[cmd.index("-c:v") + 1] = "libx264"
         cmd[cmd.index("-b:v")] = "-crf"
         cmd[cmd.index("6M")] = "20"
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)  # 软编回退同锚点
         errbuf = list(r.stderr or "")
     if r.returncode != 0:
         _status(running=False, ok=False, tail=["".join(errbuf)[-400:]])
