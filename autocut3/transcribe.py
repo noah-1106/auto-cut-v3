@@ -33,7 +33,7 @@ def project_packs(pid):
 def _locked(pdir):
     """包级互斥锁：同一 pack 的读-改-写全程串行（防并发生成器互相覆盖）。
     2026-09-11 实锤：transcribe/understand 并发跑同一包，后写方整体覆盖先写方的数据。"""
-    import fcntl
+    import flock as fcntl
     lf = open(os.path.join(pdir, ".lock"), "w")
     fcntl.flock(lf, fcntl.LOCK_EX)
     return lf
@@ -95,7 +95,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
     if changed:
         with open(pp, "w", encoding="utf-8") as fh:
             json.dump(pk, fh, ensure_ascii=False, indent=1)
-    import fcntl
+    import flock as fcntl
     fcntl.flock(lockf, fcntl.LOCK_UN)
     return out
 

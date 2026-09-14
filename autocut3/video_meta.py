@@ -11,10 +11,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def ffprobe_path():
-    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe")):
+    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
+              os.path.join(ROOT, "bin", "ffprobe.exe")):
         if c and os.path.exists(c):
             return c
     return shutil.which("ffprobe")
+
+
+def ffmpeg_path():
+    for c in (os.environ.get("FFMPEG"), os.path.join(ROOT, "bin", "ffmpeg"),
+              os.path.join(ROOT, "bin", "ffmpeg.exe")):
+        if c and os.path.exists(c):
+            return c
+    return shutil.which("ffmpeg")
 
 
 def read_rotation(s):
@@ -57,7 +66,7 @@ def display_geometry(path):
     try:
         fd, tmp = tempfile.mkstemp(suffix=".png")
         os.close(fd)
-        r2 = subprocess.run(["bin/ffmpeg", "-y", "-loglevel", "error", "-i", path,
+        r2 = subprocess.run([ffmpeg_path() or "ffmpeg", "-y", "-loglevel", "error", "-i", path,
                              "-frames:v", "1", tmp], capture_output=True, text=True)
         if r2.returncode == 0 and os.path.getsize(tmp) > 0:
             with open(tmp, "rb") as fh:

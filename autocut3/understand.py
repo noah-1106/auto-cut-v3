@@ -37,7 +37,7 @@ def project_packs(pid):
 def understand_pack(pack_id, material=None, provider=None, force=False):
     pdir = os.path.join(ROOT, "materials", "packs", pack_id)
     pp = os.path.join(pdir, "pack.json")
-    import fcntl
+    import flock as fcntl
     lockf = open(os.path.join(pdir, ".lock"), "w")  # 与 transcribe 同锁：读-改-写全程独占
     fcntl.flock(lockf, fcntl.LOCK_EX)
     pk = json.load(open(pp, encoding="utf-8"))
@@ -123,7 +123,7 @@ def build_digest(pid):
     """包级统一理解：汇总全部单素材识别结果 → LLM 一次调用产出导演视角盘点。
     产物 pack.json.digest = {theme, inventory{a_roll_candidates,broll_pool,voiceover_sources,ambient,gaps},
     roles[{id,suggest}], narrative_assets}。draft.build_dossier 读它做档案头。"""
-    import fcntl
+    import flock as fcntl
     pp = os.path.join(ROOT, "materials", "packs", pid, "pack.json")
     pk = json.load(open(pp, encoding="utf-8"))
     lines = []
@@ -163,7 +163,7 @@ def build_digest(pid):
         raise RuntimeError("digest LLM 未返回合法 JSON")
     d["at"] = asr.datetime_iso()
     with open(pp + ".lock", "w") as _lf:
-        import fcntl as _f
+        import flock as _f
         _f.flock(_lf, _f.LOCK_EX)
         pk2 = json.load(open(pp, encoding="utf-8"))
         pk2["digest"] = d

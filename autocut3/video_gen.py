@@ -160,7 +160,7 @@ def retrieve(project, task_id, file_id):
              "audit": {"transcript": "pending", "proofread": "pending", "visual": "pending"},
              "source_title": "AI 生成 %s" % task_id}
     # R2-2 同族：写 pack 前锁内重读+append（转写/理解可能已并发更新包），与全仓写者同锁
-    import fcntl
+    import flock as fcntl
     _lf = open(os.path.join(pk_dir, ".lock"), "w")
     fcntl.flock(_lf, fcntl.LOCK_EX)
     try:

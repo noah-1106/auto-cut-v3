@@ -37,14 +37,16 @@ def resolve_key(becfg):
 
 
 def ffmpeg_path():
-    for c in (os.environ.get("FFMPEG"), os.path.join(ROOT, "bin", "ffmpeg")):
+    for c in (os.environ.get("FFMPEG"), os.path.join(ROOT, "bin", "ffmpeg"),
+              os.path.join(ROOT, "bin", "ffmpeg.exe")):
         if c and os.path.exists(c):
             return c
     return shutil.which("ffmpeg")
 
 
 def ffprobe_path():
-    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe")):
+    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
+              os.path.join(ROOT, "bin", "ffprobe.exe")):
         if c and os.path.exists(c):
             return c
     return shutil.which("ffprobe")

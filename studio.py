@@ -32,7 +32,17 @@ sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
 PIPE = os.path.join(ROOT, "autocut3", "pipeline.py")
 RENDER_JOBS = {}  # "name:sid" → {running,stage,pct,tail,ok}（R2 渲染进度：pipeline 以 PCT/STAGE 行协议输出）
-FF = os.path.join(ROOT, "bin", "ffmpeg")
+def _resolve_ff():
+    # 跨平台 ffmpeg 定位：环境变量 → 仓内二进制（mac 无后缀 / win .exe）→ 系统 PATH
+    import shutil
+    for c in (os.environ.get("FFMPEG"),
+              os.path.join(ROOT, "bin", "ffmpeg"),
+              os.path.join(ROOT, "bin", "ffmpeg.exe")):
+        if c and os.path.exists(c):
+            return c
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+FF = _resolve_ff()
 MIME = {"mp4": "video/mp4", "png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
         "mp3": "audio/mpeg", "json": "application/json", "ass": "text/plain; charset=utf-8",
         "srt": "text/plain; charset=utf-8", "mlt": "application/xml",
@@ -303,12 +313,13 @@ class H(BaseHTTPRequestHandler):
                           st.get("primary", "&H00FFFFFF"), st.get("secondary", "&H00F0F0F0"),
                           st.get("outline_col", "&H00101010"), st.get("border", 3), st.get("marginv", 180) * 720 // 1920)
                 open(f"{pv_dir}/_pv_{sid}.ass", "w", encoding="utf-8").write(ass)
-                subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
-                                "-f", "lavfi", "-i", "color=c=0x1a1e24:s=1280x720:d=0.1",
-                                "-vf", "drawtext=text='':fontcolor=white",
-                                "-i", f"{pv_dir}/_pv_{sid}.ass", "-map", "0:v", "-map", "1:s",
-                                "-frames:v", "1", "-q:v", "3", jpg],
-                               capture_output=True, timeout=30)
+                r = subprocess.run([FF, "-y", "-loglevel", "error",
+                                    "-f", "lavfi", "-i", "color=c=0x1a1e24:s=1280x720:d=0.1",
+                                    "-vf", f"subtitles=assets/preview/_pv_{sid}.ass",
+                                    "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "3", jpg],
+                                   capture_output=True, text=True, timeout=30)
+                if r.returncode != 0 or not os.path.exists(jpg):
+                    return self._json({"err": "preview render failed: " + (r.stderr or "")[-200:]}, 500)
             return self._json({"ok": True, "url": f"/files/assets/preview/sub-{sid}.jpg"})
         elif u.path.startswith("/files/"):
             fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
@@ -535,7 +546,7 @@ class H(BaseHTTPRequestHandler):
                 fname = os.path.basename(dest)
             # R2-2（Claude 复核）：upload 全程无锁=9-11 事故同族——读-改-写窗口以分钟计
             # （流式收文件最长达 500MB），必须与 transcribe/understand/proofread/usable 同锁
-            import fcntl
+            import flock as fcntl
             _lf = open(f"{pk_dir}/.lock", "w")
             fcntl.flock(_lf, fcntl.LOCK_EX)
             try:
@@ -593,7 +604,7 @@ class H(BaseHTTPRequestHandler):
                      "source_title": "上传素材"}
             # append+dump 在同一把锁内完成。R3-2：重读也必须进锁（原读在锁外=写锁没护住读点，
             # upload vs 转写的丢更新仍在）；读失败经 finally 释放锁后 500 放弃登记
-            import fcntl
+            import flock as fcntl
             _lf = open(f"{pk_dir}/.lock", "w")
             fcntl.flock(_lf, fcntl.LOCK_EX)
             try:
@@ -681,7 +692,7 @@ class H(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(n) or b"{}")
             except Exception:
                 return self._json({"err": "bad json"}, 400)
-            import fcntl
+            import flock as fcntl
             # RMW 守卫战果（rmw_smoke 扫到）：此端点读在锁外、写在锁外——第五个漏网写者，四轮都没点到
             with open(os.path.join(os.path.dirname(pp), ".lock"), "w") as _lf:
                 fcntl.flock(_lf, fcntl.LOCK_EX)
@@ -885,7 +896,7 @@ class H(BaseHTTPRequestHandler):
                         f["review"] = body["review"]
             # P1#5 完整版：锁覆盖读-改-写全程。R2-1（Claude 复核）：原 `or pj` 陈旧回退是反向保险——
             # 重读失败时会把锁前旧快照落盘、覆盖并发已提交变更；重读失败必须放弃本次切换（幂等重试）
-            import fcntl
+            import flock as fcntl
             # R3-1：重读移入锁内——原读在锁外，锁只保住写点，读点仍拿陈旧快照（RMW 未原子）
             with open(f"{ROOT}/materials/packs/{pid}/.lock", "w") as lf:
                 fcntl.flock(lf, fcntl.LOCK_EX)

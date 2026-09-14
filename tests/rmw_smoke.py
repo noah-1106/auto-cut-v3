@@ -8,7 +8,10 @@
 用法：python3 tests/rmw_smoke.py（要求 Studio 在 8765 端口运行）
 产物：自建 RMWTEST 包，结束自动清理。
 """
-import fcntl, json, os, shutil, sys, threading, time, urllib.request
+import json, os, shutil, sys, threading, time, urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "autocut3"))
+import flock as fcntl  # 跨平台锁：POSIX=flock，Windows=msvcrt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PID = "RMWTEST"

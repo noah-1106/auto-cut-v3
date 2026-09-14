@@ -100,9 +100,11 @@ else:
     print("  ✓ 无重复函数定义（%d 个）" % len(all_defs))
 
 # C3. node 语法检查
-r = subprocess.run(["node", "--check", "/tmp/ui_check.js"], capture_output=True, text=True)
-open("/tmp/ui_check.js", "w", encoding="utf-8").write(js)
-r = subprocess.run(["node", "--check", "/tmp/ui_check.js"], capture_output=True, text=True)
+import tempfile
+_fd, _ui_tmp = tempfile.mkstemp(suffix=".js"); os.close(_fd)
+r = subprocess.run(["node", "--check", _ui_tmp], capture_output=True, text=True)
+open(_ui_tmp, "w", encoding="utf-8").write(js)
+r = subprocess.run(["node", "--check", _ui_tmp], capture_output=True, text=True)
 if r.returncode == 0:
     print("  ✓ node --check 语法通过")
 else:

@@ -12,7 +12,40 @@ autocut3 管线核心 v0.1 —— 最小闭环
 import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FF = os.path.join(ROOT, "bin", "ffmpeg")
+
+def _resolve_ff():
+    # 跨平台 ffmpeg 定位：环境变量 → 仓内二进制（mac 无后缀 / win .exe）→ 系统 PATH
+    for c in (os.environ.get("FFMPEG"),
+              os.path.join(ROOT, "bin", "ffmpeg"),
+              os.path.join(ROOT, "bin", "ffmpeg.exe")):
+        if c and os.path.exists(c):
+            return c
+    import shutil
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+FF = _resolve_ff()
+
+_ENC_CACHE = {}
+def _encoder_usable(enc):
+    if enc not in _ENC_CACHE:
+        try:
+            r = subprocess.run([FF, "-hide_banner", "-h", f"encoder={enc}"],
+                               capture_output=True, text=True, timeout=15)
+            _ENC_CACHE[enc] = r.returncode == 0
+        except Exception:
+            _ENC_CACHE[enc] = False
+    return _ENC_CACHE[enc]
+
+def hw_encoder():
+    """平台感知硬件编码器（2026-09-14 跨平台分发要求）：mac=videotoolbox，
+    win=nvenc→qsv 探测择一，皆不可用=libx264（软编回退铁律不变）。"""
+    if sys.platform == "darwin":
+        return "h264_videotoolbox"
+    if sys.platform == "win32":
+        for enc in ("h264_nvenc", "h264_qsv"):
+            if _encoder_usable(enc):
+                return enc
+    return "libx264"
 
 def load(p):
     with open(p, encoding="utf-8") as f:
@@ -595,7 +628,7 @@ def build_cmd(plan, ass_path, out_path):
     cmd = [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
         "-filter_complex", ";".join(fc),
         "-map", "[vout]", "-map", "[amix]", "-t", f"{total}",
-        "-c:v", "h264_videotoolbox", "-b:v", "6M",
+        "-c:v", hw_encoder(), "-b:v", "6M",
         "-c:a", "aac", "-b:a", "128k", out_path]
     return cmd
 
@@ -684,7 +717,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
     fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0[amix]")
     return [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
         "-filter_complex", ";".join(fc), "-map", "[vout]", "-map", "[amix]", "-t", f"{dur}",
-        "-c:v", "h264_videotoolbox", "-b:v", "4M", "-c:a", "aac", "-b:a", "128k", out_path]
+        "-c:v", hw_encoder(), "-b:v", "4M", "-c:a", "aac", "-b:a", "128k", out_path]
 
 def render_beat(plan, project_dir, beat_no, sid=None):
     sfx, _rs = art_suffix(project_dir, sid)
@@ -702,8 +735,9 @@ def render_beat(plan, project_dir, beat_no, sid=None):
     out = f"{pv}/beat_{tag}{beat_no}.mp4"
     cmd = build_beat_cmd(plan, seg, ass, out)
     r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0 and "videotoolbox" in (r.stderr or ""):
-        cmd[cmd.index("h264_videotoolbox")] = "libx264"
+    if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
+        # 硬编码失败回退软编（跨平台降级铁律，不限定 videotoolbox——win 的 nvenc/qsv 同理）
+        cmd[cmd.index("-c:v") + 1] = "libx264"
         cmd[cmd.index("-b:v")] = "-crf"; cmd[cmd.index("4M")] = "20"
         r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
@@ -764,9 +798,9 @@ def render(plan, project_dir, sid=None):
             print("PCT 99", flush=True)
             _status(stage="ffmpeg", pct=99)
     r.wait()
-    if r.returncode != 0 and "videotoolbox" in "".join(errbuf):
+    if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码不可用则回退软编（跨平台降级铁律）
-        cmd[cmd.index("h264_videotoolbox")] = "libx264"
+        cmd[cmd.index("-c:v") + 1] = "libx264"
         cmd[cmd.index("-b:v")] = "-crf"
         cmd[cmd.index("6M")] = "20"
         r = subprocess.run(cmd, capture_output=True, text=True)

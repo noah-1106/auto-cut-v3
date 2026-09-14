@@ -102,7 +102,8 @@ def t5_upload():
     # 上传源：夹具 ROT01（display_matrix=-90 合成件）——曾引用已删的真实素材 M0085，
     # ffmpeg 裁剪静默失败后用 /tmp 残留上传=假绿（2026-09-14 根治：源必须出自当次夹具）
     src_rot = os.path.join(ROOT, "materials", "packs", "e2e-fixture", "ROT01.MP4")
-    tmp = "/tmp/e2e_upload.mp4"
+    import tempfile
+    fd, tmp = tempfile.mkstemp(suffix=".mp4"); os.close(fd)
     rc = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
                          "-ss", "0", "-t", "1.5",
                          "-i", src_rot, "-c:v", "copy", "-an", tmp],
@@ -217,9 +218,11 @@ def t7_sticker():
             subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
                             "-ss", str(t), "-i", mp, "-frames:v", "1", png], capture_output=True)
             return png
+        import tempfile
+        _snapdir = tempfile.mkdtemp(prefix="e2e_snap_")
         def cross(t):
-            a = snap(outs[1], t, "/tmp/e2e_a.png")
-            b = snap(outs[0], t, "/tmp/e2e_b.png")
+            a = snap(outs[1], t, os.path.join(_snapdir, "e2e_a.png"))
+            b = snap(outs[0], t, os.path.join(_snapdir, "e2e_b.png"))
             r = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-hide_banner",
                                 "-i", a, "-i", b,
                                 "-filter_complex", "[0:v]crop=900:320:90:30[x];[1:v]crop=900:320:90:30[y];"
