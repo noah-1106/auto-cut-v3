@@ -76,6 +76,12 @@ def load(p):
     with open(p, encoding="utf-8") as f:
         return json.load(f)
 
+def _fpath(p):
+    """滤镜内嵌路径必须正斜杠（2026-09-15 Windows CI 实证）：-filter_complex 里
+    D:\\a\\... 的反斜杠被 ffmpeg 解析为转义符→整图 Error parsing（mac/ubuntu 正斜杠没事）。
+    argv 里的 -i 路径不受影响，只改注进滤镜串的。"""
+    return p.replace("\\", "/")
+
 # ---------------------------------------------------------------- 解说轨
 def remap_words(cuts, acts, segs, total, packpool=None):
     """词级时间戳 → 成片时间轴（0.1s 量化规范）。源: cuts.json（n001）或素材包转写词轨（source_id 优先）。
@@ -589,7 +595,7 @@ def build_cmd(plan, ass_path, out_path):
         fc.append(f"[{cur}]eq=eval=frame:brightness='if(between(t,{o:.2f},{e:.2f}),{pk:.2f}*sin((t-{o:.2f})/{e-o:.2f}*PI),0)'[fx]")
         cur = "fx"
     fonts = os.path.join(ROOT, "assets", "fonts")
-    fc.append(f"[{cur}]subtitles=filename='{ass_path}':fontsdir='{fonts}'[vout]")
+    fc.append(f"[{cur}]subtitles=filename='{_fpath(ass_path)}':fontsdir='{_fpath(fonts)}'[vout]")
     # 音频：原声链（dub 幕换配音轨）+ BGM + 音效
     for j, (lbl, a_idx, seg) in enumerate(beat_v):
         if seg.get("dub"):  # 配音幕：配音轨进链，原声弃用；配音短于画面则尾部静音补齐
@@ -790,7 +796,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         fc.append(f"[{cur}][{sidx}:v]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
     fonts = os.path.join(ROOT, "assets", "fonts")
-    fc.append(f"[{cur}]subtitles=filename='{ass_path}':fontsdir='{fonts}'[vout]")
+    fc.append(f"[{cur}]subtitles=filename='{_fpath(ass_path)}':fontsdir='{_fpath(fonts)}'[vout]")
     fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
     fc.append(f"[{a_idx}:a]atrim=0:{dur},asetpts=PTS-STARTPTS[vc]")
     mix = "[vc]"; n_in = 1
