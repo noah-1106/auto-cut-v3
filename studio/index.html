@@ -570,6 +570,7 @@ async function openProj(name,story,silent){
   P.name=name;P.projTitle=(P.storyline&&P.storyline.title)||name;
   VIEW.proj=name;VIEW.story=P.story||((P.stories||[])[0]||null);
   DRAFT=JSON.parse(JSON.stringify(P.storyline||{}));
+  DRAFT.__meta=JSON.parse(JSON.stringify((P.storyline&&P.storyline.meta)||{}));  // meta 快照：保存时保真未编辑的 meta 键（2026-09-14 序列化保真）
   DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
@@ -880,7 +881,10 @@ function collectStory(){
     beats:(DRAFT.beats||[]).map((b,i)=>({
       no:i+1,id:b.id||('b'+(i+1)),
       story:b.story||'',
-      narration:{mode:(b.narration&&b.narration.mode)||'original'},
+      narration:Object.assign({mode:(b.narration&&b.narration.mode)||'original'},
+        /* 序列化保真（2026-09-14）：words_from/audio 等管线字段不由 UI 编辑，但必须在保存时原样透传
+           ——曾实锤：手工故事线经前端落盘后 words_from 全丢，真实词轨字幕静默退化为均分 */
+        Object.fromEntries(Object.entries(b.narration||{}).filter(([k])=>!['mode'].includes(k)))),
       tracks:(b.tracks||[]).map(t=>({role:t.role||'A',source_id:t.source_id||null,
         cut_index:(t.cut_index===undefined||t.cut_index==='')?null:+t.cut_index,
         src_in:+nz(t.src_in,0),duration:+nz(t.duration,3),
@@ -894,6 +898,12 @@ function collectStory(){
       transition_out:b.transition_out||null
     }))
   };
+  /* meta 级保真：audio（贯穿 BGM）/cover（封面策略）等 meta 字段 UI 不全编辑，保存时保留未编辑键 */
+  const curMeta=(DRAFT.__meta)||null;
+  if(curMeta){out.meta=Object.assign({},curMeta,out.meta||{});
+    if(curMeta.audio&&!out.meta.audio)out.meta.audio=curMeta.audio;
+    if(curMeta.cover&&!out.meta.cover)out.meta.cover=curMeta.cover;}
+  return out;
 }
 /* ═══ R2 · 草稿对比与逐幕采纳 ═══ */
 function diffSelects(){
@@ -1017,6 +1027,7 @@ async function saveStory(silent){
       headers:{'Content-Type':'application/json'},body:JSON.stringify(collectStory())})).json();
     if(r.ok){
       DRAFT=JSON.parse(JSON.stringify(r.storyline));
+      DRAFT.__meta=JSON.parse(JSON.stringify((r.storyline&&r.storyline.meta)||{}));
       DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
       (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
       P.storyline=r.storyline;

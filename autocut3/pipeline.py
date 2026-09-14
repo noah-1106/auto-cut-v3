@@ -298,6 +298,8 @@ def build_plan(project_dir, sid=None):
                "dub": dub_f,
                "tracks": seg_tracks,
                "effects": b.get("effects", {}),
+               "music": {"inherit": (b.get("music") or {}).get("inherit", True),
+                         "bgm": (b.get("music") or {}).get("bgm")},  # 幕级 BGM 声明（2026-09-14 接通前端音乐轨开关）
                "narration": (b.get("narration") or {}).get("mode") or "original"}
         tr_id = b.get("transition_out")
         if tr_id and i < len(beats) - 1 and m.get("duration"):
@@ -502,16 +504,65 @@ def build_cmd(plan, ass_path, out_path):
             fc.append(f"[{vp}][vc{j}]concat=n=2:v=0:a=1[v{j}]")
         vp = f"v{j}"
     mix = f"[{vp}]"; n_in = 1
-    if plan.get("bgm") and os.path.exists(plan["bgm"]):
-        bgm_idx = ni; inputs += ["-i", plan["bgm"]]
-        fc.append(f"[{bgm_idx}:a]atrim=0:{total},asetpts=PTS-STARTPTS,volume={plan.get('bgm_volume',0.22)},"
-                  f"afade=t=in:st=0:d=0.5,afade=t=out:st={max(0,total-1):.1f}:d=1.0[bm]")
-        mix += "[bm]"; n_in += 1
-    # 音效落点 = 音频链时轴上该幕起点 + 幕内偏移。重叠时长与音频链同源（_overlap_d，R2-5 去双副本）
+    # 音频链时轴（幕起点累计）——BGM 分组与音效落点共用同一时轴（_overlap_d 同源，R2-5）
     a_starts, _aa = [], 0.0
     for j, (_l, _a, sg) in enumerate(beat_v):
         a_starts.append(round(_aa, 2))
         _aa += float(sg["dur"]) - (_overlap_d(plan, plan["segments"][j - 1]) if j else 0.0)
+    # BGM 区间化（2026-09-14 维护者项目问答）：前端每幕"继承贯穿 BGM"开关接通渲染——
+    # inherit=true → 贯穿曲（meta.audio.bgm_id）；inherit=false+bgm=<id> → 幕级独立换曲；
+    # inherit=false+bgm=null → 该幕无 BGM（人声/旁白裸奔）。连续同源幕合为一组共享 input，
+    # 组段按音频链时轴（a_starts 同源逻辑）切齐后 concat——组间硬切，组首尾各自淡入淡出。
+    # 曲长 < 段长自动循环（-stream_loop），afade 收尾由 atrim 精确截断。
+    _reg_bgm = load(f"{ROOT}/registry/bgm.json") if os.path.exists(f"{ROOT}/registry/bgm.json") else {}
+    def _bgm_src(seg):
+        mu = seg.get("music") or {}
+        if mu.get("inherit", True):
+            return ("global", plan.get("bgm")) if plan.get("bgm") else (None, None)
+        bid = mu.get("bgm")
+        conf = _reg_bgm.get(bid) if bid else None
+        if conf and os.path.exists(os.path.join(ROOT, conf["file"])):
+            return (bid, os.path.join(ROOT, conf["file"]))
+        return (None, None)  # 独立换曲 id 无效 → 如实静音（不打断渲染，QC 可查）
+    _bgm_groups = []  # [key, file, [seg_idx,...]]
+    for _si, _seg in enumerate(plan["segments"]):
+        _k, _f = _bgm_src(_seg)
+        if _bgm_groups and _bgm_groups[-1][0] == _k:
+            _bgm_groups[-1][2].append(_si)
+        else:
+            _bgm_groups.append([_k, _f, [_si]])
+    _bgm_chain = []
+    for _gi, (_k, _fp, _sidx) in enumerate(_bgm_groups):
+        _g0 = a_starts[_sidx[0]]
+        _last = plan["segments"][_sidx[-1]]
+        _g1 = a_starts[_sidx[-1]] + float(_last["dur"]) - (_overlap_d(plan, plan["segments"][_sidx[-1] - 1]) if _sidx[-1] else 0.0)
+        _glen = max(0.5, _g1 - _g0)
+        if not _fp:
+            # 静音组占位（2026-09-14 实测实锤）：concat 是顺序拼接不是时间对齐——
+            # 静音区间若无等长占位段，后段曲子整体前移（幕4 静音洞被填 + 片尾提前无 BGM 双重错位）
+            fc.append(f"aevalsrc=0:d={_glen:.2f}:s=32000[bg{_gi}]")
+            _bgm_chain.append(f"[bg{_gi}]")
+            continue
+        _r = subprocess.run([FF, "-hide_banner", "-i", _fp], capture_output=True, text=True)
+        import re as _re
+        _mm = _re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", _r.stderr or "")
+        _m_dur = (int(_mm.group(1)) * 3600 + int(_mm.group(2)) * 60 + float(_mm.group(3))) if _mm else 0
+        if _m_dur and _m_dur < _glen:
+            inputs += ["-stream_loop", "-1", "-i", _fp]
+        else:
+            inputs += ["-i", _fp]
+        bgm_idx = ni; ni += 1
+        _vol = plan.get('bgm_volume', 0.22)
+        fc.append(f"[{bgm_idx}:a]atrim=start={_g0:.2f}:end={_g1:.2f},asetpts=PTS-STARTPTS,volume={_vol},"
+                  f"afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, _glen - 1):.2f}:d=1.0[bg{_gi}]")
+        _bgm_chain.append(f"[bg{_gi}]")
+    if _bgm_chain:
+        if len(_bgm_chain) == 1:
+            mix += _bgm_chain[0]
+        else:
+            fc.append("".join(_bgm_chain) + f"concat=n={len(_bgm_chain)}:v=0:a=1[bgcat]")
+            mix += "[bgcat]"
+        n_in += 1
     for k, (sidx, sg, at) in enumerate(sfx_in):
         j0 = next(i for i, tup in enumerate(beat_v) if tup[2] is sg)
         fc.append(f"[{sidx}:a]adelay={int(round((a_starts[j0] + at) * 1000))}:all=1[sx{k}]")
