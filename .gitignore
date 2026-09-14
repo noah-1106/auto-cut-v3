@@ -19,3 +19,6 @@ projects/*/params.json
 bin/
 # 字幕样张等运行时缓存（/api/sub-preview 按需生成，随时可重建）
 assets/preview/
+# 密钥与本地配置（真实 API key，永不入库）
+config/services.json
+config/services.*.json
