@@ -12,6 +12,7 @@ projects/*/out-*.mp4
 projects/*/plan-*.json
 projects/*/subtitle-*.ass
 projects/*/previews/
+projects/*/cover/
 projects/*/qc-report.json
 projects/*/render.status
 projects/*/params.json
