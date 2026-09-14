@@ -31,6 +31,14 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         tl0 = float(s["tl_in"])
         tl1 = float(segs[i + 1]["tl_in"]) if i + 1 < len(segs) else float(total) + 0.3
         seg_words = []
+        # 显式词轨最优先（2026-09-15）：narration.words（VAD 物理测量/音频本体 ASR），
+        # dub/original 统一通道——素材 ASR 词轨绝对时间漂移 0~3s 实锤后，物理测量是唯一可信时间源
+        ow = s.get("owords")
+        if ow:
+            for w in ow:
+                seg_words.append({"t": w["t"], "s": round(tl0 + float(w["s"]), 1), "e": round(tl0 + float(w["e"]), 1)})
+            out.extend(seg_words)
+            continue
         dubp = s.get("dub")  # {path,text,dur,words|words_from}
         if dubp:
             dur = float(dubp.get("dur") or 0)
@@ -311,6 +319,7 @@ def build_plan(project_dir, sid=None):
                "src_in": m.get("src_in"), "dur": m.get("duration"), "tl_in": round(t, 1),
                "src_file": (seg_tracks[0].get("media") if seg_tracks else None),
                "dub": dub_f,
+               "owords": (b.get("narration") or {}).get("words"),  # VAD/显式词轨（original 幕通道，2026-09-15）
                "tracks": seg_tracks,
                "effects": b.get("effects", {}),
                "music": {"inherit": (b.get("music") or {}).get("inherit", True),
