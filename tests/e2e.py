@@ -935,6 +935,24 @@ def t29_qc_av_sync():
         check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向）", False, "异常: %s" % str(e)[:140])
 
 
+# ---------------------------------------------------------------- T30 声纹管理双通道（Studio API 回归锚）
+def t30_voice_api():
+    # 人工通道（Studio 界面）四端点契约：voices 结构 / 注册缺逐字稿必拒（零样本硬契约）/
+    # 坏名必拒 / 删不存在 404。AI 通道=tts.py voiceclone，同一注册实现（tts_audio8.register_voice）。
+    st, r = api("/api/voices")
+    ok_list = (st == 200 and r.get("ok") is True and "installed" in r
+               and isinstance(r.get("voices"), list) and r.get("provider") == "local-audio8")
+    st1, r1 = api("/api/voice-register?name=t30x&text=", "POST", raw=b"x")
+    ok_notext = st1 == 400 and "逐字稿" in (r1.get("err") or "")
+    st2, r2 = api("/api/voice-register?name=..&text=y", "POST", raw=b"x")
+    ok_badname = st2 == 400 and "voice name" in (r2.get("err") or "")
+    st3, r3 = api("/api/voice-delete/t30_no_such_voice", "POST")
+    ok_del404 = st3 == 404
+    check("T30 声纹管理 API（voices 结构/缺逐字稿拒/坏名拒/删 404）",
+          ok_list and ok_notext and ok_badname and ok_del404,
+          "list=%s notext=%s badname=%s del404=%s" % (ok_list, ok_notext, ok_badname, ok_del404))
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1053,6 +1071,7 @@ def main():
     t27_orchestrator()
     t28_disposition()
     t29_qc_av_sync()
+    t30_voice_api()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

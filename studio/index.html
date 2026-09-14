@@ -331,6 +331,21 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 </div>
 <input type="file" id="regfile" style="display:none">
 
+<!-- ═══════════ 声纹管理抽屉（本地 TTS Audio8 零样本克隆：人工通道，AI 通道=tts.py voiceclone）═══════════ -->
+<div id="voicemgr" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80" onclick="if(event.target===this)closeVoiceMgr()">
+  <div style="position:absolute;right:0;top:0;bottom:0;width:min(680px,94vw);background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)">
+      <h3 style="margin:0;font-size:15px">声纹管理 · 本地 TTS</h3>
+      <span class="statusline" id="voice-hint">零样本克隆：参考音频 0.5-30s + 逐字稿一字不差</span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="ghost" onclick="closeVoiceMgr()">✕ 关闭</button>
+      </div>
+    </div>
+    <div id="voicemgr-body" style="flex:1;overflow:auto;padding:16px 22px"></div>
+  </div>
+</div>
+<input type="file" id="voicefile" style="display:none">
+
 <!-- ═══════════ 配置页 · 模板工程台 ═══════════ -->
 <section id="s-tune">
   <div class="sec">filmBurn 模板工程台 <span style="text-transform:none;letter-spacing:0;color:var(--faint)">（精确数值只在配置层，创作台不出现数字）</span></div>
@@ -544,15 +559,19 @@ async function loadConfig(){
   const REGS=[['bgm','BGM'],['subtitles','字幕样式'],['transitions','转场'],['sfx','音效'],['stickers','贴纸']];
   P={registry:{}};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）
   for(const[rn]of REGS)P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
+  try{P._voices=await(await fetch('/api/voices')).json();}catch(e){P._voices={installed:false,voices:[]};}
   const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
   const names=rn=>items(rn).map(k=>(P.registry[rn][k].name||k)).join(' · ');
+  const vlist=(P._voices.voices||[]);
+  const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
     [['视频类型',(en.video_types||[]).length,names(en.video_types||[])&&((en.video_types||[]).map(x=>x.name).join(' · '))],
      ['封面策略',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
      ['旁白模式',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
      ['平台',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
     ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5>'+r[0]+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
-    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+4)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5>'+r[1]+'<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||'空')+'</div></div>').join('');
+    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(4*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5>声纹<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||'空')+(P._voices.installed?'':' · 未装运行时')+'</div></div>'+
+    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+5)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5>'+r[1]+'<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||'空')+'</div></div>').join('');
   const pr={flash:0.6,grain:16,hold:1.0,duration:0.5};
   $('gtune').innerHTML=sld('g-flash','白闪强度 flash',0.1,0.9,0.05,pr.flash)+sld('g-grain','噪点密度 grain',0,32,1,pr.grain)+
     sld('g-hold','白闪保持 hold (s)',0.2,2,0.1,pr.hold)+sld('g-dur','溶解时长 duration (s)',0.2,1,0.05,pr.duration);
@@ -626,6 +645,67 @@ async function delProject(name){
 }
 
 /* ═══ 创作台 ═══ */
+/* ═══ 声纹管理抽屉（本地 Audio8 零样本克隆音色） ═══ */
+function openVoiceMgr(){
+  $('voicemgr').style.display='block';
+  $('voice-hint').textContent='零样本克隆：参考音频 0.5-30s + 逐字稿一字不差';
+  renderVoiceMgr();
+}
+function closeVoiceMgr(){$('voicemgr').style.display='none'}
+async function renderVoiceMgr(){
+  let r;try{r=await(await fetch('/api/voices')).json();}catch(e){r={installed:false,voices:[]};}
+  P._voices=r;
+  const vs=r.voices||[];
+  const rows=vs.map(v=>{
+    const n=v.name||v;
+    return '<div class="regrow" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)">'+
+      '<b style="flex:1">'+esc(n)+'</b>'+
+      '<button class="ghost" onclick="voiceTest(\''+esc(n)+'\')">试听</button>'+
+      '<button class="ghost" style="color:#e5484d" onclick="voiceDel(\''+esc(n)+'\')">删除</button></div>';
+  }).join('');
+  $('voicemgr-body').innerHTML=
+    (!r.installed?'<div style="padding:14px;color:var(--gold)">⚠ Audio8 运行时未安装——按 README「本地 TTS」装 ~/.local/share/autocut3/audio8 后重开</div>':'')+
+    (rows||'<div style="padding:14px;color:var(--faint)">暂无已注册音色</div>')+
+    '<div style="padding:16px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+    '<input id="vname" placeholder="音色名（英文/数字）" style="width:160px">'+
+    '<button class="ghost" onclick="$(\'voicefile\').click()">选参考音频…</button>'+
+    '<span id="vfile-label" style="color:var(--faint);font-size:12px">未选择</span>'+
+    '<input id="vtext" placeholder="参考音频逐字稿（一字不差，硬契约）" style="flex:1;min-width:220px">'+
+    '<button class="primary" onclick="voiceRegister()">注册音色</button></div>';
+  $('voicefile').onchange=()=>{$('vfile-label').textContent=($('voicefile').files[0]||{}).name||'未选择';};
+}
+async function voiceRegister(){
+  const f=$('voicefile').files[0];
+  const name=($('vname').value||'').trim();
+  const text=($('vtext').value||'').trim();
+  if(!f){$('voice-hint').textContent='✗ 先选参考音频文件';return;}
+  if(!/^[\w.-]+$/.test(name)){$('voice-hint').textContent='✗ 音色名只能英文/数字/._-';return;}
+  if(!text){$('voice-hint').textContent='✗ 逐字稿必填（零样本克隆硬契约）';return;}
+  $('voice-hint').textContent='注册中（零样本克隆推理中，请稍候）…';
+  try{
+    const r=await(await fetch('/api/voice-register?name='+encodeURIComponent(name)+'&text='+encodeURIComponent(text),
+      {method:'POST',body:f})).json();
+    if(r.ok){$('voice-hint').textContent='✓ 已注册 '+name;renderVoiceMgr();loadConfig();}
+    else $('voice-hint').textContent='✗ '+((r.err||r.error)||'注册失败');
+  }catch(e){$('voice-hint').textContent='✗ '+e;}
+}
+async function voiceTest(name){
+  $('voice-hint').textContent='试听合成中…';
+  try{
+    const text=prompt('试听文本','大家好，今天继续讲装修避坑。')||'';
+    if(!text)return;
+    const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text))).json();
+    if(r.ok){$('voice-hint').textContent='✓ 试听已生成';new Audio(r.url).play();}
+    else $('voice-hint').textContent='✗ '+((r.err||r.error)||'试听失败');
+  }catch(e){$('voice-hint').textContent='✗ '+e;}
+}
+async function voiceDel(name){
+  if(!confirm('删除音色 '+name+'？'))return;
+  const r=await(await fetch('/api/voice-delete/'+encodeURIComponent(name),{method:'POST'})).json();
+  $('voice-hint').textContent=r.ok?('✓ 已删除 '+name):('✗ '+((r.err||r.error)||'删除失败'));
+  renderVoiceMgr();loadConfig();
+}
+
 /* ═══ 注册表管理抽屉：五件套（bgm/subtitles/transitions/sfx/stickers）增删改+素材导入 ═══ */
 let REGCUR=null;
 const REGFILE={bgm:'音频（mp3/wav/m4a/flac）',sfx:'音频（mp3/wav/m4a/flac）',stickers:'图片（png 透明底）',subtitles:'—纯JSON样式，无需文件—',transitions:'—纯JSON转场，无需文件—'};

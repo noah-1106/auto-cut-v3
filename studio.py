@@ -5,7 +5,7 @@ auto-cut V3 Studio · 人监视器 v0.1
 铁律：AI 以 JSON 为操作台，人以 Studio 为监视器。
 纯标准库实现（零 pip 依赖，自包含）。用法: python3 studio.py [port]  默认 8765
 """
-import json, os, re, shutil, subprocess, sys, time, threading
+import json, os, re, shutil, subprocess, sys, tempfile, time, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 from urllib.parse import urlparse, parse_qs, unquote
@@ -322,6 +322,9 @@ class H(BaseHTTPRequestHandler):
                 if r.returncode != 0 or not os.path.exists(jpg):
                     return self._json({"err": "preview render failed: " + (r.stderr or "")[-200:]}, 500)
             return self._json({"ok": True, "url": f"/files/assets/preview/sub-{sid}.jpg"})
+        elif u.path == "/api/voices" or u.path.startswith("/api/voice-register") \
+                or u.path.startswith("/api/voice-delete/") or u.path.startswith("/api/voice-test/"):
+            return self._handle_voice(u)
         elif u.path.startswith("/files/"):
             fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
             if not fp.startswith(os.path.realpath(ROOT)) or not os.path.isfile(fp):
@@ -359,8 +362,74 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json({"err": "not found"}, 404)
 
+    def _handle_voice(self, u):
+        # 声纹管理（2026-09-14 双通道：人工=Studio 界面，AI=tts.py voiceclone，同一注册实现）
+        import tts_audio8
+        if u.path == "/api/voices":
+            return self._json({"ok": True, "installed": tts_audio8.installed(),
+                               "provider": "local-audio8",
+                               "voices": tts_audio8.voices()})
+        _q = parse_qs(u.query)
+        if u.path.startswith("/api/voice-register"):
+            name = (_q.get("name") or [""])[0]
+            text = (_q.get("text") or [""])[0]
+            overwrite = (_q.get("overwrite") or ["false"])[0] == "true"
+            if not _safe_id(name):
+                return self._json({"err": "bad voice name（ASCII/CJK/下划线，≤40）"}, 400)
+            if not (text or "").strip():
+                return self._json({"err": "缺逐字稿 text——零样本克隆硬契约：与 spoken 内容一字不差"}, 400)
+            if not tts_audio8.installed():
+                return self._json({"err": "Audio8 运行时未安装（~/.local/share/autocut3/audio8/）——见 README 本地 TTS"}, 503)
+            n = int(self.headers.get("Content-Length", 0))
+            if n <= 0 or n > 50 << 20:
+                return self._json({"err": "bad size %d（参考音频 ≤50MB，0.5-30s）" % n}, 400)
+            fd, tmp = tempfile.mkstemp(suffix=".wav")
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(self.rfile.read(n))
+            try:
+                r = tts_audio8.register_voice(name, tmp, text, overwrite=overwrite)
+            except Exception as e:
+                return self._json({"err": str(e)[:200]}, 400)
+            finally:
+                os.unlink(tmp)
+            return self._json({"ok": True, "voice": r.get("voice", {})})
+        if u.path.startswith("/api/voice-delete/"):
+            name = urllib.parse.unquote(u.path.split("/")[3], encoding="utf-8")
+            if not _safe_id(name):
+                return self._json({"err": "bad voice name"}, 400)
+            vd = os.path.join(tts_audio8.VOICES_DIR, name)
+            hit = False
+            for suf in (".json", ".npy"):
+                p = vd + suf
+                if os.path.exists(p):
+                    os.unlink(p); hit = True
+            if not hit and os.path.isdir(vd):
+                import shutil
+                shutil.rmtree(vd); hit = True
+            return self._json({"ok": True, "deleted": name} if hit else {"err": "no such voice"}, 200 if hit else 404)
+        if u.path.startswith("/api/voice-test/"):
+            name = urllib.parse.unquote(u.path.split("/")[3], encoding="utf-8")
+            if not _safe_id(name):
+                return self._json({"err": "bad voice name"}, 400)
+            text = (_q.get("text") or ["这条配音来自本地声纹克隆。"])[0]
+            try:
+                tts_audio8.ensure_server()
+                import subprocess
+                from asr import ffmpeg_path
+                wav = os.path.join(ROOT, "assets", "preview", "_vt_%s.wav" % name)
+                mp3 = os.path.join(ROOT, "assets", "preview", "voicetest-%s.mp3" % name)
+                tts_audio8.synth(text, wav, voice=name)
+                subprocess.run([ffmpeg_path(), "-y", "-loglevel", "error", "-i", wav,
+                                "-c:a", "libmp3lame", "-b:a", "128k", mp3], capture_output=True, check=True)
+                os.unlink(wav)
+            except Exception as e:
+                return self._json({"err": str(e)[:200]}, 500)
+            return self._json({"ok": True, "url": "/files/assets/preview/voicetest-%s.mp3?t=%d" % (name, int(time.time()))})
+
     def do_POST(self):
         u = urlparse(unquote(self.path, encoding="utf-8"))  # 同 do_GET
+        if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/"):
+            return self._handle_voice(u)
         if u.path.startswith("/api/library/") and "/clip/" in u.path:
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）
