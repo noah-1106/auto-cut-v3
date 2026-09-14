@@ -170,20 +170,23 @@ def chat_llm(messages):
         raise RuntimeError("未找到 llm key：env %s 或 api_key_file" % be.get("api_key_env", "?"))
     # M3 是思考型模型：think 可能吃掉全部 token 导致正文为空——大 max_tokens + 空回答重试一次
     last_err = None
-    for attempt, cap in enumerate((8192, 12288, 16384)):  # M3 think 额度阶梯（minimax-av 教训：think 吃满=空正文，加档不封顶思维）
+    for attempt, cap in enumerate((8192, 12288, 16384, 24576)):  # M3 think 额度阶梯（minimax-av 教训：think 吃满=空正文，加档不封顶思维）
         payload = {"model": be["model"], "messages": messages, "max_tokens": cap}
         req = urllib.request.Request(
             be["base_url"].rstrip("/") + "/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
         resp = json.loads(urllib.request.urlopen(req, timeout=be.get("timeout_s", 300)).read())
-        msg = ((resp.get("choices") or [{}])[0].get("message", {}) or {})
+        ch = (resp.get("choices") or [{}])[0]
+        msg = ch.get("message", {}) or {}
         text = re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip()
-        if text:
+        if text and ch.get("finish_reason") != "length":
             return text
-        last_err = "空回答（think 吃满 %d token，usage=%s）" % (
-            cap, (resp.get("usage") or {}).get("completion_tokens"))
-    raise RuntimeError("起草失败：" + str(last_err) + "——重试仍空，请缩短意图或稍后再试")
+        # finish_reason=length=正文被截断（JSON 半成品，extract_json 必炸）——与空回答同 ladder 升档
+        last_err = "%s（finish_reason=%s cap=%d，usage=%s）" % (
+            "空回答" if not text else "正文截断", ch.get("finish_reason"), cap,
+            (resp.get("usage") or {}).get("completion_tokens"))
+    raise RuntimeError("起草失败：" + str(last_err) + "——重试仍空/截断，请缩短意图或稍后再试")
 
 
 def extract_json(text):

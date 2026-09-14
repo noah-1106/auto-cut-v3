@@ -25,6 +25,31 @@ def _resolve_ff():
 
 FF = _resolve_ff()
 
+
+def _media_duration(path):
+    if not path or not os.path.exists(path):
+        return 0.0
+    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
+              os.path.join(ROOT, "bin", "ffprobe.exe")):
+        if c and os.path.exists(c):
+            r = subprocess.run([c, "-v", "error", "-show_entries", "format=duration",
+                                "-of", "csv=p=0", path], capture_output=True, text=True)
+            try:
+                return float(r.stdout.strip())
+            except ValueError:
+                return 0.0
+    import shutil
+    fp = shutil.which("ffprobe")
+    if not fp:
+        return 0.0
+    r = subprocess.run([fp, "-v", "error", "-show_entries", "format=duration",
+                        "-of", "csv=p=0", path], capture_output=True, text=True)
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
 _ENC_CACHE = {}
 def _encoder_usable(enc):
     if enc not in _ENC_CACHE:
@@ -69,7 +94,12 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         ow = s.get("owords")
         if ow:
             for w in ow:
-                seg_words.append({"t": w["t"], "s": round(tl0 + float(w["s"]), 1), "e": round(tl0 + float(w["e"]), 1)})
+                _ws, _we = round(tl0 + float(w["s"]), 1), round(tl0 + float(w["e"]), 1)
+                # 幕内钳制与 dub 通道同源（新素材包实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）
+                _ws, _we = max(_ws, tl0), min(_we, tl1)
+                if _we - _ws < 0.08:
+                    continue
+                seg_words.append({"t": w["t"], "s": _ws, "e": _we})
             out.extend(seg_words)
             continue
         dubp = s.get("dub")  # {path,text,dur,words|words_from}
@@ -331,13 +361,25 @@ def build_plan(project_dir, sid=None):
                 df = os.path.join(project_dir, df)
             if df and os.path.exists(df):
                 # 字幕需要文案+实测时长（词轨均分用）；渲染链只要路径
-                r = subprocess.run([os.path.join(ROOT, "bin", "ffprobe"), "-v", "error",
-                                    "-show_entries", "format=duration", "-of", "csv=p=0", df],
-                                   capture_output=True, text=True)
                 dub_f = {"path": df, "text": (b.get("story") or "").strip(),
-                         "dur": round(float(r.stdout.strip() or 0), 1),
+                         "dur": round(_media_duration(df), 1),
                          "words": (b.get("narration") or {}).get("words"),
                          "words_from": (b.get("narration") or {}).get("words_from")}
+                # dub 配音实测时长盖过幕视频时长 → 延展 A 轨窗口盖满配音（新素材包冷启动实锤：
+                # seg dub 7.6s vs 幕 5.3s → atrim 掐断句子 + 词轨越界 bleed 进下一幕 → R5 字幕页倒置）。
+                # 素材余量不足则如实保留（配音截断，remap 钳制 + QC 终审兜底）。
+                if dub_f["dur"] > float(m.get("duration") or 0):
+                    _a = seg_tracks[0]
+                    _mdur = _media_duration(_a.get("media"))
+                    _src_in = float(_a.get("src_in") or 0)
+                    _reach = round(min(dub_f["dur"], _mdur - _src_in), 1)  # 盖到配音长或素材尽头
+                    if _reach >= float(m.get("duration") or 0) + 0.3:
+                        _a["dur"] = _reach
+                        m["duration"] = _reach
+                    else:
+                        print(f"警告: 幕{i+1} 配音 {dub_f['dur']}s 超幕 {m.get('duration')}s "
+                              f"且素材余量仅 {_mdur - _src_in:.1f}s——配音将截断，QC 会 flagged",
+                              flush=True)
                 # 词轨↔文本一致性（2026-09-15 15s 错位防线）：显式词轨拼接必须与 story 实义字符全等
                 _rw = dub_f.get("words") or []
                 if _rw:

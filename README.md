@@ -42,7 +42,8 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 
 - v3 稳定运行；维护者项目 v6 成片已交付（57.1s / 门禁三域过 / -17.1 LUFS）
 - **2026-09-14 接管首批落地（M1-M5 全部完成）**：管线编排器（orchestrate.py + /api/status + 前端进度条）｜缺陷处置链（disposition.py 四类缺陷→起草消费→素材卡⚠）｜QC 双域补位（R7 听觉/R4 冻结/R10 页同步）｜前端收敛（试渲去硬编码/字幕样张真兑现/渲染实时进度+系统通知）｜资产策展（12 槽位爆款语义音效 + 4 条真实 BGM 替换占位，Mixkit 免费商用，许可与来源清单随包）｜跨平台（flock.py 跨平台锁 + 平台感知 ffmpeg/硬解编码链，Mac/Windows 双端）
-- **已知遗留**：本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）
+- **2026-09-14 新素材包冷启动验收（v2 总验收）**：全新素材包 19 条 → 成片两条（aidraft 原声 40.0s / aidraft2 本地 TTS 配音 37.6s），QC deliverable 0 blocker，全程零会话内人工急救。冷启动实锤修复两处管线缺口：①draft LLM 正文截断（finish_reason=length 旧代码当成功交付 → extract_json 炸；现升档重试 T32 锚）②dub 配音超幕视频时长旧链 atrim 掐断句子+词轨越界 bleed 成 R5 字幕页倒置（现 A 轨自动延展盖满配音+owords 幕内钳制，T12 断言改盖满语义）
+- **已知遗留**：本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）；aidraft2 成片 R6 响度 -27.7 LUFS 偏轻（warn 不拦交付，平台会自行归一，终审核对混音比例）
 - 代码托管：GitHub 私有库（Noah 账号），config/services.json 已永久 gitignore（历史已清除，key 走环境变量或 api_key_file）
 
 ## 快速上手

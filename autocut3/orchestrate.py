@@ -289,6 +289,7 @@ def advance(project, intent=None, story=None, only=None):
     if not todo:
         print("全部环节完成，无可推进。")
         return st
+    print("待推进: %s" % " → ".join(todo), flush=True)  # 留痕：某步被跳过时可对账 todo 快照
     for key in todo:
         if only and key != only:
             continue

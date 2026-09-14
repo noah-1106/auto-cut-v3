@@ -380,7 +380,14 @@ def _t12_render(dub_src):
                             "-show_entries", "format=duration", "-of", "csv=p=0", out],
                            capture_output=True, text=True)
         dur = float(r.stdout.strip() or 0)
-    check("T12 dub 渲染（幕1配音+幕2原声混合，8s 画面）", ok and 7.0 < dur < 9.5, "%.1fs" % dur)
+    # 2026-09-14 dub 盖满语义（新素材包冷启动修复）：配音 > 幕视频时长 → A 轨延展盖满配音，
+    # 成片 ≈ 配音实测长 + 幕2 4s——不再 atrim 掐断句子（旧断言 8s=掐断语义，已废）
+    rd = subprocess.run([os.path.join(ROOT, "bin", "ffprobe"), "-v", "error",
+                         "-show_entries", "format=duration", "-of", "csv=p=0", dub_src],
+                        capture_output=True, text=True)
+    dub_dur = float(rd.stdout.strip() or 0)
+    check("T12 dub 渲染（幕1配音延展盖满+幕2原声混合）",
+          ok and abs(dur - (dub_dur + 4.0)) < 1.5, "%.1fs（配音%.1fs+4s）" % (dur, dub_dur))
     api("/api/storyline-delete/" + PROJ + "?story=e2edub", method="POST")
 
 
@@ -1063,6 +1070,46 @@ def t31_dubfit():
               False, "异常: %s" % str(e)[:140])
 
 
+# ---------------------------------------------------------------- T32 起草截断升档重试（冷启动实锤缺口）
+def t32_draft_truncation_retry():
+    # 回归锚：冷启动新素材包实锤——M3 正文超 cap 时 finish_reason=length 返回 JSON 半成品，
+    # 旧代码非空即 return → extract_json 必炸。锚：length 必须升档重试，2 次调用拿到干净正文。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import draft
+        calls = {"n": 0}
+
+        class _R:
+            def __init__(self, d):
+                self._d = d
+
+            def read(self):
+                return json.dumps(self._d).encode()
+
+        def fake_urlopen(req, timeout=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _R({"choices": [{"message": {"content": '{"title":"x","outline":"未写完'},
+                                        "finish_reason": "length"}],
+                           "usage": {"completion_tokens": 8192}})
+            return _R({"choices": [{"message": {"content": '{"title":"x","outline":"完整"}'},
+                                    "finish_reason": "stop"}],
+                       "usage": {"completion_tokens": 100}})
+
+        old = draft.urllib.request.urlopen
+        draft.urllib.request.urlopen = fake_urlopen
+        try:
+            text = draft.chat_llm([{"role": "user", "content": "hi"}])
+            ok = calls["n"] == 2 and "完整" in text
+        finally:
+            draft.urllib.request.urlopen = old
+        check("T32 起草截断升档重试（finish_reason=length 不交付半成品 JSON）",
+              ok, "calls=%s" % calls["n"])
+    except Exception as e:
+        check("T32 起草截断升档重试（finish_reason=length 不交付半成品 JSON）",
+              False, "异常: %s" % str(e)[:140])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1183,6 +1230,7 @@ def main():
     t29_qc_av_sync()
     t30_voice_api()
     t31_dubfit()
+    t32_draft_truncation_retry()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
