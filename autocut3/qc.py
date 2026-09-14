@@ -64,6 +64,10 @@ def check_windows(sl, files, rules):
             if t.get("role") == "B":
                 # B 轨=画中画，无叙事语音语义——R1/R2/R3 词轨类检查不适用（镜像 draft.validate 的 role==B 跳过）
                 continue
+            if ((b.get("narration") or {}).get("mode") or "original") == "dub":
+                # 配音幕：原声整段被配音轨替换（pipeline 音频链 dub 分支），A 轨素材自带词轨
+                # 对成片无语义——R1 死尾/R2 咬字/R3 静音洞按原声检查=误报（2026-09-14 维护者项目实锤）
+                continue
             words = _real_words(f)
             dur_m = float(f.get("duration") or 0)
             si, du = float(t.get("src_in") or 0), float(t.get("duration") or 0)
