@@ -53,7 +53,8 @@ def ensure_server(timeout_s=180):
                ARKTTS_MODEL_DIR=MODEL_DIR, ARKTTS_VOICES_DIR=VOICES_DIR,
                ARKTTS_REGISTRATION_DIR=os.path.join(MODEL_DIR, "registration"),
                ARKTTS_PRECISION="int4", ARKTTS_CODEC_PRECISION="fp16",
-               PORT=str(PORT), ARKTTS_THREADS=os.environ.get("ARKTTS_THREADS", "5"),
+               PORT=str(PORT), ARKTTS_THREADS=os.environ.get(
+                   "ARKTTS_THREADS", str(min(8, (os.cpu_count() or 6)))),  # 默认线程按核数取（2026-09-15 试听提速）
                PATH=_VENV_BIN + os.pathsep + os.environ.get("PATH", ""))
     log = open(os.path.join(ARK, "service.log"), "ab")
     # 启动方式对齐上游 run_server.sh：service.py 只定义 app，必须由 uvicorn 拉起

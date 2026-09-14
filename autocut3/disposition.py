@@ -88,6 +88,18 @@ def assess_material(pack_id, f):
     v = f.get("visual") or {}
     words = tr.get("words") or []
 
+    # 0) 人工标记缺陷（素材卡「＋缺陷」一手记录——2026-09-15 展示收敛：原始 defects 并进台账聚合，
+    #    前端只读一个视图；此处消费使人工标记与自动检测同级进 draft 提示词）
+    for d in f.get("defects") or []:
+        try:
+            _at = float(d.get("at"))
+            _t = [round(_at, 1), round(_at + 0.5, 1)]
+        except (TypeError, ValueError):
+            _t = None
+        items.append({"type": "manual-" + str(d.get("type", "note")), "t": _t,
+                      "evidence": str(d.get("note", ""))[:80],
+                      "suggestion": "人工标记缺陷：选段避开该时刻或掐剪"})
+
     # 1) 重说段（词级定位，可直接避开）
     for t in dossier.detect_takes([w for w in words if w.get("text") not in "，。！？、"]):
         items.append({"type": "retake-suspect", "t": t["t"],
