@@ -2,20 +2,12 @@ __pycache__/
 *.pyc
 .DS_Store
 nohup.out
-# 归档目录（2.5GB 旧渲染产物）
-projects/_attic/
+# 项目工作区整体不入库（2026-09-15 Noah 指令）：故事线/报告/封面/成片=私人项目数据
+# 或随时可重渲的派生物，与代码库无关；本地文件保留，git 只跟踪源码+注册表+资产
+projects/
 # 素材库（任意层级的 materials 目录——根目录 packs 与项目内都在内）
 materials/
 projects/*/materials/
-# 渲染产物（派生物，随时可重渲）
-projects/*/out-*.mp4
-projects/*/plan-*.json
-projects/*/subtitle-*.ass
-projects/*/previews/
-projects/*/cover/
-projects/*/qc-report.json
-projects/*/render.status
-projects/*/params.json
 # ffmpeg 二进制（自备 6.0+）
 bin/
 # 字幕样张等运行时缓存（/api/sub-preview 按需生成，随时可重建）
