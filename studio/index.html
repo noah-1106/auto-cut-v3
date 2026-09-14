@@ -262,6 +262,14 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 .phbox{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--faint);
   background:repeating-linear-gradient(45deg,rgba(255,255,255,.025) 0 10px,transparent 10px 20px);
   border:1px dashed var(--line2);border-radius:10px;font-size:12px;text-align:center;padding:10px;width:100%}
+/* ── 管线进度条（orchestrate.py 同源 /api/status——人随时跟进 Agent 推进）── */
+.pipebar{display:flex;align-items:center;gap:5px;padding:6px 22px;border-bottom:1px solid var(--line);flex:0 0 auto;font-size:11px;overflow-x:auto}
+.pipebar .pstep{display:flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);color:var(--faint);white-space:nowrap}
+.pipebar .pstep.done{color:var(--ok);border-color:rgba(123,224,162,.35)}
+.pipebar .pstep.pending{color:var(--gold);border-color:var(--gold-line);background:var(--gold-soft)}
+.pipebar .pstep.failed{color:var(--bad);border-color:rgba(255,122,122,.45)}
+.pipebar .pstep.na{opacity:.42}
+.pipebar .pdet{color:var(--dim);margin-left:10px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -280,6 +288,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 </header>
 
 <nav class="tabs" id="tabs"></nav>
+<div class="pipebar" id="pipebar" style="display:none"></div>
 
 <main>
 <!-- ═══════════ 配置页 · 项目 ═══════════ -->
@@ -1366,6 +1375,19 @@ async function syncPoll(){
     SYNC=r;
   }catch(e){}
 }
+async function pipePoll(){
+  // 管线进度条：与 CLI orchestrate.py 同源（/api/status），Agent 推进人随时看得见
+  const bar=$('pipebar');
+  if(VIEW.page!=='proj'||!P||!VIEW.proj){if(bar)bar.style.display='none';return;}
+  let r;
+  try{r=await(await fetch('/api/status/'+VIEW.proj)).json();}catch(e){return;}
+  if(!r.ok||!r.pipe){if(bar)bar.style.display='none';return;}
+  const icon={done:'✓',pending:'○',failed:'✗',na:'·'};
+  bar.style.display='flex';
+  bar.innerHTML=r.pipe.steps.map(s=>
+    '<span class="pstep '+s.status+'" title="'+esc(s.detail||'')+'">'+icon[s.status]+' '+esc(s.name)+'</span>').join('')
+    +(r.pipe.next?'<span class="pdet">下一动作: '+esc(r.pipe.next)+'</span>':'<span class="pdet" style="color:var(--ok)">全部就绪</span>');
+}
 async function pulsePoll(){
   if(document.hidden)return;
   let r;
@@ -1408,13 +1430,13 @@ async function pulsePoll(){
     if(changed&&!DIRTY&&VIEW.tab!=='create'){  // 创作台正在编辑时不打扰（DIRTY 守卫）
       try{
         if(P.library!==undefined&&VIEW.tab==='library'){const lib=await(await fetch('/api/library/'+P.name)).json();P.library=lib;renderPack();renderCuts();}
-        P.stories=((r.projs||[]).find(x=>x.name===P.name)||{}).name?P.stories:P.stories;
         await refreshPills();
         setStatus('↻ 检测到数据更新（Agent/后台），素材库与列表已同步');
       }catch(e){}
     }
     PULSE=Object.assign(PULSE||{}, {projSigs:Object.assign({},(PULSE||{}).projSigs,{[P.name]:s})});
   }
+  await pipePoll();
   PULSE=PULSE||{};PULSE.t=Date.now();
 }
 setInterval(pulsePoll,2500);

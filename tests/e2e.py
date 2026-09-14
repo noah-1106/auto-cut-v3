@@ -735,6 +735,33 @@ def t26_voiceover_orchestration():
         check("T26 编排回归", False, str(e)[:120])
 
 
+# ---------------------------------------------------------------- T27 管线编排器（M1）
+def t27_orchestrator():
+    # 回归：orchestrate.status 文件态推导（与 /api/status/CLI 同源）——
+    # ①结构完整（13 环节+合法状态）②全链跑通的 fixture 必须全 done/na 且无 next
+    # ③空项目的下一动作=mount ④advance 不越创作门（mount 是创作决策，全自动只到门）
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import orchestrate as ORCH
+        st = ORCH.status(PROJ)
+        ok_struct = (st["project"] == PROJ and len(st["steps"]) == 13
+                     and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
+        ok_done = all(s["status"] in ("done", "na") for s in st["steps"]) and st["next"] is None
+        api("/api/project-create/", method="POST", body={"name": "e2eorch", "title": "编排测试", "format": "vertical"})
+        try:
+            st2 = ORCH.status("e2eorch")
+            st2_after = ORCH.advance("e2eorch")  # mount 是创作决策门——advance 必须停在这里（无副作用）
+            ok_gate = (st2["next"] == "mount" and st2["steps"][0]["status"] == "pending"
+                       and st2_after["next"] == "mount")
+        finally:
+            api("/api/project-delete/e2eorch", method="POST")
+        check("T27 管线编排器（状态推导/全链 done/mount 创作门）",
+              ok_struct and ok_done and ok_gate,
+              "steps=%d next=%s | 空项目 next=%s" % (len(st["steps"]), st["next"], st2["next"]))
+    except Exception as e:
+        check("T27 管线编排器（状态推导/全链 done/mount 创作门）", False, "异常: %s" % str(e)[:120])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -850,6 +877,7 @@ def main():
     t24_proofread_v2()
     t24b_proofread_words_sync()
     t26_voiceover_orchestration()
+    t27_orchestrator()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

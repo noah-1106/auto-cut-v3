@@ -124,6 +124,26 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": True,
                                "stories_mtime": int(os.path.getmtime(sdir)) if os.path.isdir(sdir) else 0,
                                "story_mtime": stories.get(sid, 0), "stories": stories})
+        if u.path.startswith("/api/status/"):
+            # 管线编排状态（2026-09-15 接管落地件）：与 CLI orchestrate.py 同一实现推导——人机同一份事实。
+            # 只读，无锁；前端管线进度条随 PULSE 轮询这里，人随时跟进 Agent 的推进
+            name = u.path.split("/")[3]
+            if not _safe(name):
+                return self._json({"err": "bad id"}, 400)
+            p = f"{ROOT}/projects/{name}"
+            if not os.path.isdir(p):
+                return self._json({"err": "no such project"}, 404)
+            try:
+                sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+                import orchestrate as ORCH
+                st = ORCH.status(name)
+            except Exception as e:
+                return self._json({"err": "orchestrate 推导失败: %s" % str(e)[:120]}, 500)
+            rs = jload(f"{p}/render.status", None)
+            if rs and time.time() - os.path.getmtime(f"{p}/render.status") >= 300:
+                rs = None  # 5 分钟外是历史残留，不展示
+            return self._json({"ok": True, "pipe": st, "render": rs,
+                               "story": st and ORCH._latest_story(p)})
         if u.path.startswith("/api/render-progress/"):
             name = u.path.split("/")[3]
             if not _safe(name):
