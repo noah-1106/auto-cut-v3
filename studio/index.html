@@ -337,7 +337,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
   <div class="tunebox">
     <div id="gtune"></div>
     <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
-      <button class="primary" id="tbtn" onclick="tuneRender()">▶ 试渲（koubo 幕1 片段）</button>
+      <button class="primary" id="tbtn" onclick="tuneRender()">▶ 试渲（当前项目首幕片段）</button>
       <span class="statusline" id="tstat">调整的是试渲参数——验证观感后由 Agent 固化进模板</span>
     </div>
     <div id="tvidwrap" style="display:none;max-width:280px;margin-top:10px"></div>
@@ -560,9 +560,16 @@ async function loadConfig(){
 async function tuneRender(){
   const btn=$('tbtn');btn.disabled=true;$('tstat').textContent='试渲中…';
   try{
-    if(VIEW.proj!=='demo-ningbo')await openProj('demo-ningbo','koubo',true);
-    const r=await(await fetch('/api/beat/demo-ningbo/1?story=koubo',{method:'POST'})).json();
-    if(r.ok){setVideo('tvidwrap',r.video,'试渲失败');$('tvidwrap').style.display='block';$('tstat').textContent='✓ 试渲完成（koubo 幕1，当前参数）';}
+    let proj=VIEW.proj,story=VIEW.story;
+    if(!proj||!story){
+      const pl=await(await fetch('/api/projects')).json();
+      const hit=(pl||[]).find(p=>p.stories&&p.stories.length);
+      if(!hit){$('tstat').textContent='✗ 还没有任何带故事线的项目，无法试渲';btn.disabled=false;return;}
+      proj=hit.name;story=hit.stories[0];
+    }
+    if(VIEW.proj!==proj||VIEW.story!==story)await openProj(proj,story,true);
+    const r=await(await fetch('/api/beat/'+proj+'/1?story='+encodeURIComponent(story),{method:'POST'})).json();
+    if(r.ok){setVideo('tvidwrap',r.video,'试渲失败');$('tvidwrap').style.display='block';$('tstat').textContent='✓ 试渲完成（'+story+' 幕1，当前参数）';}
     else $('tstat').textContent='✗ '+(r.log||'');
   }catch(e){$('tstat').textContent='✗ '+e;}
   btn.disabled=false;
@@ -643,7 +650,7 @@ async function renderRegMgr(){
       else if(REGCUR==='stickers'&&e.file)
         prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=\\"font:10px var(--mono);color:var(--faint)\\">图缺失</span>\'">';
       else if(REGCUR==='subtitles')
-        prev=regStyleCard(e);
+        prev=regStyleCard(e)+'<img data-subpv="'+esc(id)+'" style="height:60px;border-radius:6px;border:1px solid var(--line);display:block;margin-top:6px" onerror="this.remove()">';
       else if(REGCUR==='transitions')
         prev='<span class="achip">xfade · '+esc(e.preset||e.type||'')+'</span>';
       return '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
@@ -655,6 +662,11 @@ async function renderRegMgr(){
       (needFile?'<span style="font:10px var(--mono);color:var(--faint)">'+esc(e.file||'')+'</span>':'')+
       '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">删除</button>'+
       '</div></div>';}).join('')||'<div class="empty">空注册表——点右上「新增条目」或「导入素材文件」</div>';
+  // 字幕样式样张：先请后端按需生成（/api/sub-preview 返回 {ok,url}），再挂图
+  document.querySelectorAll('#regmgr-body img[data-subpv]').forEach(async img=>{
+    try{const r=await(await fetch('/api/sub-preview/'+encodeURIComponent(img.dataset.subpv))).json();if(r.ok)img.src=r.url;else img.remove();}
+    catch(e){img.remove();}
+  });
 }
 async function regSet(id,k,v){
   const reg=Object.assign({},P.registry[REGCUR]);
@@ -683,7 +695,6 @@ function regImport(){
     const f=fi.files[0];if(!f)return;
     let id=(f.name.replace(/\.[^.]+$/,'').toLowerCase()||'asset').replace(/[^a-z0-9_\-]/g,'_');
     id=prompt('条目 id（Agent 用它引用）:',id)||'';if(!id)return;
-    const fd=new FormData();
     const st=await fetch('/api/registry-upload/'+REGCUR+'/'+encodeURIComponent(id)+'?filename='+encodeURIComponent(f.name),{method:'POST',body:f});
     const d=await st.json();
     if(!d.ok){alert('导入失败：'+(d.err||st.status));return}
@@ -1112,16 +1123,22 @@ async function rebuildDigest(){
   }catch(e){setStatus('盘点请求失败：'+e,'bad');}
   btn.disabled=false;btn.textContent='📋 重新盘点';
 }
+let PACKNAMES=null;
+async function loadPackNames(){
+  if(PACKNAMES)return;
+  try{const l=await(await fetch('/api/packs')).json();PACKNAMES={};(l||[]).forEach(p=>PACKNAMES[p.id]=p.name||p.id);}
+  catch(e){PACKNAMES={};}
+}
 function renderPack(){
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
+  if(!PACKNAMES)loadPackNames().then(()=>renderPack());
   // 缺陷台账（disposition.json）懒加载——素材卡 ⚠ 展示，Agent 生成的台账人直接可见
   if(P&&P.name&&!P._disp){fetch('/files/projects/'+P.name+'/disposition.json').then(r=>r.ok?r.json():null).then(d=>{if(d&&d.materials){P._disp=d;renderPack();}}).catch(()=>{});}
   const fs=(P.pack_files||[]).filter(f=>!q||((f.transcript&&f.transcript.text)||'').toLowerCase().indexOf(q)>=0||(f.id||'').toLowerCase().indexOf(q)>=0);
   const groups={};
   fs.forEach(f=>{(groups[f.pack]=groups[f.pack]||[]).push(f);});
-  const PN={'nature-stock':'自然空镜 · 通用 B-roll（CC 示例）','demo-ningbo':'王亚伦 · 宁波拍摄（贝壳圣都）'};
   $('packgroups').innerHTML=Object.keys(groups).map(pk=>
-    '<div class="subsec">'+esc(PN[pk]||pk)+' · '+groups[pk].length+' 条</div><div class="libgrid">'+groups[pk].map(packCard).join('')+'</div>'
+    '<div class="subsec">'+esc((PACKNAMES&&PACKNAMES[pk])||pk)+' · '+groups[pk].length+' 条</div><div class="libgrid">'+groups[pk].map(packCard).join('')+'</div>'
   ).join('') || (q?'<div class="empty">无命中——台词搜索覆盖已转写素材</div>':'');
   document.querySelectorAll('#packgroups video, #packgroups img, #packgroups audio').forEach(el=>{el.onerror=()=>phReplace(el,'素材文件缺失');});
 }
@@ -1406,9 +1423,13 @@ async function pulsePoll(){
       CLI_RENDER_SHOWN=j.pct;
       if(bar){bar.style.display='block';bar.innerHTML='<span class="mono">⚙ 渲染中（'+esc(myJob[0].split(':')[1]||'main')+'）['+esc(j.stage||'')+'] '+j.pct+'%——后台/命令行启动的渲染也能看到</span>';}
       if(VIEW.page==='proj')setStatus('渲染中 ['+esc(j.stage||'')+'] '+j.pct+'%');
+      document.title='（渲染 '+j.pct+'%）auto-cut V3 · Studio';  // 标签页实时进度：切走也能看见
     }else if(j.ok===true&&CLI_RENDER_SHOWN!==null){
       CLI_RENDER_SHOWN=null;
       if(bar)bar.style.display='none';
+      notifyRender('✓ 渲染完成 · '+myJob[0].split(':')[0],'监视器已自动刷新，可回来验收');
+      if(document.hidden){document.title='✓ 渲染完成——auto-cut V3';flashTitle();}
+      else document.title='auto-cut V3 · Studio';
       if(VIEW.page==='proj'&&P&&P.name===VIEW.proj){
         try{const pf=await(await fetch('/api/project/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
           if(pf.ok!==false&&pf.files){P.files=pf.files;setVideo('monwrap',P.files.out+'?t='+Date.now(),'暂无成片');
@@ -1418,6 +1439,8 @@ async function pulsePoll(){
       PULSE=null;  // 强制下轮全量对账（渲染产物变了）
     }else if(j.ok===false&&CLI_RENDER_SHOWN!==null){
       CLI_RENDER_SHOWN=null; if(bar)bar.style.display='none';
+      document.title='auto-cut V3 · Studio';
+      notifyRender('✗ 渲染失败 · '+myJob[0].split(':')[0],((j.tail||[]).join('')||'见终端/日志').slice(-120));
       if(VIEW.page==='proj')setStatus('✗ 后台渲染失败（见终端/日志）');
       PULSE=null;
     }
@@ -1444,6 +1467,29 @@ async function pulsePoll(){
   PULSE=PULSE||{};PULSE.t=Date.now();
 }
 setInterval(pulsePoll,2500);
+
+/* ═══ 渲染完成提醒（2026-09-14 体验要求）：系统通知 + 隐藏标签页标题闪烁 ═══ */
+let _flashT=null;
+function notifyRender(title,body){
+  try{
+    if(!('Notification' in window)||Notification.permission!=='granted')return;
+    const n=new Notification(title,{body:body||'',tag:'autocut-render'});  // tag 去重：同任务不叠通知
+    n.onclick=()=>{window.focus();};
+  }catch(e){}
+}
+function flashTitle(){  // 切走期间渲染完成：标题闪三次引人回来
+  if(_flashT)return;
+  let i=0;
+  _flashT=setInterval(()=>{
+    i++;
+    document.title=(i%2?'✨ ':'')+'✓ 渲染完成——auto-cut V3';
+    if(i>=6){clearInterval(_flashT);_flashT=null;document.title='auto-cut V3 · Studio';}
+  },900);
+}
+document.addEventListener('pointerdown',function _np(){  // 通知权限必须出自用户手势：首次点击时顺手请求
+  document.removeEventListener('pointerdown',_np);
+  try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();}catch(e){}
+},{once:false});
 setInterval(syncPoll,5000);
 window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue='';}});
 

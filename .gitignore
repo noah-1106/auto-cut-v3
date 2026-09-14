@@ -17,3 +17,5 @@ projects/*/render.status
 projects/*/params.json
 # ffmpeg 二进制（自备 6.0+）
 bin/
+# 字幕样张等运行时缓存（/api/sub-preview 按需生成，随时可重建）
+assets/preview/
