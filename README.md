@@ -65,9 +65,20 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 ```bash
 # ffmpeg 6.0+：mac 放 bin/ffmpeg，Windows 放 bin/ffmpeg.exe，或装进 PATH（libass/libx264 编译项必需）
 bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
-# 云端服务 key：config/services.json 填 api_key_env（环境变量名，推荐）或 api_key_file（指向 {"api_key":"..."} 的文件）
-#   此文件已 gitignore 永不入库。ASR 可选 local-faster-whisper 免 key 本地转写
 ```
+
+**云端服务 key**（填 `config/services.json`，已 gitignore 永不入库；`api_key_env` 指向你 shell 里 export 的变量名，或 `api_key_file` 指向一个 `{"api_key":"..."}` 的 key 文件）。各段用途与必需性：
+
+| services.json 段 | 干什么用 | 必需？ | 默认 provider | 免 key 替代 |
+|---|---|---|---|---|
+| `asr` | 语音转写（词轨原料） | **必需** | minimax | `local-faster-whisper`（本地转写，免 key） |
+| `vision` | 画面识别（素材理解/缺陷） | **视频素材必需**（无 key 则视频永不过审、draft 剔除；人可在素材卡手动 toggle 强制过审） | minimax | 无 |
+| `llm` | AI 起草故事线 + proofread 校对 | **必需** | minimax | 无 |
+| `tts` | dub 配音合成 | dub 幕才需要 | local-audio8（本地，免 key，见 0.5） | 全 original 原声幕可不用 |
+| `image` | AI 生成封面 | 可选（封面也可抽帧/上传） | minimax | output-frame/first-frame/beat-frame/upload 四途径 |
+| `video` | AI 生成视频素材 | 可选（基本不用） | minimax | 全部实拍素材即可 |
+
+最小可用组合 = ffmpeg + asr/vision/llm 三个 key，跑 original 原声口播全链。
 平台支持：macOS 与 Windows 双端（Python 3.10+，零 pip 依赖；本地 TTS 的 onnxruntime venv 是可选组件，见下文"本地 TTS"）。
 
 ### 0.5 本地 TTS（Audio8-TTS，可选组件，2026-09-14 接入）
@@ -174,7 +185,8 @@ python3 tests/audit.py                                     # 代码审计器
 ## 测试与质量
 
 ```bash
-python3 tests/e2e.py      # 39 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+python3 tests/e2e.py      # 45 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（43 项离线，日常回归用这个）
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
