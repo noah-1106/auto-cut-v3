@@ -28,7 +28,7 @@ import argparse, json, os, re, shutil, subprocess, sys, time, urllib.request, ur
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = os.path.join(ROOT, "bin", "ffprobe")
 BASE = "http://localhost:8765"
-PROJ = "demo-project"
+PROJ = "demo-project"  # E2E 专用夹具包/项目名（tests/fixtures.py 自给自足合成，与用户素材零耦合）
 PASS, FAIL = [], []
 
 
@@ -809,6 +809,9 @@ def main():
     ap.add_argument("--fast", action="store_true", help="跳过 LLM 与长渲染")
     a = ap.parse_args()
     print("══ E2E 回归（%s）══" % ("fast" if a.fast else "全量"))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import fixtures
+    fixtures.ensure()  # 测试底盘自给自足：夹具包缺失时合成（2026-09-14 清场后立——E2E 曾 40 处硬编码真实素材）
     t1_health()
     t2_injection()
     t3_default_story()
