@@ -190,7 +190,7 @@ def t6_sfx():
         ok = (on - base) > 3 or abs(on - ding) < 3  # 抬升显著 或 贴着素材原响度
         check("T6 音效混音", ok, "ding窗 %.1fdB / 基线窗 %.1fdB" % (on, base))
     else:
-        check("T6 音效混音", False, str(d)[:80])
+        check("T6 音效混音", False, str(d))  # 全量 log 不截断：CI 排障要完整 ffmpeg 错误（Windows 截断曾致盲排）
     api("/api/storyline-delete/" + PROJ + "?story=e2esfx", method="POST")
 
 
@@ -432,7 +432,7 @@ def t16_narration_modes():
         st, d = api("/api/render/" + PROJ + "?flash=0.6&grain=16&hold=1.0&duration=0.5&story=e2emodes", method="POST")
         out = os.path.join(ROOT, "projects", PROJ, "out-e2emodes.mp4")
         if not (st == 200 and d.get("ok") and os.path.exists(out)):
-            check("T16 narration 三态", False, json.dumps(d, ensure_ascii=False)[:120])
+            check("T16 narration 三态", False, json.dumps(d, ensure_ascii=False))
             return
 
         def seg_mv(ss, tt):
@@ -1234,7 +1234,7 @@ def t35_bgm_segment_render():
         st, d = api("/api/render/" + PROJ + "?flash=0.6&grain=16&hold=1.0&duration=0.5&story=e2ebgm35", method="POST")
         out = os.path.join(ROOT, "projects", PROJ, "out-e2ebgm35.mp4")
         if not (st == 200 and d.get("ok") and os.path.exists(out)):
-            check("T35 BGM 段落渲染（段落窗口+不循环→apad 补静音）", False, json.dumps(d, ensure_ascii=False)[:150])
+            check("T35 BGM 段落渲染（段落窗口+不循环→apad 补静音）", False, json.dumps(d, ensure_ascii=False))
             return
         r2 = subprocess.run([FFMPEG, "-ss", "1.5", "-t", "2.5", "-i", out,
                              "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
