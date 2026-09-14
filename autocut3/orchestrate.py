@@ -11,7 +11,7 @@
 设计要点：
   · 状态全部从文件推导（零新数据库）——与人看到的必然是同一份事实
   · 素材处理段全自动（mount→转写→理解→digest→校对→档案→缺陷台账）；
-    创作段以"意图"为门（--intent），draft 之后 vadwords→dubgate→渲染→QC 继续自动
+    创作段以"意图"为门（--intent），draft 之后 vadwords→dubfit→dubgate→渲染→QC 继续自动
   · 每步推进都走现有模块入口（subprocess），不复制逻辑；失败即停，错误原样透出
   · aigen（AI 生成素材，video_gen.py）为预留槽位：默认 n/a，见 STATUS 表
 
@@ -25,7 +25,8 @@
   disposition projects/<pid>/disposition.json 存在（M2 落地；此前该步 na）
   storyline  storylines/*.json 非空
   vadwords   当前故事线每幕 narration.words 在场（VAD 物理测量时间源）
-  dubgate    无 dub 幕=na；有则 D1-D3 全过
+  dubfit     无 dub 幕=na；有则每幕 narration.dubfit 在场且 dubfit-report passed
+  dubgate    读 dubgate-report.json（dubfit/dubgate 产物）passed——D1-D3 同源
   render     out-<sid>.mp4 存在且新于故事线
   qc         qc-report.json 存在（verdict=blocked→failed）
   aigen      预留槽位（video_gen 口）——默认 na，接活时在此登记判据
@@ -162,6 +163,26 @@ def _step_vadwords(pdir):
             "VAD 词轨在场" if not left else f"幕 {left} 缺 VAD 词轨（渲染前自动跑 vadwords）")
 
 
+def _step_dubfit(pdir):
+    sid, sl = _active_story(pdir)
+    if not sid:
+        return ("pending", "先有成片故事线")
+    dubs = [b for b in (sl.get("beats") or []) if (b.get("narration") or {}).get("mode") == "dub"]
+    if not dubs:
+        return ("na", "无 dub 幕")
+    left = [b.get("no") for b in dubs if not (b.get("narration") or {}).get("dubfit")]
+    if left:
+        return ("pending", "幕 %s 待配音裁剪（渲染前自动跑 dubfit）" % left)
+    rp = f"{pdir}/dubfit-report.json"
+    if os.path.exists(rp):
+        r = _jload(rp, {})
+        if r.get("passed") is True:
+            return ("done", "配音裁剪完成（报告 dubfit-report.json）")
+        if r.get("passed") is False:
+            return ("failed", "dubfit 未过: %s" % (r.get("fails") or "见报告"))
+    return ("pending", "待跑 dubfit")
+
+
 def _step_dubgate(pdir):
     sid, sl = _active_story(pdir)
     if not sid:
@@ -220,6 +241,7 @@ STEPS = [
     ("disposition", "缺陷台账",   _step_disposition),
     ("storyline",   "故事线",     _step_storyline),
     ("vadwords",    "VAD 词轨",   _step_vadwords),
+    ("dubfit",      "配音裁剪",   _step_dubfit),
     ("dubgate",     "配音门禁",   _step_dubgate),
     ("render",      "渲染",       _step_render),
     ("qc",          "审片 QC",    _step_qc),
@@ -229,7 +251,7 @@ STEPS = [
 # 全自动推进段：素材处理段无条件自动；storyline 需要 intent 门；之后自动
 _ADVANCE_AUTO = {"mount", "transcribe", "understand", "digest", "proofread", "dossier", "disposition"}
 _ADVANCE_INTENT = {"storyline"}   # 需要 --intent
-_ADVANCE_STORY = {"vadwords", "dubgate", "render", "qc"}
+_ADVANCE_STORY = {"vadwords", "dubfit", "dubgate", "render", "qc"}
 
 
 def status(project):
@@ -307,6 +329,9 @@ def advance(project, intent=None, story=None, only=None):
         elif key == "vadwords":
             sid = story or _latest_story(pdir)
             _run([py, os.path.join(ac, "vadwords.py"), name, "--story", sid], "VAD 词轨")
+        elif key == "dubfit":
+            sid = story or _latest_story(pdir)
+            _run([py, os.path.join(ac, "dubfit.py"), name, "--story", sid], "配音裁剪")
         elif key == "dubgate":
             sid = story or _latest_story(pdir)
             _run([py, os.path.join(ac, "dubgate.py"), name, "--story", sid], "配音门禁")

@@ -772,7 +772,7 @@ def t27_orchestrator():
             json.dump({"verdict": "pass"}, open(os.path.join(pd, "qc-report.json"), "w"))
             open(os.path.join(pd, "out-s.mp4"), "wb").write(b"x")  # mtime 最新=out 新于故事线
             st = ORCH.status(pd)
-            ok_struct = (st["project"] == "full" and len(st["steps"]) == 13
+            ok_struct = (st["project"] == "full" and len(st["steps"]) == 14
                          and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
             ok_done = all(s["status"] in ("done", "na") for s in st["steps"]) and st["next"] is None
         finally:
@@ -953,6 +953,116 @@ def t30_voice_api():
           "list=%s notext=%s badname=%s del404=%s" % (ok_list, ok_notext, ok_badname, ok_del404))
 
 
+# ---------------------------------------------------------------- T31 配音裁剪自动化（v2-③ dubfit）
+def t31_dubfit():
+    # 回归锚：包络掐头掐尾 / D1 句首残留→重锚回退裁点（VAD 能量边界）/ 序列化保真
+    #（故事线未知字段透传，硬规则 4）/ 不过 exit 1 + dubgate-report 落盘（编排器 dubgate 环节读它）。
+    # ASR 全程打桩（离线）：fit.mp3 复检词轨 vs src.wav 原始词轨 按文件名分派。
+    import tempfile, shutil
+    FF = os.path.join(ROOT, "bin", "ffmpeg")
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import dubfit, asr
+        tmp = tempfile.mkdtemp(prefix="t31_")
+        old_cwd, old_tr = os.getcwd(), asr.transcribe
+        MODE = {"m": "clean"}
+        state = {"dirty_used": False}
+        CLEAN = {"text": "你好世界", "words": [
+            {"text": "你", "start": 0.0, "end": 0.3}, {"text": "好", "start": 0.4, "end": 0.7},
+            {"text": "世", "start": 0.9, "end": 1.2}, {"text": "界", "start": 1.3, "end": 1.7}]}
+        DIRTY = {"text": "残你好世界", "words": [
+            {"text": "残", "start": 0.0, "end": 0.3}] + CLEAN["words"]}
+        RAW = {"text": "残你好世界", "words": [
+            {"text": "残", "start": 0.3, "end": 0.7}, {"text": "你", "start": 1.3, "end": 1.5},
+            {"text": "好", "start": 1.6, "end": 1.8}, {"text": "世", "start": 2.0, "end": 2.2},
+            {"text": "界", "start": 2.3, "end": 2.6}]}
+
+        def fake_transcribe(src, provider=None, cache_dir=None):
+            if src.endswith("src.wav"):
+                return RAW
+            if MODE["m"] == "always_dirty":
+                return DIRTY
+            if MODE["m"] == "dirty_first" and not state["dirty_used"]:
+                state["dirty_used"] = True
+                return DIRTY
+            return CLEAN
+
+        try:
+            asr.transcribe = fake_transcribe
+            dubfit.asr.transcribe = fake_transcribe  # 同源模块双保险（import 绑定早于 patch）
+            os.chdir(tmp)
+            # 夹具 dub 录音：0-1s 静音 + 1-3s 语音 + 3-4s 静音（头尾垃圾 1s each）
+            os.makedirs("projects/t31/materials/dub")
+            os.makedirs("projects/t31/storylines")
+            raw = "projects/t31/materials/dub/raw.mp3"
+            r = subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                                "aevalsrc='if(lt(t,1),0,if(lt(t,3),sin(440*t),0))':s=16000:d=4",
+                                "-c:a", "libmp3lame", raw], capture_output=True, text=True)
+            assert r.returncode == 0, "夹具合成失败"
+            sl = {"beats": [
+                {"no": 1, "custom_keep": "beat级透传", "story": "你好世界。",
+                 "narration": {"mode": "dub", "audio": "materials/dub/raw.mp3",
+                               "custom_nar": "narration级透传"}},
+                {"no": 2, "story": "你好世界。",
+                 "narration": {"mode": "dub", "audio": "materials/dub/raw.mp3"}}]}
+            json.dump(sl, open("projects/t31/storylines/t31.json", "w", encoding="utf-8"),
+                      ensure_ascii=False)
+            old_argv = sys.argv
+            # 幕1 干净 take（包络轮即过）；幕2 首检残留"残"→重锚回退到 1s 语音span头
+            MODE["m"] = "dirty_first"
+            sys.argv = ["dubfit.py", "t31", "--story", "t31"]
+            code = None
+            try:
+                dubfit.main()
+            except SystemExit as e:
+                code = e.code
+            finally:
+                sys.argv = old_argv
+            rep = json.load(open("projects/t31/dubfit-report.json"))
+            sl2 = json.load(open("projects/t31/storylines/t31.json"))
+            b1, b2 = sl2["beats"][0], sl2["beats"][1]
+            n1, n2 = b1["narration"], b2["narration"]
+            anchored = n1 if any(r.startswith("head-anchor") for r in n1["dubfit"]["rounds"]) else n2
+            fit1 = os.path.join("projects/t31", b1["narration"]["audio"])
+            ok_clean = (code in (None, 0) and rep["passed"] is True
+                        and n1["dubfit"]["rounds"][0] == "envelope"
+                        and n2["dubfit"]["rounds"][0] == "envelope"
+                        and os.path.exists(fit1))
+            ok_anchor = (any(r.startswith("head-anchor@你") for r in anchored["dubfit"]["rounds"])
+                         and anchored["dubfit"]["start"] > 0.85  # 残留段被掐掉（mp3 编码容差）
+                         and anchored["audio"].startswith("materials/dub/fit-t31-b"))
+            ok_keep = (b1.get("custom_keep") == "beat级透传"
+                       and b1["narration"].get("custom_nar") == "narration级透传"
+                       and b1["narration"]["dubfit"]["raw"] == "materials/dub/raw.mp3")
+            dg = json.load(open("projects/t31/dubgate-report.json"))
+            ok_dg = dg["passed"] is True and dg["source"] == "dubfit"
+            # 负例：门禁永不过 → exit 1 + 报告 passed=False
+            MODE["m"] = "always_dirty"
+            json.dump({"beats": [{"no": 9, "story": "你好世界。",
+                                  "narration": {"mode": "dub", "audio": "materials/dub/raw.mp3"}}]},
+                      open("projects/t31/storylines/bad.json", "w", encoding="utf-8"))
+            sys.argv = ["dubfit.py", "t31", "--story", "bad"]
+            bad_code = None
+            try:
+                dubfit.main()
+            except SystemExit as e:
+                bad_code = e.code
+            finally:
+                sys.argv = old_argv
+            rep_bad = json.load(open("projects/t31/dubfit-report.json"))
+            ok_fail = bad_code == 1 and rep_bad["passed"] is False and rep_bad["fails"] == [9]
+            check("T31 dubfit 配音裁剪（包络/句首重锚/保真/不过 exit1+dubgate报告）",
+                  ok_clean and ok_anchor and ok_keep and ok_dg and ok_fail,
+                  "clean=%s anchor=%s keep=%s dg=%s fail=%s" % (ok_clean, ok_anchor, ok_keep, ok_dg, ok_fail))
+        finally:
+            asr.transcribe = old_tr
+            os.chdir(old_cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T31 dubfit 配音裁剪（包络/句首重锚/保真/不过 exit1+dubgate报告）",
+              False, "异常: %s" % str(e)[:140])
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1072,6 +1182,7 @@ def main():
     t28_disposition()
     t29_qc_av_sync()
     t30_voice_api()
+    t31_dubfit()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

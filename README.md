@@ -12,15 +12,15 @@
 | 2 | 理解 | understand.py | digest（场景/资产/定位） | 起草 | 自动✓ |
 | 3 | 缺陷台账 | disposition.py | disposition.json（四类缺陷+建议窗口） | 起草提示词/素材卡⚠ | 自动✓（2026-09-14 M2） |
 | 4 | 起草 | draft.py | storylines/*.json | 渲染 | 自动✓（消费缺陷台账） |
-| 5 | 裁剪 | dubfit 未建（会话内手工） | dub 音频+验证报告 | 渲染 | **手工 → v2-③** |
+| 5 | 裁剪 | dubfit.py（v2-③ 落地） | dub 音频+验证报告 | 渲染 | 自动✓（包络定位→掐头掐尾→ASR 闭环，吸收 dubgate D1-D3） |
 | 6 | 词轨 | vadwords.py | VAD 词轨 | 字幕/卡拉OK | 自动✓（2026-09-14 编排器挂载） |
 | 7 | 渲染 | pipeline.py + video_gen | out-*.mp4 + subtitle.ass | 门禁/交付 | 自动✓（硬解优先：mac=videotoolbox/win=nvenc·qsv，回退 libx264） |
 | 8 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 | 自动✓（2026-09-14 M3：听觉/冻结/页同步入列） |
 | 9 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 | 自动✓ |
 
-**管线编排器（2026-09-14 M1 落地）**：`autocut3/orchestrate.py` 从文件推导 13 环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
+**管线编排器（2026-09-14 M1 落地）**：`autocut3/orchestrate.py` 从文件推导 14 环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
 ```bash
-python3 autocut3/orchestrate.py myproj              # 看状态（13 环节 ✓/○/✗/· + 下一动作）
+python3 autocut3/orchestrate.py myproj              # 看状态（14 环节 ✓/○/✗/· + 下一动作）
 python3 autocut3/orchestrate.py myproj --advance    # 推进到下一道门（素材段全自动；故事线门需 --intent；mount 是创作决定门）
 ```
 Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，人随时看得见。
@@ -42,7 +42,7 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 
 - v3 稳定运行；维护者项目 v6 成片已交付（57.1s / 门禁三域过 / -17.1 LUFS）
 - **2026-09-14 接管首批落地（M1-M5 全部完成）**：管线编排器（orchestrate.py + /api/status + 前端进度条）｜缺陷处置链（disposition.py 四类缺陷→起草消费→素材卡⚠）｜QC 双域补位（R7 听觉/R4 冻结/R10 页同步）｜前端收敛（试渲去硬编码/字幕样张真兑现/渲染实时进度+系统通知）｜资产策展（12 槽位爆款语义音效 + 4 条真实 BGM 替换占位，Mixkit 免费商用，许可与来源清单随包）｜跨平台（flock.py 跨平台锁 + 平台感知 ffmpeg/硬解编码链，Mac/Windows 双端）
-- **已知遗留**：dubfit.py 裁剪自动化（v2-③）未建，配音裁剪仍是会话内手工；本地 TTS（Audio8-TTS，Apache 2.0）接入中
+- **已知遗留**：本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）
 - 代码托管：GitHub 私有库（Noah 账号），config/services.json 已永久 gitignore（历史已清除，key 走环境变量或 api_key_file）
 
 ## 快速上手
@@ -107,7 +107,7 @@ studio.py            # 后端全部路由（人/Agent 同权 HTTP）
 studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
 autocut3/            # 流水线模块：orchestrate(编排器) transcribe(转写) understand(画面)
                      #   draft(AI起草) disposition(缺陷台账) pipeline(成片) video_gen(AI生成口)
-                     #   qc(质检R1-R10) proofread(校对) vadwords(VAD词轨) dubgate(配音门禁)
+                     #   qc(质检R1-R10) proofread(校对) vadwords(VAD词轨) dubfit(配音裁剪) dubgate(配音门禁)
                      #   dossier(素材档案) flock(跨平台锁) tts(配音合成)
 registry/            # 注册表：效果系统的单一事实源（*.json 纯数据）
                      #   bgm/subtitles/transitions/sfx/stickers=效果；enums/formats=语义枚举(只读)
@@ -116,7 +116,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线改造立项）
-tests/               # e2e.py(35项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(39项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域/T30 声纹/T31 dubfit) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -133,9 +133,10 @@ Agent 起草时读同一张注册表选 BGM/转场；字幕样式、贴纸、音
 python3 autocut3/transcribe.py myproj --material M0211   # 只转写一条
 python3 autocut3/understand.py  myproj --material M0211   # 只识别一条
 python3 autocut3/vadwords.py    myproj --story main       # VAD 词轨重生成
+python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动化（dub 幕）
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
-python3 tests/e2e.py                                       # 32 项全量回归
+python3 tests/e2e.py                                       # 39 项全量回归
 python3 tests/audit.py                                     # 代码审计器
 ```
 
@@ -156,7 +157,7 @@ python3 tests/audit.py                                     # 代码审计器
 ## 测试与质量
 
 ```bash
-python3 tests/e2e.py      # 32 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+python3 tests/e2e.py      # 39 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```

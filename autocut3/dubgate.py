@@ -19,6 +19,7 @@ def main():
     cache = os.path.join(pdir, "materials", "dub", ".asrcache")
     os.makedirs(cache, exist_ok=True)
     fails = []
+    report = []
     for b in sl.get("beats", []):
         nar = b.get("narration") or {}
         if nar.get("mode") != "dub":
@@ -40,6 +41,12 @@ def main():
             "✓" if d2 else "✗", d3, (r.get("text") or "")[:30]))
         if not ok:
             fails.append(b.get("no"))
+        report.append({"no": b.get("no"), "ok": ok, "d1": d1, "d2": d2, "d3": round(d3, 3)})
+    sid = a.story or os.path.splitext(os.path.basename(sfile))[0]
+    json.dump({"passed": not fails, "fails": fails, "source": "dubgate", "story": sid,
+               "beats": report},
+              open(os.path.join(pdir, "dubgate-report.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
     if fails:
         print("门禁不过：幕 %s 配音残留/吞字——重裁后复检" % fails); sys.exit(1)
     print("dubgate ✓ 全部配音干净")
