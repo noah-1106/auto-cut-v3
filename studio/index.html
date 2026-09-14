@@ -174,6 +174,8 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 .trow input[type=text]{padding:0 8px;font-size:12px;height:var(--ctl-h-s)}
 .trow select{padding:0 8px;font-size:12px;height:var(--ctl-h-s)}
 .trow .n{width:52px;flex:0 0 auto}
+.trow .lbl{font-size:10px;color:var(--faint);flex:0 0 auto}
+.trow .win{font:10px var(--mono);color:var(--faint);flex:0 0 auto;white-space:nowrap}
 .trow .req{flex:1 1 150px;min-width:140px}
 .trow select{flex:1 1 130px;min-width:120px}
 .trow .x,.eff .x{flex:0 0 auto;background:none;border:0;color:var(--faint);cursor:pointer;font-size:13px;padding:2px}
@@ -372,10 +374,10 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <!-- ═══════════ 操作页 · 素材库 ═══════════ -->
 <section id="s-library">
   <div class="sec">项目素材 <span class="packtag" style="border-color:var(--line);color:var(--dim)">仅本项目</span></div>
-  <div class="note">本项目独有的素材与衍生资产——n001 权威切片（V1 挑好段落拼成的源片 + 权威词轨），随本项目生灭。跨项目共享素材在下方。</div>
+  <div class="note">本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。</div>
   <div class="libgrid" id="cutgrid"></div>
 
-  <div class="sec" style="margin-top:26px">跨项目素材 <span class="packtag">root</span></div>
+  <div class="sec" style="margin-top:26px">跨项目素材 <span class="packtag">仓库级</span></div>
   <div class="note"><b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。</div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
     <input id="pk-id" placeholder="新包 id（字母数字-）" style="max-width:190px">
@@ -779,7 +781,7 @@ function buildCreator(){
     '<div class="mf"><label>BGM</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表">'+optHtml([{id:'',name:'（无 BGM）'}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
     (m.audio.bgm_id?'<div class="mf"><label>BGM 段落</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="贯穿曲默认段落；幕级音乐轨可再覆盖">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
     (m.audio.bgm_id?'<div class="mf"><label>BGM 循环</label><select onchange="DRAFT.meta.audio.bgm_loop=this.value===\'\'?null:this.value===\'true\'" title="段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音"><option value="">自动</option><option value="true"'+(m.audio.bgm_loop===true?' selected':'')+'>循环</option><option value="false"'+(m.audio.bgm_loop===false?' selected':'')+'>不循环</option></select></div>':'')+
-    '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22"></div>'+
+    '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="BGM 相对音量 0–1（默认 0.22）"></div>'+
     '<div class="mf"><label>画幅氛围</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:'自然'},{id:'warm',name:'暖调'},{id:'cool',name:'冷调'}],m.style.grade)+'</select></div>';
   $('coverops').innerHTML=
     '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="output-frame=成片抽帧（含字幕全要素）/ first-frame=素材首帧 / beat-frame=指定幕抽帧 / ai-generated=AI 生成图 / upload=已上传图">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
@@ -801,7 +803,7 @@ function srcOptions(cur){
   const opts=[];
   (P.library.sources||[]).forEach(s=>{if(s.id)opts.push({id:s.id,label:s.id+' · 项目自有'});});
   (P.pack_files||[]).forEach(f=>{opts.push({id:f.id,label:f.id+' · '+fmtD(f.duration)});});
-  return '<option value="">（默认 n001 源片）</option>'+opts.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.label)+'</option>').join('');
+  return '<option value="">（项目自有切片）</option>'+opts.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.label)+'</option>').join('');
 }
 function renderBeats(){
   const bs=DRAFT.beats||[];
@@ -860,10 +862,12 @@ function beatCard(b,i){
   const en=P.enums||{};
   const trks=(b.tracks||[]).map((t,k)=>{
     const isB=t.role==='B';
+    const win0=+nz(t.src_in,0), win1=win0+(+nz(t.duration,3));  // 素材窗口起止（原始素材内的取段）
     return '<div class="trow"><span class="role">'+(isB?'B 叠加':'A 主画')+'</span>'+
       '<select title="素材来源" onchange="DRAFT.beats['+i+'].tracks['+k+'].source_id=this.value||null">'+srcOptions(t.source_id)+'</select>'+
-      '<input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="源入点秒" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value">'+
-      '<input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="时长秒" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value">'+
+      '<span class="lbl">入点</span><input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="源入点秒：从素材第几秒开始取" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value;updWin('+i+','+k+')">'+
+      '<span class="lbl">时长</span><input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="时长秒：取多少秒（右侧即素材窗口起止）" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value;updWin('+i+','+k+')">'+
+      '<span class="win" id="win-'+i+'-'+k+'" title="本轨取用的素材窗口（原始素材内起止秒）">'+win0.toFixed(1)+'–'+win1.toFixed(1)+'s</span>'+
       '<div class="req-line" title="选用理由/素材要求——Agent 起草时自述为什么选这条素材；点击可改为你的采购要求。纯档案字段，渲染不读" onclick="reqEdit('+i+','+k+',this)">'+
         ((t.requirement||'')?'<span class="req-v">'+esc(t.requirement)+'</span>':'<span class="req-e">＋ 选材理由（点击填写）</span>')+'</div>'+
       (isB?'<select title="画中画位置" onchange="DRAFT.beats['+i+'].tracks['+k+'].pos=this.value">'+optHtml(en.positions,t.pos||'top-right')+'</select>'+
@@ -888,14 +892,14 @@ function beatCard(b,i){
     '<div class="bhead"><span class="bno">#'+nz(b.no,i+1)+'</span><span class="badge">'+esc(b.id||'')+'</span>'+
     '<span class="sp"><button class="pvbtn" id="pvbtn-'+nz(b.no,i+1)+'" onclick="previewBeat('+nz(b.no,i+1)+')">▶ 幕预览</button>'+
     '<button class="x" title="删幕" onclick="delBeat('+i+')">✕</button></span></div>'+
-    laneSub('幕预览 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">点框即渲 · 方形适配</span>',
+    laneSub('幕预览 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">点框即渲 · 秒级低清</span>',
       '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>幕预览</div></div>')+
     laneSub('字幕轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">'+subModeHint(b)+'</span>',
       subBody(b,i)+
       '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="幕级字幕样式（注册表）；留空=继承全局">'+optHtml([{id:'',name:'（跟随全局）'}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
     laneSub('视频轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">A 定时长 · B 叠加</span>',
       trks,'<button class="act" onclick="addTrack('+i+')">＋ B 轨</button>')+
-    laneSub('旁白轨',
+    laneSub('旁白轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">本幕语音来源</span>',
       '<div class="trow"><select onchange="DRAFT.beats['+i+'].narration.mode=this.value;renderBeats()" title="切换后字幕轨随之分流：dub=台词可编辑 / original=原声转写只读 / none=静音无字幕">'+optHtml(en.narration_modes,(b.narration||{}).mode||'original')+'</select></div>')+
     laneSub('转场轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">本幕→下一幕</span>',
       '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">（无）</option>'+((P.transition_ids||[]).map(t=>{const tn=((P.registry||{}).transitions||{})[t];return '<option value="'+esc(t)+'"'+(t===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+t+'）':t)+'</option>';}).join(''))+'</select></div>')+
@@ -906,7 +910,6 @@ function beatCard(b,i){
     laneSub('音乐轨', musicRow(b,i))+
     '</div>';
 }
-function addBeat(){addBeatAt((DRAFT.beats||[]).length);}
 function delBeat(i){DRAFT.beats.splice(i,1);DRAFT.beats.forEach((b,j)=>b.no=j+1);renderBeats();}
 function reqEdit(i,k,el){
   const v=(DRAFT.beats[i].tracks[k].requirement)||'';
@@ -924,6 +927,11 @@ function addTrack(i){
   const A=DRAFT.beats[i].tracks[0]||{};
   DRAFT.beats[i].tracks.push({role:'B',source_id:null,cut_index:0,src_in:0,duration:A.duration||3,op:'overlay-pip',pos:'top-right',scale:0.3,requirement:''});
   renderBeats();
+}
+function updWin(i,k){  // 素材窗口标注联动：入点/时长编辑时实时刷新起止显示（2026-09-15 Noah：起止时间点要标清楚）
+  const t=(DRAFT.beats[i].tracks||[])[k];const el=$('win-'+i+'-'+k);if(!t||!el)return;
+  const a=+nz(t.src_in,0), b=a+(+nz(t.duration,3));
+  el.textContent=(isNaN(a)?'?':a.toFixed(1))+'–'+(isNaN(b)?'?':b.toFixed(1))+'s';
 }
 function delTrack(i,k){DRAFT.beats[i].tracks.splice(k,1);renderBeats();}
 function addEff(i,kind){
@@ -1062,7 +1070,7 @@ async function saveAndRender(){
       const pr=await(await fetch('/api/render-progress/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
       const j=pr.job||{};
       if(j.running){setStatus('渲染中 ['+(j.stage||'')+'] '+j.pct+'%');continue;}
-      if(j.ok===false){setStatus('✗ 渲染失败：'+esc((j.tail||[]).slice(-1)[0]||''));break;}
+      if(j.ok===false){setStatus('✗ 渲染失败：'+((j.tail||[]).slice(-1)[0]||''));break;}
       // 完成：刷新监视器/封面
       const pf=await(await fetch('/api/project/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
       if(pf.ok!==false&&pf.files){P.files=pf.files;
@@ -1158,7 +1166,7 @@ function packCard(f){
   const kind=f.kind||'video';
   const KLBL={video:'▶ 视频 · ASR+视觉',image:'🖼 图片 · 视觉+OCR',audio:'♪ 音频 · ASR'}[kind]||kind;
   const t=f.transcript;
-  const pend=kind!=='image'&&((f.audit||{}).transcript==='pending');
+  const pend=kind!=='image'&&((f.audit||{}).transcript!=='done');
   let media='';
   if(kind==='image'){
     media='<img alt="" src="'+f.url+'" style="width:100%;border-radius:10px;display:block;background:#000;aspect-ratio:16/9;object-fit:cover">';
@@ -1294,8 +1302,8 @@ function renderCuts(){
       '<span class="mt">'+fmtT(nz(c.in,'?'))+' → '+fmtT(nz(c.out,'?'))+' · '+fmtD(c.duration)+'</span>'+
       '<span class="usebadge '+(c.usable?'usable':'waste')+'" onclick="toggleCut('+i+')">'+(c.usable?'✓ 可用':'✕ 拍摄废片')+'</span></div>'+
       '<textarea class="tedit" placeholder="校对台词（失焦即落盘）" onblur="saveCutText('+i+',this.value)">'+esc(c.text||'')+'</textarea>'+defs+
-      '<div class="audit"><span class="achip done">转写 ✓</span><span class="achip'+(((c.audit||{}).proofread==='done')?' done':'')+'">校对 · '+((((c.audit||{}).proofread==='done'))?'✓':'可编辑')+'</span><span class="achip">画面 · 待</span></div></div>';
-  }).join('');
+      '<div class="audit"><span class="achip done">转写 ✓</span><span class="achip'+(((c.audit||{}).proofread==='done')?' done':'')+'">校对 · '+((((c.audit||{}).proofread==='done'))?'✓':'可编辑')+'</span><span class="achip" title="切片为源片窗口，不做独立画面识别">画面 —</span></div></div>';
+  }).join('')||'<div class="empty" style="grid-column:1/-1">尚无项目切片——渲染成片后由源片自动切出（窗口+权威词轨随切片落档）</div>';
 }
 async function saveCut(c){
   const r=await(await fetch('/api/library/'+P.name+'/usable',{method:'POST',
