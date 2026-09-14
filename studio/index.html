@@ -109,7 +109,6 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 .regcard h5::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--gold-soft);border:1px solid var(--gold-line)}
 .regcard .cnt{font:28px var(--mono);font-weight:700}
 .regcard .items{font-size:11px;color:var(--dim);line-height:1.9;margin-top:6px}
-.tunebox{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px 20px;max-width:640px}
 .slider-row{display:flex;align-items:center;gap:12px;margin:12px 0}
 .slider-row label{font-size:12px;color:var(--dim);width:160px;flex:0 0 auto}
 .slider-row input[type=range]{flex:1;accent-color:var(--gold)}
@@ -340,23 +339,11 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 </div>
 <input type="file" id="voicefile" style="display:none">
 
-<!-- ═══════════ 配置页 · 模板工程台 ═══════════ -->
-<section id="s-tune">
-  <div class="sec">filmBurn 模板工程台 <span style="text-transform:none;letter-spacing:0;color:var(--faint)">（精确数值只在配置层，创作台不出现数字）</span></div>
-  <div class="tunebox">
-    <div id="gtune"></div>
-    <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
-      <button class="primary" id="tbtn" onclick="tuneRender()">▶ 试渲（当前项目首幕片段）</button>
-      <span class="statusline" id="tstat">调整的是试渲参数——验证观感后由 Agent 固化进模板</span>
-    </div>
-    <div id="tvidwrap" style="display:none;max-width:280px;margin-top:10px"></div>
-  </div>
-</section>
+
 
 <!-- ═══════════ 操作页 · 创作台 ═══════════ -->
 <section id="s-create">
-  <!-- 顶行三联：左=成片（预览+基本信息在下），中=大纲·贯穿元素（合并），右=封面 -->
-  <div class="topline">
+  <!-- 顶行三联：左=成片（预览+基本信息在下），中=大纲·贯穿元素（合并），右=封面 -->  <div class="topline">
     <div class="pane out-pane">
       <h4>成片</h4>
       <div id="monwrap"></div>
@@ -452,10 +439,10 @@ function setVideo(wrapId,src,phText,poster){
 
 /* ═══ 页面/签（按 id 定位，永不错位）═══ */
 const PAGES={
-  config:{tabs:[['config','项目'],['registry','注册表'],['tune','模板工程台']]},
+  config:{tabs:[['config','项目'],['registry','注册表']]},
   proj:{tabs:[['create','创作台'],['library','素材库']]}
 };
-const SECMAP={config:'s-config',registry:'s-registry',tune:'s-tune',create:'s-create',library:'s-library'};
+const SECMAP={config:'s-config',registry:'s-registry',create:'s-create',library:'s-library'};
 
 function renderTabs(){
   const pg=PAGES[VIEW.page],t=$('tabs');t.innerHTML='';
@@ -540,28 +527,7 @@ async function loadConfig(){
     ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5>'+r[0]+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
     '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(4*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5>声纹<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||'空')+(P._voices.installed?'':' · 未装运行时')+'</div></div>'+
     REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+5)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5>'+r[1]+'<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||'空')+'</div></div>').join('');
-  const pr={flash:0.6,grain:16,hold:1.0,duration:0.5};
-  $('gtune').innerHTML=sld('g-flash','白闪强度 flash',0.1,0.9,0.05,pr.flash)+sld('g-grain','噪点密度 grain',0,32,1,pr.grain)+
-    sld('g-hold','白闪保持 hold (s)',0.2,2,0.1,pr.hold)+sld('g-dur','溶解时长 duration (s)',0.2,1,0.05,pr.duration);
 }
-async function tuneRender(){
-  const btn=$('tbtn');btn.disabled=true;$('tstat').textContent='试渲中…';
-  try{
-    let proj=VIEW.proj,story=VIEW.story;
-    if(!proj||!story){
-      const pl=await(await fetch('/api/projects')).json();
-      const hit=(pl||[]).find(p=>p.stories&&p.stories.length);
-      if(!hit){$('tstat').textContent='✗ 还没有任何带故事线的项目，无法试渲';btn.disabled=false;return;}
-      proj=hit.name;story=hit.stories[0];
-    }
-    if(VIEW.proj!==proj||VIEW.story!==story)await openProj(proj,story,true);
-    const r=await(await fetch('/api/beat/'+proj+'/1?story='+encodeURIComponent(story),{method:'POST'})).json();
-    if(r.ok){setVideo('tvidwrap',r.video,'试渲失败');$('tvidwrap').style.display='block';$('tstat').textContent='✓ 试渲完成（'+story+' 幕1，当前参数）';}
-    else $('tstat').textContent='✗ '+(r.log||'');
-  }catch(e){$('tstat').textContent='✗ '+e;}
-  btn.disabled=false;
-}
-
 /* ═══ 项目操作页 ═══ */
 async function openProj(name,story,silent){
   if(DIRTY&&P&&!silent){
@@ -1183,7 +1149,12 @@ function renderPack(){
 }
 function packCard(f){
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
-  const rev=f.review||'pending-review';
+  // 审核有实义化（2026-09-15 Noah #3）：待审=该 kind 所需审计未齐（与 draft 门禁同判据）——
+  // 审计齐即视同过审（transcribe/understand 下次跑时会回写 review 字段，旧数据此处兜齐）
+  const kind0=f.kind||'video';
+  const need=kind0==='video'?['transcript','visual']:(kind0==='audio'?['transcript']:['visual']);
+  const audited=need.every(k=>{const v=(f.audit||{})[k];return v==='done'||v==='n/a';});
+  const rev=((f.review||'pending-review')==='pending-review'&&!audited)?'pending-review':'reviewed';
   const kind=f.kind||'video';
   const KLBL={video:'▶ 视频 · ASR+视觉',image:'🖼 图片 · 视觉+OCR',audio:'♪ 音频 · ASR'}[kind]||kind;
   const t=f.transcript;
@@ -1230,7 +1201,7 @@ function packCard(f){
     '<div class="ktag">'+esc(KLBL)+'</div>'+
     trHtml+visHtml+defs+dispHtml+
     '<div class="defadd" style="display:flex;gap:6px;margin-top:6px">'+
-    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">＋ 缺陷</button></div>'+
+    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">＋ 台账</button></div>'+
     '<div class="audit">'+
     (kind==='image'?'<span class="achip">转写 —</span>'
       :'<span class="achip'+(pend?' act':' done')+'" '+(pend?'title="云端转写（供应商见 config/services.json）" onclick="transcribeOne(\''+esc(f.id)+'\',this)"':'')+'>'+(pend?'⟳ 转写':'转写 ✓')+'</span>')+
@@ -1253,7 +1224,7 @@ async function togglePackUsable(mid){
 }
 async function addPackDefect(mid){
   const f=findPack(mid);if(!f)return;
-  const type=prompt('缺陷类型（说错 / 卡等 / 重复 / 气口 / 抖动）','说错');if(!type)return;
+  const type=prompt('台账类型（说错 / 卡等 / 重复 / 气口 / 抖动 / 其他）','说错');if(!type)return;
   const at=parseFloat(prompt('发生时刻（秒）','0'));if(isNaN(at))return;
   const note=prompt('备注','')||'';
   f.defects=(f.defects||[]).concat([{at:at,type:type,note:note}]);
@@ -1370,11 +1341,6 @@ function buildViews(){
     '<span class="render-row"><button class="primary" id="srbtn" onclick="saveAndRender()" style="height:28px;padding:0 14px;font-size:12px">▶ 保存并重渲</button>'+
     '<button class="ghost" onclick="previewStory()" style="height:28px;font-size:11px;padding:0 10px" title="成片已存在时在监视器重放">▷ 重放</button></span>';
 }
-function sld(id,label,min,max,step,val){
-  return '<div class="slider-row"><label>'+label+'</label><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" oninput="$(\''+id+'v\').textContent=this.value"><span class="val" id="'+id+'v">'+val+'</span></div>';
-}
-function gv(id){return $(id).value;}
-
 /* ═══ 双向同步（先落库，后读取）═══ */
 async function refreshPills(){
   try{

@@ -52,6 +52,9 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
   ⑤封面四途径补齐（beat-frame 幕号/秒输入 + AI 生成封面 image_gen.py/image-01 真路由 + output-frame 枚举补登）
   ⑥幕级字幕风格下拉（曾手填）/转场显示中文名/素材台账收敛（人工缺陷并入 disposition 聚合，单一视图）
   ⑦渲染防跳（预览/渲染中 PULSE 暂停热重载）/幕预览降质提速（540×960·1.5M，实测 7.5s/幕）/音色试听计时+线程数按核数
+- **2026-09-15 Noah 三板斧第二批（全落地）**：
+  ①前端瘦身——项目页「草稿对比」「审计」tab 撤除（创作台已完备，独立页名存实亡）；主页「模板工程台」撤除（滑杆参数从未被试渲消费=死功能，单幕试渲入口保留在项目页）；素材库「＋缺陷」改「＋台账」（与 disposition 台账同名同义，消歧）
+  ②素材审核有实义化（曾名存实亡：待审只是标签，Agent 剪辑照用）——审核实质内容=转写+画面识别，transcribe/understand 审计齐即自动过审；draft 档案对未过审素材标【未过审——禁用】+ validate 剔除（LLM 选了也不落轨）；人保留最终否决权（拍摄废片 toggle）；前端待审徽标与门禁同判据（审计齐即视同过审）；T37 锚
 - **已知遗留**：本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）；aidraft2 成片 R6 响度 -27.7 LUFS 偏轻（warn 不拦交付，平台会自行归一，终审核对混音比例）
 - 代码托管：GitHub 私有库（Noah 账号），config/services.json 已永久 gitignore（历史已清除，key 走环境变量或 api_key_file）
 
@@ -126,7 +129,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线改造立项）
-tests/               # e2e.py(44项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域/T30 声纹/T31 dubfit/T34 词汇表/T35 BGM段落/T36 效果注册表) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(45项全量，含 T27 编排器/T28 缺陷台账/T29 QC双域/T30 声纹/T31 dubfit/T34 词汇表/T35 BGM段落/T36 效果注册表/T37 审核门) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -149,7 +152,7 @@ python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动�
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
 python3 autocut3/pipeline.py    myproj beat 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
-python3 tests/e2e.py                                       # 44 项全量回归
+python3 tests/e2e.py                                       # 45 项全量回归
 python3 tests/audit.py                                     # 代码审计器
 ```
 
