@@ -28,7 +28,7 @@ import argparse, json, os, re, shutil, subprocess, sys, time, urllib.request, ur
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = os.path.join(ROOT, "bin", "ffprobe")
 BASE = "http://localhost:8765"
-PROJ = "demo-project"  # E2E 专用夹具包/项目名（tests/fixtures.py 自给自足合成，与用户素材零耦合）
+PROJ = "e2e-fixture"  # E2E 夹具专属名（tests/fixtures.py 合成+跑完即删，与用户素材零命名空间交集）
 PASS, FAIL = [], []
 
 
@@ -98,44 +98,57 @@ def t4_sync():
 def t5_upload():
     # 测试夹具（2026-09-11 rotation 必检升级）：直拷苏炜素材 2s——带真实 rotation=-90 的
     # 手机素材（编码 1920x1080）。合成 testsrc 无 rotation，恰好漏掉了人侧上传的几何盲区。
-    api("/api/pack-create/", method="POST", body={"id": "nature-stock", "name": "E2E 夹具包"})  # 幂等：已存在 409 忽略
+    api("/api/pack-create/", method="POST", body={"id": "e2e-upload", "name": "E2E 上传夹具"})  # 幂等：已存在 409 忽略
+    # 上传源：夹具 ROT01（display_matrix=-90 合成件）——曾引用已删的真实素材 M0085，
+    # ffmpeg 裁剪静默失败后用 /tmp 残留上传=假绿（2026-09-14 根治：源必须出自当次夹具）
+    src_rot = os.path.join(ROOT, "materials", "packs", "e2e-fixture", "ROT01.MP4")
     tmp = "/tmp/e2e_upload.mp4"
-    subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
-                    "-ss", "0", "-t", "2",
-                    "-i", os.path.join(ROOT, "materials/packs/demo-project/20260826_M0085.MP4"),
-                    "-c:v", "copy", "-an", tmp], capture_output=True)
+    rc = subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+                         "-ss", "0", "-t", "1.5",
+                         "-i", src_rot, "-c:v", "copy", "-an", tmp],
+                        capture_output=True, text=True)
+    if rc.returncode != 0 or not os.path.exists(tmp):
+        check("T5 上传素材（入库/元数据/缩略帧/审计队列/rotation 转正）", False,
+              ("夹具源缺失/裁剪失败：%s" % (rc.stderr or "no src"))[-90:])
+        return
     raw = open(tmp, "rb").read()
-    st, d = api("/api/pack-upload/nature-stock?filename=e2e_test_src.mp4", method="POST", raw=raw)
+    st, d = api("/api/pack-upload/e2e-upload?filename=e2e_test_src.mp4", method="POST", raw=raw)
     entry = d.get("entry") or {}
     ok = (st == 200 and entry.get("kind") == "video"
-          and abs((entry.get("duration") or 0) - 2.0) < 0.5
+          and abs((entry.get("duration") or 0) - 1.5) < 0.5  # 裁剪 1.5s（与上方 -t 1.5 一致；曾写 2.0 撞边界=0.5<0.5 False）
           and bool(entry.get("thumb"))
           and ((entry.get("audit") or {}).get("transcript") == "pending"))
     # rotation 必检（2026-09-11）：登记宽高必须是转正后的显示尺寸，病因角度必须落盘
-    geo_ok = (entry.get("width"), entry.get("height")) == (1080, 1920) and entry.get("_rotation") is not None
+    _rot = entry.get("_rotation")
+    geo_ok = (entry.get("width"), entry.get("height")) == (1080, 1920) and \
+        _rot is not None and abs(abs(_rot) - 90) < 0.001  # 夹具注入 +90（tkhd matrix 符号约定），等价旋转均可
     check("T5 上传素材（入库/元数据/缩略帧/审计队列/rotation 转正）", ok and geo_ok,
           "id=%s dur=%s geo=%sx%s rot=%s" % (entry.get("id"), entry.get("duration"),
                                              entry.get("width"), entry.get("height"), entry.get("_rotation")))
     # 重名保护
-    st2, d2 = api("/api/pack-upload/nature-stock?filename=e2e_test_src.mp4", method="POST", raw=raw)
+    st2, d2 = api("/api/pack-upload/e2e-upload?filename=e2e_test_src.mp4", method="POST", raw=raw)
     fn2 = (d2.get("entry") or {}).get("file", "")
     check("T5 重名不覆盖", st2 == 200 and fn2 != "e2e_test_src.mp4")
     # 非法文件名拒绝（小载荷探针：服务器在拒绝路径不读请求体，大 body 会让客户端 BrokenPipe）
-    st3, _ = api("/api/pack-upload/nature-stock?filename=..%2Fx.mp4", method="POST", raw=b"\x00" * 1024)
+    st3, _ = api("/api/pack-upload/e2e-upload?filename=..%2Fx.mp4", method="POST", raw=b"\x00" * 1024)
     check("T5 恶意文件名拒绝", st3 == 400)
     # 清理：把测试素材从包里移除（文件一并删）
-    pk_path = os.path.join(ROOT, "materials", "packs", "nature-stock", "pack.json")
+    pk_path = os.path.join(ROOT, "materials", "packs", "e2e-upload", "pack.json")
     pk = json.load(open(pk_path, encoding="utf-8"))
     pk["files"] = [f for f in pk["files"] if not str(f.get("file", "")).startswith("e2e_test_src")]
     json.dump(pk, open(pk_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    for f in os.listdir(os.path.join(ROOT, "materials", "packs", "nature-stock")):
+    updir = os.path.join(ROOT, "materials", "packs", "e2e-upload")
+    for f in os.listdir(updir):
         if f.startswith("e2e_test_src"):
-            os.remove(os.path.join(ROOT, "materials", "packs", "nature-stock", f))
+            os.remove(os.path.join(updir, f))
+    if not (json.load(open(os.path.join(updir, "pack.json"), encoding="utf-8")).get("files") or []):
+        import shutil as _sh
+        _sh.rmtree(updir, ignore_errors=True)  # 测试包不留壳（曾只删素材文件，目录残留=磁盘脏）
 
 
 # ---------------------------------------------------------------- T6 音效混音
 def t6_sfx():
-    aid = json.load(open(os.path.join(ROOT, "materials/packs/demo-project/pack.json"), encoding="utf-8"))
+    aid = json.load(open(os.path.join(ROOT, "materials/packs/e2e-fixture/pack.json"), encoding="utf-8"))
     m = [f for f in aid["files"] if f["id"] == "M0124"][0]
     sl = {"title": "E2E音效验证", "outline": "静音/语音底 + ding@1s", "origin": "test",
           "meta": {"format": "vertical"},
@@ -471,7 +484,7 @@ def t18_sar_purity():
     # 苏炜实锤：编码 1920x1080 + rotation=-90 的素材，登记/渲染若不转正，成片会被写上
     # SAR 81:256 / DAR 9:16 的补偿标记 → 播放器横向压扁画面（字幕贴纸画中画全变形）。
     # 回归：入库登记必须写显示尺寸；成片 SAR 必须干净 1:1。
-    pk = json.load(open(os.path.join(ROOT, "materials", "packs", "demo-project", "pack.json"), encoding="utf-8"))
+    pk = json.load(open(os.path.join(ROOT, "materials", "packs", "e2e-fixture", "pack.json"), encoding="utf-8"))
     bad = [f["id"] for f in pk["files"]
            if f.get("_rotated") and f["width"] > f["height"]]          # 竖版内容被登记成横版 = 旧病
     norot = [f["id"] for f in pk["files"]
@@ -550,7 +563,7 @@ def t21_trim_pad_clamp():
         import draft as draftmod
         # 防"假绿"回归（Claude 审查 P1#1）：必须用生产链的 mats 构造（build_dossier）——
         # 曾因测试直塞全量 f 而生产链塞精简 dict，validate 生产从未生效
-        mats = draftmod.build_dossier(["demo-project"])[1]
+        mats = draftmod.build_dossier(["e2e-fixture"])[1]
         V = lambda sid, si, dur: draftmod.validate(
             {"beats": [{"tracks": [{"source_id": sid, "src_in": si, "duration": dur, "role": "A"}]}]},
             mats, ["crossDissolve"])[0]["tracks"][0]
@@ -606,7 +619,7 @@ def t23_dossier_selfaudit():
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import dossier
-        pk = json.load(open(os.path.join(ROOT, "materials/packs/demo-project/pack.json"), encoding="utf-8"))
+        pk = json.load(open(os.path.join(ROOT, "materials/packs/e2e-fixture/pack.json"), encoding="utf-8"))
         files = {f["id"]: f for f in pk["files"]}
         TERMS = ["檀溪公馆", "窗帘盒", "龙骨", "石膏板", "可耐福"]
         # 注入1：檀溪公馆 → 潭溪工馆（连续四词 中 三字同位）
@@ -839,6 +852,7 @@ def main():
     t26_voiceover_orchestration()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
+    fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
     if FAIL:
         print("失败项：" + ", ".join(FAIL))
         sys.exit(1)

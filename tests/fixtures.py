@@ -9,7 +9,8 @@ import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = os.path.join(ROOT, "bin", "ffmpeg")
 BASE = "http://127.0.0.1:8765"
-PID = "demo-project"  # E2E 的 PROJ（40 处引用的包名）
+PID = "e2e-fixture"  # E2E 夹具专属命名空间（绝不与用户数据同名——清场后磁盘一眼可辨；
+# 素材 id 仍用 M0124 等断言锚，但包/项目隔离，用户新素材 M 编号撞车无影响）
 
 # id → (时长s, 尺寸, 词尾锚点或None, 台词)  —— 锚点对齐 T21 钳制断言（7.2/3.95/10.2）
 FIXTURES = [
@@ -46,12 +47,30 @@ def _synth_rotated(tmpdir):
     r = subprocess.run(
         [FF, "-y", "-loglevel", "error",
          "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=2",
-         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-         "-bsf:v", "h264_metadata=display_orientation=insert:rotate=-90", out],
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", out],
         capture_output=True, text=True)
     if r.returncode != 0:
         return None
+    _inject_tkhd_rotation(out)  # SEI 路径 ffprobe 读不出角度；tkhd display matrix 是 ffprobe 认的（真实手机素材同款）
     return out
+
+
+def _inject_tkhd_rotation(path, angle=90):
+    """MP4 tkhd 直写 rotation display matrix（真实手机素材的存储方式）。
+    锚点定位：视频 tkhd 末尾 8 字节 = 编码宽高的 16.16 定点数（全文件唯一，音频轨无此对）。
+    覆写矩阵 [0,-1,0, 1,0,0, 0,0,1] → ffprobe 读出 rotation=90（等效 ±90 旋转，语义对齐）。"""
+    import struct
+    data = bytearray(open(path, 'rb').read())
+    anchor = struct.pack(">II", 1920 << 16, 1080 << 16)  # 1920x1080 编码件
+    pos = data.find(anchor)
+    if pos < 0:
+        print("  [fixtures] ⚠ tkhd 锚点未找到（宽高非1920x1080？），rotation 未注入")
+        return False
+    mstart = pos - 36
+    mat = struct.pack(">9i", 0, -65536, 0, 65536, 0, 0, 0, 0, 0x40000000)
+    data[mstart:mstart + 36] = mat
+    open(path, 'wb').write(bytes(data))
+    return True
 
 
 def _words_to(t_end, text):
@@ -87,7 +106,7 @@ def ensure():
                 return  # 已就位
         except Exception:
             pass
-    print("  [fixtures] 合成 E2E 夹具包（一次性，~30s）…")
+    print("  [fixtures] 合成 E2E 夹具包（e2e-fixture，~30s；跑完自动删除）…")
     import tempfile
     tmpdir = tempfile.mkdtemp(prefix="e2efix_")
     try:
@@ -135,6 +154,26 @@ def ensure():
     finally:
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def remove():
+    """夹具清理：跑完即删（磁盘不残留任何测试数据——Noah 迎接新素材，持久化夹具=污染源）。
+    双保险：只删带 fixture 标记的包/项目；E2E_KEEP_FIXTURES=1 时保留（调试用）。"""
+    if os.environ.get("E2E_KEEP_FIXTURES") == "1":
+        print("  [fixtures] E2E_KEEP_FIXTURES=1，保留夹具（调试模式）")
+        return
+    import shutil
+    pp = os.path.join(ROOT, "materials", "packs", PID, "pack.json")
+    if os.path.exists(pp):
+        mark = json.load(open(pp, encoding="utf-8")).get("fixture")
+        if not mark:
+            print("  [fixtures] ⚠ %s 无 fixture 标记，拒绝删除（安全阀）" % PID)
+            return
+    for d in (os.path.join(ROOT, "materials", "packs", PID),
+              os.path.join(ROOT, "projects", PID)):
+        if os.path.exists(d):
+            shutil.rmtree(d, ignore_errors=True)
+    print("  [fixtures] 夹具已清理（磁盘干净）")
 
 
 if __name__ == "__main__":
