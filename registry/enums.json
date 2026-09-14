@@ -70,9 +70,9 @@
    "desc": "直接用该幕素材的原声（当前 ASR 词级时间戳驱动字幕）"
   },
   {
-   "id": "tts",
+   "id": "dub",
    "name": "AI 旁白",
-   "desc": "MiniMax TTS 朗读本幕文案（生成器待接，接口已留）"
+   "desc": "TTS 配音朗读本幕台词（draft --dub 产物，音频+词轨已 dubfit 闭环）"
   },
   {
    "id": "none",

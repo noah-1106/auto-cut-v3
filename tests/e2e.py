@@ -1191,6 +1191,17 @@ def t33_vadwords_transcript_text():
               False, "异常: %s" % str(e)[:140])
 
 
+def t34_narration_vocab_guard():
+    # 回归锚（2026-09-15 Noah 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
+    # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
+    # ① storyline mode=dub 时前端 select 无匹配项→回退显示"视频原声"（Noah 看到原声却渲出 TTS）；
+    # ② 用户手选"AI 旁白"存成 tts→pipeline 不认→静默渲原声。此处钉死两端同一词汇表。
+    en = json.load(open(os.path.join(ROOT, "registry", "enums.json"), encoding="utf-8"))
+    ids = sorted(m["id"] for m in en.get("narration_modes") or [])
+    check("T34 旁白词汇表两端一致（enums ≡ pipeline 消费集 original/dub/none）",
+          ids == ["dub", "none", "original"], "enums=%s" % ids)
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1313,6 +1324,7 @@ def main():
     t31_dubfit()
     t32_draft_truncation_retry()
     t33_vadwords_transcript_text()
+    t34_narration_vocab_guard()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

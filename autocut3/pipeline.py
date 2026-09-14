@@ -359,7 +359,10 @@ def build_plan(project_dir, sid=None):
             df = (b.get("narration") or {}).get("audio")
             if df and not os.path.isabs(df):
                 df = os.path.join(project_dir, df)
-            if df and os.path.exists(df):
+            if df and not os.path.exists(df):
+                print("警告: 幕%s mode=dub 但配音音频不存在（%s）——回退原声" % (b.get("no", 0), df))
+                df = None
+            if df:
                 # 字幕需要文案+实测时长（词轨均分用）；渲染链只要路径
                 dub_f = {"path": df, "text": (b.get("story") or "").strip(),
                          "dur": round(_media_duration(df), 1),
