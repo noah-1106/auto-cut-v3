@@ -17,6 +17,19 @@ import asr  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _audits_done(f, aud):
+    """审核有实义化（2026-09-15 Noah #3）：审计（转写+画面识别）即审核的实质内容——
+    该 kind 所需的审计全部 done/n/a 即视为已过审。返回 True=已可自动过审。"""
+    need = {"video": ("transcript", "visual"), "audio": ("transcript",), "image": ("visual",)}.get(
+        f.get("kind", "video"), ())
+    return all(aud.get(k) in ("done", "n/a") for k in need)
+
+
+def _auto_review(f):
+    if f.get("review") == "pending-review" and _audits_done(f, f.get("audit") or {}):
+        f["review"] = "reviewed"  # 审计齐=自动过审（人保留最终否决权：toggle 可再降为废片）
+
+
 def project_packs(pid):
     """项目引用的素材包列表：project.json material_packs → library.json packs 兜底。"""
     pdir = os.path.join(ROOT, "projects", pid)
@@ -89,6 +102,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
         if _dup >= 12:
             f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（Noah 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
         aud["transcript"] = "done"
+        _auto_review(f)
         changed = True
         out[f["id"]] = {"ok": True, "tier": r["tier"], "words": len(r["words"]),
                         "text": (r["text"] or "")[:40], "has_speech": has_speech}

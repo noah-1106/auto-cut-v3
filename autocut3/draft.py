@@ -5,7 +5,7 @@
   人    : Studio 创作台「✨ AI 起草」按钮（写一句意图 → 点一下）
 
 纪律（AI 只起草不落定）：
-  · 只从 usable=true 的素材里选段；【拍摄废片】在档案中标注为禁用
+  · 只从 usable=true 且已过审的素材里选段；【拍摄废片】【未过审】在档案中标注为禁用
   · 台词优先取人工校对后的文本（proofread 落盘即覆盖 ASR 原文，天然生效）
   · 草稿写成新故事线（aidraft / aidraft2 / …），绝不覆盖既有故事线
   · 人接受后在创作台继续改；渲染由人触发
@@ -96,6 +96,9 @@ def build_dossier(packs):
             if not usable:
                 rows.append("- %s（%s）【拍摄废片——禁用】" % (f["id"], kind_cn(kind)))
                 continue
+            if not _reviewed(f):
+                rows.append("- %s（%s）【未过审——禁用：转写/画面识别未完成（Agent 跑 transcribe+understand 后自动过审）】" % (f["id"], kind_cn(kind)))
+                continue
             line = "- %s（%s %ss）" % (f["id"], kind_cn(kind), f.get("duration", "?"))
             tr = f.get("transcript") or {}
             if tr.get("text"):
@@ -122,6 +125,18 @@ def build_dossier(packs):
                 line += "（无理解档案）"
             rows.append(line)
     return "\n".join(rows), mats
+
+
+def _reviewed(f):
+    """审核有实义化（2026-09-15 Noah #3）：review=pending-review 且该 kind 所需审计未齐 = 未过审。
+    transcribe/understand 跑完会自动置 reviewed——pending-review 存续即"Agent 还没审过"，
+    draft 提示词标注禁用 + validate 剔除。人保留最终否决权（toggle 拍摄废片）。"""
+    if f.get("review") != "pending-review":
+        return True
+    aud = f.get("audit") or {}
+    need = {"video": ("transcript", "visual"), "audio": ("transcript",), "image": ("visual",)}.get(
+        f.get("kind", "video"), ())
+    return all(aud.get(k) in ("done", "n/a") for k in need)
 
 
 def _reg(name):
@@ -246,7 +261,7 @@ def validate(draft, mats, transitions):
         tracks = []
         for t in (b.get("tracks") or []):
             m = mats.get(t.get("source_id"))
-            if not m or not m.get("usable", True):  # R2-4：mats=f 后外部手造 pack 可能缺 usable 键
+            if not m or not m.get("usable", True) or not _reviewed(m):  # R2-4：mats=f 后外部手造 pack 可能缺 usable 键；未过审素材同废片剔除
                 continue
             src_in = max(0.0, float(t.get("src_in") or 0))
             dur = float(t.get("duration") or 0)

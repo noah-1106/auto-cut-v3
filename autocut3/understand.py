@@ -34,6 +34,18 @@ def project_packs(pid):
     return packs
 
 
+def _audits_done(f, aud):
+    """与 transcribe.py 同规则：该 kind 所需审计全部 done/n/a = 已过审。"""
+    need = {"video": ("transcript", "visual"), "audio": ("transcript",), "image": ("visual",)}.get(
+        f.get("kind", "video"), ())
+    return all(aud.get(k) in ("done", "n/a") for k in need)
+
+
+def _auto_review(f):
+    if f.get("review") == "pending-review" and _audits_done(f, f.get("audit") or {}):
+        f["review"] = "reviewed"  # 审计齐=自动过审（Noah 2026-09-15：审核的实质内容 Agent 自己能做）
+
+
 def understand_pack(pack_id, material=None, provider=None, force=False):
     pdir = os.path.join(ROOT, "materials", "packs", pack_id)
     pp = os.path.join(pdir, "pack.json")
@@ -52,6 +64,7 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
         kind = f.get("kind", "video")
         if kind not in ("image", "video"):
             aud["visual"] = "n/a"  # 音频无视觉轨——如实标注，不留永久 pending
+            _auto_review(f)
             changed = True  # P1#2：audit 变更也要落盘（原只在理解成功分支置位，n/a 改动被吞）
             out[f["id"]] = {"ok": False, "err": "音频无视觉轨（理解走 ASR）"}
             continue
@@ -68,6 +81,7 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
             continue
         f["visual"] = r
         aud["visual"] = "done"
+        _auto_review(f)
         changed = True
         out[f["id"]] = {"ok": True, "desc": (r.get("desc") or "")[:44], "ocr_n": len(r.get("ocr") or []),
                        "content_type": r.get("content_type") or "", "schema": r.get("schema", 1)}

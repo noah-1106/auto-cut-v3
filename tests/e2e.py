@@ -1276,6 +1276,66 @@ def t36_draft_effect_registry():
                                                    len(b["effects"]["stickers"]), len(b["effects"]["sfx"])))
 
 
+def t37_review_gate():
+    # 回归锚（2026-09-15 Noah #3）：素材审核有实义化——"待审"曾是纯标签，validate 只看 usable，
+    # 待审素材照进成片（名存实亡）。现三层：①审计齐自动过审 ②档案标【未过审——禁用】 ③validate 剔除。
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import draft, transcribe, understand
+    v_done = {"kind": "video", "review": "pending-review",
+              "audit": {"transcript": "done", "visual": "done"}}
+    v_half = {"kind": "video", "review": "pending-review", "audit": {"transcript": "done"}}
+    a_done = {"kind": "audio", "review": "pending-review",
+              "audit": {"transcript": "done", "visual": "n/a"}}
+    for f in (v_done, a_done):
+        transcribe._auto_review(f)
+    understand._auto_review(v_half)
+    ok_auto = (v_done["review"] == "reviewed" and a_done["review"] == "reviewed"
+               and v_half["review"] == "pending-review")  # 半审（只转写）不过审
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="t37_")
+    old_root = draft.ROOT
+    ok_rows = ok_val = False
+    try:
+        draft.ROOT = tmp
+        os.makedirs(os.path.join(tmp, "materials", "packs", "t37p"))
+        _w = {"words": [{"text": "x", "start": 0.0, "end": 0.5}]}
+        files = [
+            {"id": "M_UNREV", "kind": "video", "duration": 8.0, "usable": True,
+             "review": "pending-review", "audit": {}, "transcript": dict(_w)},
+            {"id": "M_LEGOK", "kind": "video", "duration": 8.0, "usable": True,
+             "review": "pending-review", "audit": {"transcript": "done", "visual": "done"},
+             "transcript": dict(_w)},
+            {"id": "M_OK", "kind": "video", "duration": 8.0, "usable": True,
+             "review": "reviewed", "audit": {"transcript": "done", "visual": "done"},
+             "transcript": dict(_w)},
+        ]
+        json.dump({"files": files},
+                  open(os.path.join(tmp, "materials", "packs", "t37p", "pack.json"), "w"),
+                  ensure_ascii=False)
+        dossier, mats = draft.build_dossier(["t37p"])
+
+        def row_of(mid):
+            return next((l for l in dossier.split("\n") if l.startswith("- %s（" % mid)), "")
+        ok_rows = ("【未过审——禁用" in row_of("M_UNREV")
+                   and "【未过审" not in row_of("M_LEGOK")  # 审计齐的旧数据=视同过审（不回写也放行）
+                   and "【未过审" not in row_of("M_OK"))
+        beats = draft.validate({"beats": [
+            {"story": "s", "transition_out": None,
+             "tracks": [{"role": "A", "source_id": "M_OK", "src_in": 0, "duration": 3},
+                        {"role": "B", "source_id": "M_UNREV", "src_in": 0, "duration": 2}]},
+            {"story": "s", "transition_out": None,
+             "tracks": [{"role": "A", "source_id": "M_UNREV", "src_in": 0, "duration": 3}]}]},
+            mats, ["cut"])
+        ok_val = (len(beats) == 1 and len(beats[0]["tracks"]) == 1
+                  and beats[0]["tracks"][0]["source_id"] == "M_OK")  # 未过审轨被剔+纯未过审幕整幕丢弃
+    finally:
+        draft.ROOT = old_root
+        shutil.rmtree(tmp, ignore_errors=True)
+    check("T37 审核有实义化（审计齐自动过审/档案标禁用/validate 剔除未过审）",
+          ok_auto and ok_rows and ok_val,
+          "auto=%s rows=%s val=%s" % (ok_auto, ok_rows, ok_val))
+
+
 def t25_rmw_smoke():
     # R3 终局轮产物：RMW 并发竞争冒烟——慢写者持锁期间并发 usable/upload，
     # 两方变更都必须存活（R3-1/R3-2 的回归锚：读点再溜出临界区，此测试当场红）
@@ -1401,6 +1461,7 @@ def main():
     t34_narration_vocab_guard()
     t35_bgm_segment_render()
     t36_draft_effect_registry()
+    t37_review_gate()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
