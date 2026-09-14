@@ -31,16 +31,22 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         tl0 = float(s["tl_in"])
         tl1 = float(segs[i + 1]["tl_in"]) if i + 1 < len(segs) else float(total) + 0.3
         seg_words = []
-        dubp = s.get("dub")  # {path,text,dur,words_from:{source_id,src_in}}
+        dubp = s.get("dub")  # {path,text,dur,words|words_from}
         if dubp:
             dur = float(dubp.get("dur") or 0)
             if dur <= 0:
                 dur = float(s["dur"])
             seg_words = []
-            # 真实词轨优先（2026-09-14 维护者项目）：配音音频从素材词级锚点裁出，词轨同源平移——
-            # 字字有真实时间戳，断句分页/逐字卡拉OK全对齐。均分只作无词轨来源时的回退。
+            # 词轨三级优先（2026-09-15 15s 错位根因复盘）：
+            # ① narration.words 显式词轨=配音音频本体 ASR——与音频同源零偏移（首选）
+            # ② words_from 素材词轨平移——已实锤素材 ASR 绝对时间偏移 0.15~3s 不等，只作旧线兼容
+            # ③ 均分——最后兜底
+            rw = dubp.get("words") or []
+            if rw:
+                for w in rw:
+                    seg_words.append({"t": w["t"], "s": round(tl0 + float(w["s"]), 1), "e": round(tl0 + float(w["e"]), 1)})
             wf = dubp.get("words_from") or {}
-            src_words = (packpool.get(wf.get("source_id")) or {}).get("words", []) if wf.get("source_id") else []
+            src_words = (packpool.get(wf.get("source_id")) or {}).get("words", []) if (wf.get("source_id") and not seg_words) else []
             t0 = float(wf.get("src_in") or 0)
             if src_words:
                 for w in src_words:
@@ -289,7 +295,16 @@ def build_plan(project_dir, sid=None):
                                    capture_output=True, text=True)
                 dub_f = {"path": df, "text": (b.get("story") or "").strip(),
                          "dur": round(float(r.stdout.strip() or 0), 1),
+                         "words": (b.get("narration") or {}).get("words"),
                          "words_from": (b.get("narration") or {}).get("words_from")}
+                # 词轨↔文本一致性（2026-09-15 15s 错位防线）：显式词轨拼接必须与 story 实义字符全等
+                _rw = dub_f.get("words") or []
+                if _rw:
+                    _wt = "".join(w.get("t", "") for w in _rw)
+                    _strip = lambda x: "".join(ch for ch in x if ch not in "，。！？、,.!?;；:： \"'")
+                    if _strip(_wt) != _strip(dub_f["text"]):
+                        raise SystemExit("故事线幕%d 词轨与文本不一致（词轨=%s… story=%s…）——字幕错位风险，先修词轨再渲染"
+                                         % (b.get("no", 0), _wt[:20], dub_f["text"][:20]))
             else:
                 print(f"警告: 幕{i+1} 配音文件缺失（{df}），本幕回退原声", flush=True)
         seg = {"id": b.get("id", f"b{i+1}"), "no": b.get("no", i + 1),
