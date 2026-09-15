@@ -157,7 +157,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
-tests/               # e2e.py(46项全量) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(50项全量) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -174,7 +174,7 @@ python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动�
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
 python3 autocut3/pipeline.py    myproj beat 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
-python3 tests/e2e.py                                       # 46 项全量回归
+python3 tests/e2e.py                                       # 50 项全量回归
 python3 tests/audit.py                                     # 代码审计器
 ```
 
@@ -198,8 +198,8 @@ python3 tests/audit.py                                     # 代码审计器
 ## 测试与质量
 
 ```bash
-python3 tests/e2e.py      # 46 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
-                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（44 项离线，日常回归用这个）
+python3 tests/e2e.py      # 50 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（48 项离线，日常回归用这个）
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
@@ -233,4 +233,4 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 贡献
 
-欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（44 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。
+欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（48 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。

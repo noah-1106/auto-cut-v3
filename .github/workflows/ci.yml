@@ -1,6 +1,6 @@
 name: ci
 # Windows/mac 双端等价性实证：每 push 到 main 在
-# windows-latest + ubuntu-latest 跑全量 e2e（46 项，含真实云端 LLM/ASR/TTS 冒烟）。
+# windows-latest + ubuntu-latest 跑全量 e2e（50 项，含真实云端 LLM/ASR/TTS 冒烟）。
 # MiniMax key 走 repository secret（MINIMAX_KEY），永不入库。
 on:
   push:

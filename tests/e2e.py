@@ -20,6 +20,10 @@
   T23 dossier 自审性验收（注入 ASR 错必须被抓，同日）
   T24 proofread v2 分级+队列（词表auto/非词表转人工/超长/非等长拒绝/dry零落盘）
   T22 视觉v2契约归一化（兼容三键/时间钳制/非法值丢弃/flags，2026-09-12 视觉重做）
+  T39 dossier LLM digest 契约（digest 落盘 pack.json / 空包抛错不白调 LLM）
+  T40 幕样张渲染（render_beat 逐幕独立验证：preview 产物存在且时长 >0）
+  T41 注册表读写闭环（save 回读 / enums 拒写 / delete 幂等 / upload 入库+落盘）
+  T42 编排器故事线门（audit+review+digest 齐后 --advance 仍停在故事线门）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1241,6 +1245,197 @@ def t38_cover_sink():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t39_digest():
+    # 锚：/api/digest 同款 build_digest——包级盘点（汇总单素材识别 → LLM 一次调用出导演视角
+    # digest 落 pack.json，draft 档案头消费）。①空包护栏：无素材不调 LLM 直接 RuntimeError
+    #（曾把模型的"错误说明"当 digest 落库）②正常包：digest 结构落盘可回读。
+    import tempfile
+    calls = {"n": 0}
+
+    class _R:
+        def __init__(self, d):
+            self._d = d
+
+        def read(self):
+            return json.dumps(self._d).encode()
+
+    def fake_urlopen(req, timeout=None):
+        calls["n"] += 1
+        return _R({"choices": [{"message": {"content": json.dumps({
+            "theme": "t39 主题",
+            "inventory": {"a_roll_candidates": ["M1"], "broll_pool": [],
+                          "voiceover_sources": [], "ambient": [], "gaps": []},
+            "roles": [], "narrative_assets": []})}, "finish_reason": "stop"}]})
+
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import understand as U
+        import draft
+        tmp = tempfile.mkdtemp(prefix="t39_")
+        old_root = U.ROOT
+        U.ROOT = tmp
+        pd_ = os.path.join(tmp, "materials", "packs", "t39p")
+        os.makedirs(pd_)
+        pk = {"files": [
+            {"id": "M1", "usable": True, "duration": 8,
+             "transcript": {"text": "台词一", "scripted_dup": 0},
+             "visual": {"desc": "画面一", "content_type": "speech", "usage": "口播A轨"}},
+            {"id": "M2", "usable": False, "duration": 6,
+             "transcript": {"text": "x"}, "visual": {}}]}
+        json.dump(pk, open(os.path.join(pd_, "pack.json"), "w", encoding="utf-8"), ensure_ascii=False)
+        old_uo = draft.urllib.request.urlopen
+        draft.urllib.request.urlopen = fake_urlopen
+        try:
+            d = U.build_digest("t39p")
+            saved = json.load(open(os.path.join(pd_, "pack.json"), encoding="utf-8")).get("digest") or {}
+            n_before = calls["n"]
+            json.dump({"files": []}, open(os.path.join(pd_, "pack.json"), "w", encoding="utf-8"))
+            try:
+                U.build_digest("t39p")
+                guard = False
+            except RuntimeError:
+                guard = True
+        finally:
+            draft.urllib.request.urlopen = old_uo
+            U.ROOT = old_root
+        ok = (d.get("theme") == "t39 主题"
+              and saved.get("theme") == "t39 主题"
+              and (saved.get("inventory") or {}).get("a_roll_candidates") == ["M1"]
+              and guard and calls["n"] == n_before)
+        check("T39 包级盘点 digest（结构落盘/空包不调 LLM 护栏）", ok,
+              "theme=%s calls=%s guard=%s" % (saved.get("theme"), calls["n"], guard))
+    except Exception as e:
+        check("T39 包级盘点 digest", False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t40_beat_preview():
+    # 锚：/api/beat 幕级预览——绝低压力快速剪辑核心（秒级 540p 单幕样张，
+    # build_beat_cmd 与全片渲染两条代码路径，全片过≠单幕过）。手造故事线 → 幕渲染 → 产物有效视频。
+    try:
+        import fixtures
+        def beat(no, mid, line, dur):
+            return {"no": no, "id": "b%d" % no, "story": line,
+                    "narration": {"mode": "original",
+                                  "words": [{"t": c, "s": round(i * 0.2, 2), "e": round((i + 1) * 0.2, 2)}
+                                            for i, c in enumerate(line)]},
+                    "tracks": [{"role": "A", "source_id": mid, "cut_index": 0, "src_in": 0,
+                                "duration": dur, "scale": 0.3, "op": "overlay-pip",
+                                "requirement": None}],
+                    "music": {"inherit": True, "bgm": None, "segment": None, "loop": None},
+                    "effects": {}, "subtitle": {}, "transition_out": None}
+        sl = {"title": "T40", "outline": "t40",
+              "meta": {"audio": {}, "style": {}, "cover": {"strategy": "output-frame"}},
+              "beats": [beat(1, "M0124", "第一幕测试台词。", 3), beat(2, "M0089", "第二幕测试台词。", 3)]}
+        pdir = os.path.join(ROOT, "projects", fixtures.PID)
+        sp = os.path.join(pdir, "storylines", "t40beat.json")
+        os.makedirs(os.path.dirname(sp), exist_ok=True)
+        json.dump(sl, open(sp, "w", encoding="utf-8"), ensure_ascii=False)
+        code, r = api("/api/beat/%s/1?story=t40beat" % fixtures.PID, method="POST")
+        pv = os.path.join(pdir, "previews", "beat_t40beat_1.mp4")
+        okv = False
+        if os.path.exists(pv):
+            pr = subprocess.run([FF, "-v", "error", "-show_entries", "format=duration",
+                                 "-of", "csv=p=0", pv], capture_output=True, text=True)
+            try:
+                okv = float((pr.stdout or "0").strip() or 0) > 0
+            except ValueError:
+                okv = False
+        check("T40 幕预览渲染（/api/beat 产物存在且为有效视频）",
+              code == 200 and r.get("ok") and okv,
+              "code=%s ok=%s valid=%s log=%s" % (code, r.get("ok"), okv, str(r.get("log"))[:60]))
+    except Exception as e:
+        check("T40 幕预览渲染", False, "异常: %s" % str(e)[:140])
+
+
+def t41_registry():
+    # 锚：注册表管理写接口闭环（改注册表=改下一次渲染，曾零覆盖）。
+    # save 整体保存→读回→白名单拒 enums（400）→delete→404→upload 音频入 assets+条目→清理。
+    import tempfile
+    sfxp = os.path.join(ROOT, "registry", "sfx.json")
+    old = open(sfxp, encoding="utf-8").read()
+    try:
+        reg = json.loads(old)
+        reg["_t41"] = {"file": "assets/sfx/_t41.mp3", "desc": "t41"}
+        code1, _ = api("/api/registry-save/sfx", method="POST", body=reg)
+        saved = "_t41" in json.load(open(sfxp, encoding="utf-8"))
+        code2, _ = api("/api/registry-save/enums", method="POST", body={})
+        code3, r3 = api("/api/registry-delete/sfx/_t41", method="POST")
+        code4, _ = api("/api/registry-delete/sfx/_t41", method="POST")  # 再删=404
+        gone = "_t41" not in json.load(open(sfxp, encoding="utf-8"))
+        wav = os.path.join(tempfile.mkdtemp(prefix="t41_"), "a.wav")
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                        "-i", "sine=frequency=440:duration=1", wav], check=True)
+        req = urllib.request.Request(BASE + "/api/registry-upload/sfx/_t41up?filename=a.wav",
+                                     method="POST", data=open(wav, "rb").read(),
+                                     headers={"Content-Type": "audio/x-wav"})
+        with urllib.request.urlopen(req, timeout=60) as rr:
+            up = json.loads(rr.read() or b"{}")
+        up_in = "_t41up" in json.load(open(sfxp, encoding="utf-8"))
+        asset = os.path.join(ROOT, "assets", "sfx", "_t41up.wav")
+        up_file = os.path.exists(asset)
+        api("/api/registry-delete/sfx/_t41up", method="POST")
+        if os.path.exists(asset):
+            os.remove(asset)
+        check("T41 注册表管理写闭环（save/白名单拒/delete 404/upload+清理）",
+              code1 == 200 and saved and code2 == 400 and code3 == 200 and code4 == 404
+              and gone and up.get("ok") and up_in and up_file,
+              "save=%s/%s enums=%s del=%s/redel=%s gone=%s upload=%s/%s/%s" % (
+                  code1, saved, code2, code3, code4, gone, up.get("ok"), up_in, up_file))
+    except Exception as e:
+        check("T41 注册表管理写闭环", False, "异常: %s" % str(e)[:140])
+    finally:
+        open(sfxp, "w", encoding="utf-8").write(old)  # 防御：无论成败还原注册表快照
+
+
+def t42_advance_gate():
+    # 锚：orchestrate --advance 故事线门语义——素材段全绿时不带 --intent 必须停在故事线门
+    # （打印门提示而非误跑 LLM 起草/后续渲染环节），状态零污染。门语义=人机契约的自动化边界。
+    try:
+        import fixtures
+        pj = os.path.join(ROOT, "materials", "packs", fixtures.PID, "pack.json")
+        pk = json.load(open(pj, encoding="utf-8"))
+        for f in pk.get("files", []):
+            f.setdefault("audit", {})
+            if f.get("kind") != "image":
+                f["audit"]["transcript"] = "done"
+            if f.get("kind") in ("video", "image"):
+                f["audit"]["visual"] = "done"
+            if (f.get("transcript") or {}).get("words"):
+                f["audit"]["proofread"] = "done"
+            f["review"] = "reviewed"
+        pk["digest"] = {"theme": "t42", "inventory": {}, "roles": [], "narrative_assets": []}
+        json.dump(pk, open(pj, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        pdir = os.path.join(ROOT, "projects", fixtures.PID)
+        # 夹具自带 seed 故事线会让 storyline 判 done、advance 真去渲染——移到一边使
+        # storyline 成为首个 pending 步（门语义才有触发条件），测后恢复
+        sdir = os.path.join(pdir, "storylines")
+        bak = sdir + "_t42bak"
+        os.replace(sdir, bak)
+        json.dump({"version": 1}, open(os.path.join(pdir, "dossier.json"), "w", encoding="utf-8"))
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import io
+        import contextlib
+        import orchestrate
+        import disposition
+        disposition.build(fixtures.PID)  # 离线缺陷台账（T28 同款路径）
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            st = orchestrate.advance(fixtures.PID)
+        nxt = (st or {}).get("next")
+        gate = "停在故事线门" in buf.getvalue()
+        untouched = not os.path.exists(os.path.join(pdir, "out-main.mp4"))
+        check("T42 --advance 故事线门（素材段全绿无 intent 必停门、零污染）",
+              nxt == "storyline" and gate and untouched,
+              "next=%s gate=%s untouched=%s" % (nxt, gate, untouched))
+        os.replace(bak, sdir)  # 恢复 seed 故事线（后续测试依赖）
+    except Exception as e:
+        check("T42 --advance 故事线门", False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1513,6 +1708,10 @@ def main():
     t36_draft_effect_registry()
     t37_review_gate()
     t38_cover_sink()
+    t39_digest()
+    t40_beat_preview()
+    t41_registry()
+    t42_advance_gate()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
