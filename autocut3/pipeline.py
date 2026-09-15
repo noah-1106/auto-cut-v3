@@ -837,8 +837,9 @@ def render_beat(plan, project_dir, beat_no, sid=None):
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码失败回退软编（跨平台降级铁律，不限定 videotoolbox——win 的 nvenc/qsv 同理）
+        # 改 -b:v 的"值位"而非按码率字面量找（幕预览是 1.5M，按 4M 找=ValueError，2026-09-15 Windows CI 实锤）
         cmd[cmd.index("-c:v") + 1] = "libx264"
-        cmd[cmd.index("-b:v")] = "-crf"; cmd[cmd.index("4M")] = "20"
+        bi = cmd.index("-b:v"); cmd[bi] = "-crf"; cmd[bi + 1] = "20"
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     if r.returncode != 0:
         print("BEAT FAIL:", r.stderr[-600:]); sys.exit(1)

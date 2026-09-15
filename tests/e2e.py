@@ -794,6 +794,11 @@ def t27_orchestrator():
                       open(os.path.join(pd, "storylines", "s.json"), "w", encoding="utf-8"), ensure_ascii=False)
             json.dump({"verdict": "pass"}, open(os.path.join(pd, "qc-report.json"), "w"))
             open(os.path.join(pd, "out-s.mp4"), "wb").write(b"x")  # mtime 最新=out 新于故事线
+            # 显式钉 mtime 而非依赖"先写后写"：同 tick 内两者 mtime 可相等（Windows CI
+            # 2026-09-15 实锤 T27 偶发 done=False——render  freshness 判据是严格大于）
+            t0 = time.time()
+            os.utime(os.path.join(pd, "storylines", "s.json"), (t0, t0))
+            os.utime(os.path.join(pd, "out-s.mp4"), (t0 + 2, t0 + 2))
             st = ORCH.status(pd)
             ok_struct = (st["project"] == "full" and len(st["steps"]) == 14
                          and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
