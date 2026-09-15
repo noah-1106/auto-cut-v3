@@ -33,7 +33,7 @@ def _media_duration(path):
               os.path.join(ROOT, "bin", "ffprobe.exe")):
         if c and os.path.exists(c):
             r = subprocess.run([c, "-v", "error", "-show_entries", "format=duration",
-                                "-of", "csv=p=0", path], capture_output=True, text=True)
+                                "-of", "csv=p=0", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
             try:
                 return float(r.stdout.strip())
             except ValueError:
@@ -43,7 +43,7 @@ def _media_duration(path):
     if not fp:
         return 0.0
     r = subprocess.run([fp, "-v", "error", "-show_entries", "format=duration",
-                        "-of", "csv=p=0", path], capture_output=True, text=True)
+                        "-of", "csv=p=0", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
     try:
         return float(r.stdout.strip())
     except ValueError:
@@ -55,7 +55,7 @@ def _encoder_usable(enc):
     if enc not in _ENC_CACHE:
         try:
             r = subprocess.run([FF, "-hide_banner", "-h", f"encoder={enc}"],
-                               capture_output=True, text=True, timeout=15)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
             _ENC_CACHE[enc] = r.returncode == 0
         except Exception:
             _ENC_CACHE[enc] = False
@@ -677,7 +677,7 @@ def build_cmd(plan, ass_path, out_path):
             fc.append(f"aevalsrc=0:d={_glen:.2f}:s=32000[bg{_gi}]")
             _bgm_chain.append(f"[bg{_gi}]")
             continue
-        _r = subprocess.run([FF, "-hide_banner", "-i", _fp], capture_output=True, text=True)
+        _r = subprocess.run([FF, "-hide_banner", "-i", _fp], capture_output=True, text=True, encoding="utf-8", errors="replace")
         import re as _re
         _mm = _re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", _r.stderr or "")
         _m_dur = (int(_mm.group(1)) * 3600 + int(_mm.group(2)) * 60 + float(_mm.group(3))) if _mm else 0
@@ -834,13 +834,13 @@ def render_beat(plan, project_dir, beat_no, sid=None):
     ass, _np = build_ass(mini, pv, f"beat_{tag}{beat_no}.ass")  # 解包元组(路径,页数)
     out = f"{pv}/beat_{tag}{beat_no}.mp4"
     cmd = build_beat_cmd(plan, seg, ass, out)
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码失败回退软编（跨平台降级铁律，不限定 videotoolbox——win 的 nvenc/qsv 同理）
         # 改 -b:v 的"值位"而非按码率字面量找（幕预览是 1.5M，按 4M 找=ValueError，2026-09-15 Windows CI 实锤）
         cmd[cmd.index("-c:v") + 1] = "libx264"
         bi = cmd.index("-b:v"); cmd[bi] = "-crf"; cmd[bi + 1] = "20"
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     if r.returncode != 0:
         print("BEAT FAIL:", r.stderr[-600:]); sys.exit(1)
     print(f"BEAT OK: {out} ({os.path.getsize(out)//1024}KB)")
@@ -878,7 +878,7 @@ def render(plan, project_dir, sid=None):
     cmd = build_cmd(plan, ass, out) + ["-progress", "pipe:1", "-nostats"]
     print("STAGE ffmpeg", flush=True)
     _status(stage="ffmpeg", pct=0)
-    r = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=ROOT)  # cwd=ROOT：滤镜串内嵌相对路径（_ass_spec）的解析锚点
+    r = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", cwd=ROOT)  # cwd=ROOT：滤镜串内嵌相对路径（_ass_spec）的解析锚点
     errbuf = []
     threading.Thread(target=lambda: [errbuf.append(l) for l in r.stderr], daemon=True).start()
     total = float(plan.get("duration") or 0)
@@ -901,10 +901,10 @@ def render(plan, project_dir, sid=None):
     r.wait()
     if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码不可用则回退软编（跨平台降级铁律）
+        # 改 -b:v 的值位而非按码率字面量找（与 render_beat 同款——改码率即炸的雷，2026-09-15 实锤）
         cmd[cmd.index("-c:v") + 1] = "libx264"
-        cmd[cmd.index("-b:v")] = "-crf"
-        cmd[cmd.index("6M")] = "20"
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)  # 软编回退同锚点
+        bi = cmd.index("-b:v"); cmd[bi] = "-crf"; cmd[bi + 1] = "20"
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)  # 软编回退同锚点
         errbuf = list(r.stderr or "")
     if r.returncode != 0:
         _status(running=False, ok=False, tail=["".join(errbuf)[-400:]])
@@ -925,6 +925,9 @@ def render(plan, project_dir, sid=None):
 
 # ---------------------------------------------------------------- 入口
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     cmd = sys.argv[1]
     arg2 = sys.argv[2]
     # 项目参数：绝对/相对目录路径，或裸项目名（与其他生成器同语义，README 示例即此）

@@ -125,6 +125,9 @@ def register_voice(name, audio_path, transcript, overwrite=False, timeout_s=300)
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     import sys
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "status":

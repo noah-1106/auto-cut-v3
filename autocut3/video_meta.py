@@ -49,7 +49,7 @@ def display_geometry(path):
     fp = ffprobe_path()
     r = subprocess.run([fp, "-v", "error", "-select_streams", "v:0", "-show_entries",
                         "stream=width,height,sample_aspect_ratio:stream_side_data=rotation:stream_tags=rotate:format=duration",
-                        "-of", "json", path], capture_output=True, text=True)
+                        "-of", "json", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
     meta = json.loads(r.stdout or "{}")
     s = (meta.get("streams") or [{}])[0]
     ew, eh = int(s.get("width") or 0), int(s.get("height") or 0)
@@ -67,7 +67,7 @@ def display_geometry(path):
         fd, tmp = tempfile.mkstemp(suffix=".png")
         os.close(fd)
         r2 = subprocess.run([ffmpeg_path() or "ffmpeg", "-y", "-loglevel", "error", "-i", path,
-                             "-frames:v", "1", tmp], capture_output=True, text=True)
+                             "-frames:v", "1", tmp], capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r2.returncode == 0 and os.path.getsize(tmp) > 0:
             with open(tmp, "rb") as fh:
                 head = fh.read(24)
@@ -89,5 +89,8 @@ def display_geometry(path):
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     import sys
     print(json.dumps(display_geometry(sys.argv[1]), ensure_ascii=False))

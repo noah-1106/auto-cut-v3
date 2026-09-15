@@ -15,7 +15,7 @@ def main():
     a = ap.parse_args()
     pdir = os.path.join("projects", a.project)
     sfile = os.path.join(pdir, "storylines", "%s.json" % a.story) if a.story else os.path.join(pdir, "storyline.json")
-    sl = json.load(open(sfile))
+    sl = json.load(open(sfile, encoding="utf-8"))
     cache = os.path.join(pdir, "materials", "dub", ".asrcache")
     os.makedirs(cache, exist_ok=True)
     fails = []
@@ -52,4 +52,7 @@ def main():
     print("dubgate ✓ 全部配音干净")
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()

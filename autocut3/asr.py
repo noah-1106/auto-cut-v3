@@ -57,7 +57,7 @@ def media_duration(path):
     if not fp:
         return 0.0
     r = subprocess.run([fp, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     try:
         return float(r.stdout.strip())
     except Exception:
@@ -75,7 +75,7 @@ def vad_speech_spans(wav, ff=None, noise="-35dB", min_silence=0.25, min_span=0.1
     """ffmpeg silencedetect → 语音段（静音的补集）。"""
     ff = ff or ffmpeg_path()
     r = subprocess.run([ff, "-i", wav, "-af", f"silencedetect=noise={noise}:d={min_silence}",
-                        "-f", "null", "-"], capture_output=True, text=True)
+                        "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     sil, cur = [], None
     for line in (r.stderr or "").splitlines():
         m = re.search(r"silence_start: ([\d.]+)", line)
@@ -97,7 +97,7 @@ def vad_speech_spans(wav, ff=None, noise="-35dB", min_silence=0.25, min_span=0.1
 
 
 def _wav_dur_ffmpeg(wav, ff):
-    r = subprocess.run([ff, "-i", wav], capture_output=True, text=True)
+    r = subprocess.run([ff, "-i", wav], capture_output=True, text=True, encoding="utf-8", errors="replace")
     m = re.findall(r"Duration: (\d+):(\d+):([\d.]+)", r.stderr or "")
     if m:
         h, mi, s = m[0]

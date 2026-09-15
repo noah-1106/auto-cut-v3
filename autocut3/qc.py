@@ -196,7 +196,7 @@ def check_lufs(video, rules):
     try:
         p = subprocess.run([ff, "-hide_banner", "-nostats", "-i", video,
                             "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         m = re.search(r"I:\s*(-?[\d.]+)\s*LUFS", p.stderr)
         if not m:
             return [_V("R6", "warn", "human", {}, note="ebur128 无输出，跳过")]
@@ -228,7 +228,7 @@ def check_audio_output(video, rules):
     try:
         p = subprocess.run([ff, "-hide_banner", "-i", video, "-vn",
                             "-af", "silencedetect=noise=-35dB:d=0.5", "-f", "null", "-"],
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         sil = []
         cur = None
         for line in (p.stderr or "").splitlines():
@@ -257,7 +257,7 @@ def check_audio_output(video, rules):
         while t + 1 < dur:
             r = subprocess.run([ff, "-hide_banner", "-nostats", "-ss", str(t), "-t", str(seg),
                                 "-i", video, "-vn", "-af", "volumedetect", "-f", "null", "-"],
-                               capture_output=True, text=True, timeout=60)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             m = re.search(r"mean_volume: (-?[\d.]+)", r.stderr or "")
             if m:
                 means.append((t, float(m.group(1))))
@@ -285,7 +285,7 @@ def check_freeze(video, rules):
         p = subprocess.run([ff, "-hide_banner", "-i", video, "-vf",
                             "freezedetect=noise=0.001:duration=%.1f" % rules.get("R4_freeze_min", 2.0),
                             "-map", "0:v", "-f", "null", "-"],
-                           capture_output=True, text=True, timeout=180)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
         freezes = []
         start = None
         for line in (p.stderr or "").splitlines():
@@ -443,6 +443,9 @@ def run(pid, story=None, deep=True, write=True):
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     import argparse
     ap = argparse.ArgumentParser(description="审片层 QC——结论先行的交付闸门")
     ap.add_argument("project")

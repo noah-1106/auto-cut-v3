@@ -16,7 +16,7 @@
 
 图生视频：--image 本地图片自动转 base64 data URL（支持 jpg/png）。
 """
-import argparse, base64, json, os, subprocess, sys, time, urllib.request, urllib.error
+import argparse, base64, json, os, shutil, subprocess, sys, time, urllib.request, urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from asr import load_services, resolve_key, ffmpeg_path as _ffmpeg_path, ffprobe_path as _ffprobe_path  # noqa: E402 平台解析链（硬规则 8）
@@ -148,10 +148,10 @@ def retrieve(project, task_id, file_id):
     mid = "G%s" % task_id.replace("-", "")[-7:]
     fname = os.path.basename(mp4)
     dest = os.path.join(pk_dir, fname)
-    os.replace(mp4, dest)
+    shutil.move(mp4, dest)  # 跨盘安全（os.replace 跨盘=WinError 17；项目目录可配在仓外）
     r = subprocess.run([FFP, "-v", "error",
                         "-show_entries", "format=duration:stream=width,height", "-of", "json", dest],  # probe 目的地（先移后探=永远探空）
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     meta = json.loads(r.stdout or "{}")
     dur = round(float((meta.get("format") or {}).get("duration") or 0), 1)
     wh = next(({"width": s["width"], "height": s["height"]} for s in meta.get("streams", []) if s.get("width")), {})
@@ -232,4 +232,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()

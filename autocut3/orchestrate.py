@@ -206,7 +206,7 @@ def _step_render(pdir):
         return ("pending", "先有成片故事线")
     out = f"{pdir}/out-{sid}.mp4"
     sp = f"{pdir}/storylines/{sid}.json"
-    if os.path.exists(out) and os.path.getmtime(out) > os.path.getmtime(sp):
+    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(sp):  # >=：同 tick 写盘不算 stale（freshness flake 同类，2026-09-15 审计 P3-1）
         return ("done", f"out-{sid}.mp4 新于故事线")
     st = _jload(f"{pdir}/render.status", {})
     if st.get("running"):
@@ -270,7 +270,7 @@ def status(project):
 
 def _run(cmd, label):
     print(f"  ▸ {label}: {' '.join(os.path.basename(c) for c in cmd[:3])} …", flush=True)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     tail = (r.stdout or "")[-300:]
     if r.returncode != 0:
         raise RuntimeError(f"{label} 失败（exit {r.returncode}）: {(r.stderr or '')[-300:]}")
@@ -340,8 +340,8 @@ def advance(project, intent=None, story=None, only=None):
             sid = story or _latest_story(pdir)
             print(f"  ▸ render story={sid}（进度见 render.status / Studio）…", flush=True)
             r = subprocess.run([py, os.path.join(ac, "pipeline.py"), "render", name, sid],
-                               capture_output=True, text=True)
-            last = (r.stdout or "").strip().split("\n")[-1]
+                               capture_output=True, text=True, encoding="utf-8", errors="replace")
+            last = (r.stdout or "").strip().splitlines()[-1]  # splitlines：Windows \r\n 残留 \r 会让行比较踩空
             print("  " + last)
             if r.returncode != 0:
                 raise RuntimeError("渲染失败: " + (r.stdout or "")[-300:])
@@ -360,7 +360,7 @@ def advance(project, intent=None, story=None, only=None):
             bad = []
             for seg in plan0["segments"]:
                 rb = subprocess.run([py, os.path.join(ac, "pipeline.py"), "beat", name,
-                                     str(seg.get("no")), sid0], capture_output=True, text=True)
+                                     str(seg.get("no")), sid0], capture_output=True, text=True, encoding="utf-8", errors="replace")
                 if rb.returncode != 0:
                     bad.append("幕%s: %s" % (seg.get("no"), (rb.stdout or rb.stderr or "")[-120:]))
             if bad:
@@ -408,4 +408,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()

@@ -22,7 +22,7 @@ def vad_spans(src, ss=0.0, t=None, noise="-32dB", min_speech=0.30):
     if ss: cmd += ["-ss", str(ss)]
     if t: cmd += ["-t", str(t)]
     cmd += ["-i", src, "-vn", "-af", "silencedetect=n=%s:d=0.25" % noise, "-f", "null", "-"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     ev = []
     for line in (r.stderr or "").splitlines():
         m = re.search(r"silence_start: ([\d.]+)", line)
@@ -40,7 +40,7 @@ def vad_spans(src, ss=0.0, t=None, noise="-32dB", min_speech=0.30):
     if dur is None:
         q = subprocess.run([asr.ffprobe_path(), "-v", "error",
                             "-show_entries", "format=duration", "-of", "csv=p=0", src],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         dur = float(q.stdout.strip())
     spans, pos = [], 0.0
     for s, e in sil:
@@ -70,7 +70,7 @@ def main():
     a = ap.parse_args()
     pdir = os.path.join("projects", a.project)
     sfile = os.path.join(pdir, "storylines", "%s.json" % a.story) if a.story else os.path.join(pdir, "storyline.json")
-    sl = json.load(open(sfile))
+    sl = json.load(open(sfile, encoding="utf-8"))
     report = []
     for b in sl.get("beats", []):
         nar = b.get("narration") or {}
@@ -87,9 +87,9 @@ def main():
             A = next((x for x in (b.get("tracks") or [])), None)
             if not A: continue
             src = None
-            lib = json.load(open(os.path.join(pdir, "materials", "library.json")))
+            lib = json.load(open(os.path.join(pdir, "materials", "library.json"), encoding="utf-8"))
             for pk in lib.get("packs", []):
-                pj = json.load(open(os.path.join("materials", "packs", pk, "pack.json")))
+                pj = json.load(open(os.path.join("materials", "packs", pk, "pack.json"), encoding="utf-8"))
                 for f in pj.get("files", []):
                     if f["id"] == A.get("source_id"):
                         src = os.path.join("materials", "packs", pk, f["file"])
@@ -117,10 +117,13 @@ def main():
                        "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0,
                        "text_from": text_from})
         print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]))
-    json.dump(sl, open(sfile, "w"), ensure_ascii=False, indent=1)
-    json.dump(report, open(os.path.join(pdir, "vad-report.json"), "w"), ensure_ascii=False, indent=1)
+    json.dump(sl, open(sfile, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    json.dump(report, open(os.path.join(pdir, "vad-report.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("VAD 词轨已写入 %s ✓" % sfile)
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()

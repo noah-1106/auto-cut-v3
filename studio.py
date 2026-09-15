@@ -318,7 +318,8 @@ class H(BaseHTTPRequestHandler):
                                     "-f", "lavfi", "-i", "color=c=0x1a1e24:s=1280x720:d=0.1",
                                     "-vf", f"subtitles=assets/preview/_pv_{sid}.ass",
                                     "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "3", jpg],
-                                   capture_output=True, text=True, timeout=30)
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+                                   cwd=ROOT)  # 滤镜值是相对路径，cwd 锚定仓根（从他目录起 studio 不再 500，审计 P3-3）
                 if r.returncode != 0 or not os.path.exists(jpg):
                     return self._json({"err": "preview render failed: " + (r.stderr or "")[-200:]}, 500)
             return self._json({"ok": True, "url": f"/files/assets/preview/sub-{sid}.jpg"})
@@ -327,7 +328,13 @@ class H(BaseHTTPRequestHandler):
             return self._handle_voice(u)
         elif u.path.startswith("/files/"):
             fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
-            if not fp.startswith(os.path.realpath(ROOT)) or not os.path.isfile(fp):
+            # commonpath 而非 startswith 前缀匹配：auto-cut-v3x 这类兄弟目录同样
+            # 以 ROOT 字符串开头会被放行（2026-09-15 审计 P2-3），目录级比较才能真防穿越
+            try:
+                in_root = os.path.commonpath([fp, os.path.realpath(ROOT)]) == os.path.realpath(ROOT)
+            except ValueError:  # 不同盘符（Win）/混用路径，必然不在仓内
+                in_root = False
+            if not in_root or not os.path.isfile(fp):
                 return self._json({"err": "not found"}, 404)
             ctype = MIME.get(fp.rsplit(".", 1)[-1].lower(), "application/octet-stream")
             size = os.path.getsize(fp)
@@ -568,7 +575,7 @@ class H(BaseHTTPRequestHandler):
             def _run(job=RENDER_JOBS[key]):
                 try:
                     r = subprocess.Popen([sys.executable, "-u", PIPE, "render", p] + ([sid] if sid else []),
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=1)
                     for line in r.stdout:
                         line = line.strip()
                         if line.startswith("PCT "):
@@ -1043,7 +1050,7 @@ class H(BaseHTTPRequestHandler):
             p = f"{ROOT}/projects/{name}"
             try:
                 r = subprocess.run([sys.executable, PIPE, "beat", p, beat_no] + ([sid] if sid else []),
-                                   capture_output=True, text=True, timeout=300)
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
             except subprocess.TimeoutExpired:
                 return self._json({"ok": False, "log": "幕渲染超时"})
             ok = r.returncode == 0 and "BEAT OK" in r.stdout
@@ -1198,7 +1205,7 @@ class H(BaseHTTPRequestHandler):
                 json.dump(params, f, ensure_ascii=False, indent=1)
             try:
                 r = subprocess.run([sys.executable, PIPE, "render", p] + ([sid] if sid else []),
-                                   capture_output=True, text=True, timeout=600)
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
             except subprocess.TimeoutExpired:
                 return self._json({"ok": False, "log": "渲染超时(600s)"})
             sfx = f"-{sid}" if sid else ""
@@ -1209,6 +1216,9 @@ class H(BaseHTTPRequestHandler):
             self._json({"err": "not found"}, 404)
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)  # 只绑本机：素材不出本机
     print(f"Studio: http://localhost:{port}")

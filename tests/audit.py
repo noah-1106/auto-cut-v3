@@ -51,9 +51,10 @@ if unvalidated:
 else:
     print("  ✓ 全部路由参数有校验")
 
-# A2. /files/ 防穿越仍在
-if "realpath" in studio and 'fp.startswith(os.path.realpath(ROOT))' in studio:
-    print("  ✓ /files/ realpath 防穿越在位")
+# A2. /files/ 防穿越仍在（commonpath 目录级比较，2026-09-15 替代 startswith 前缀匹配——
+#     startswith 会被 auto-cut-v3x 兄弟目录绕过）
+if "realpath" in studio and "os.path.commonpath" in studio:
+    print("  ✓ /files/ realpath 防穿越在位（commonpath）")
 else:
     add("P1", "A2 穿越防护", "/files/ realpath 防穿越丢失！")
 

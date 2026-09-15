@@ -16,7 +16,7 @@
   python3 autocut3/tts.py synth --text "..." [--out x.mp3] [--model m] [--voice v] [--speed 1.15]
   python3 autocut3/tts.py voiceclone --audio 10s+人声.mp3 --voice-id demo_v1
 """
-import argparse, binascii, json, os, sys, time, uuid, urllib.request, urllib.error
+import argparse, binascii, json, os, sys, tempfile, time, uuid, urllib.request, urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from asr import load_services, resolve_key  # noqa: E402 key 解析与供应商登记同源，DRY
@@ -47,10 +47,10 @@ def _wav_to_mp3(wav, out):
     """Audio8 产物 44.1kHz wav → 契约 mp3（128k）。ffmpeg 走平台解析链（asr.ffmpeg_path）。"""
     import subprocess
     from asr import ffmpeg_path
-    out = out or os.path.join("/tmp", "audio8_%d.mp3" % int(time.time()))
+    out = out or os.path.join(tempfile.gettempdir(), "audio8_%d.mp3" % int(time.time()))
     _ensure_parent(out)
     r = subprocess.run([ffmpeg_path(), "-y", "-loglevel", "error", "-i", wav,
-                        "-c:a", "libmp3lame", "-b:a", "128k", out], capture_output=True, text=True)
+                        "-c:a", "libmp3lame", "-b:a", "128k", out], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError("wav→mp3 转码失败: %s" % (r.stderr or "")[-200:])
     return out
@@ -93,7 +93,7 @@ def synth(text, model=None, voice_id=None, speed=None, out=None):
     audio = d.get("audio") or ""
     if not audio:
         raise RuntimeError("TTS 无音频载荷")
-    out = out or os.path.join("/tmp", "t2a_%d.mp3" % int(time.time()))
+    out = out or os.path.join(tempfile.gettempdir(), "t2a_%d.mp3" % int(time.time()))
     _ensure_parent(out)
     open(out, "wb").write(binascii.unhexlify(audio))
     return out
@@ -177,4 +177,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()

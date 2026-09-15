@@ -198,6 +198,9 @@ def lines_for_prompt(pid, limit=12):
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="缺陷台账聚合器（检测→落库→留痕，不破坏性处置）")
     ap.add_argument("project")
     a = ap.parse_args()

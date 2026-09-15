@@ -56,7 +56,7 @@ def seed(project_dir):
     dur = None
     if os.path.exists(FFP) and os.path.exists(abspath):
         r = subprocess.run([FFP, "-v", "error", "-show_entries", "format=duration",
-                            "-of", "csv=p=0", abspath], capture_output=True, text=True)
+                            "-of", "csv=p=0", abspath], capture_output=True, text=True, encoding="utf-8", errors="replace")
         try:
             dur = round(float(r.stdout.strip()), 2)
         except ValueError:
@@ -102,4 +102,7 @@ def seed(project_dir):
     print(f"LIBRARY: {out}  cuts={len(entries)}  源时长={dur}s")
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     seed(sys.argv[2])

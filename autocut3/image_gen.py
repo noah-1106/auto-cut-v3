@@ -59,6 +59,9 @@ def gen_image(prompt, out_path, aspect_ratio="9:16", model=None, timeout_s=180):
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="AI 图片生成（MiniMax image-01）")
     ap.add_argument("prompt")
     ap.add_argument("out")
