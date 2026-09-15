@@ -24,6 +24,10 @@
   T40 幕样张渲染（render_beat 逐幕独立验证：preview 产物存在且时长 >0）
   T41 注册表读写闭环（save 回读 / enums 拒写 / delete 幂等 / upload 入库+落盘）
   T42 编排器故事线门（audit+review+digest 齐后 --advance 仍停在故事线门）
+  T43 proofread 人工复核门（review-queue 有 pending=环节 pending，复核后放行）
+  T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段，2026-09-15 agent-037 实锤）
+  T45 content_type 强制门（voiceover/meta 禁A/drop、说话画面禁B、干净素材不受影响）
+  T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -750,7 +754,7 @@ def t26_voiceover_orchestration():
                 open(os.path.join(pp, "pack.json"), "w", encoding="utf-8"), ensure_ascii=False)
             dos, mats = D.build_dossier(["tp"])
             c1 = "素材包盘点" in dos and "旁白音轨源：M0269" in dos and "缺成果镜头" in dos
-            c2 = "🎙voiceover" in dos and "词轨可作旁白音轨源" in dos
+            c2 = "🎙voiceover" in dos and "词轨=旁白音轨源" in dos and "validate 硬剔除" in dos
             c3 = "逐条明细" in dos and "M0269" in mats and mats["M0269"].get("transcript", {}).get("scripted_dup") == 23
             check("T26c digest 消费链（盘点头/voiceover表述/明细降级无digest也可用）", c1 and c2 and c3,
                   "盘点头=%s voiceover标注=%s mats穿透=%s" % (c1, c2, c3))
@@ -1442,6 +1446,206 @@ def t42_advance_gate():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t43_proofread_review_gate():
+    # 回归锚（2026-09-16 agent-037 实锤）：proofread 把语义存疑组进 review-queue.json
+    # （status=pending）后环节照样 done——「违科」类未校错字直达成片。锚：queue 有 pending
+    # = 门不开（_step_proofread 返回 pending）；清空/复核后回 done。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import orchestrate as ORCH
+        tmp = tempfile.mkdtemp(prefix="t43_")
+        old_root = ORCH.ROOT
+        try:
+            ORCH.ROOT = tmp
+            os.makedirs(os.path.join(tmp, "materials/packs/tp"), exist_ok=True)
+            json.dump({"files": [{"id": "M1", "kind": "video", "usable": True,
+                                  "transcript": {"text": "x", "words": [{"text": "x", "start": 0, "end": 1}]},
+                                  "audit": {"proofread": "auto-done"}}]},
+                      open(os.path.join(tmp, "materials/packs/tp/pack.json"), "w", encoding="utf-8"))
+            pdir = os.path.join(tmp, "projects/t43")
+            os.makedirs(os.path.join(pdir, "materials"), exist_ok=True)
+            json.dump({"packs": ["tp"]}, open(os.path.join(pdir, "materials/library.json"), "w"))
+            st1, d1 = ORCH._step_proofread(pdir)  # 空 queue → done
+            json.dump({"project": "t43", "items": [
+                {"material": "M1", "find": "违科", "replace": "贝壳",
+                 "status": "pending", "reason": "语义存疑"}]},
+                      open(os.path.join(pdir, "review-queue.json"), "w", encoding="utf-8"))
+            st2, d2 = ORCH._step_proofread(pdir)  # 有 pending → 门不开
+            ok = (st1 == "done") and (st2 == "pending" and "待人工复核" in d2 and "违科" in d2)
+            check("T43 proofread 人工复核门（review-queue 有 pending=环节 pending，复核后放行）",
+                  ok, "empty=%s:%s queued=%s:%s" % (st1, d1[:20], st2, d2[:40]))
+        finally:
+            ORCH.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T43 proofread 人工复核门（review-queue 有 pending=环节 pending，复核后放行）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t44_vadwords_no_asr_time():
+    # 回归锚（2026-09-16 agent-037 实锤）：vadwords 曾用 ASR 词时间过滤窗口内词——
+    # minimax 词时间漂移 0.5-3s（M0269「我」标 7.2 实际 11.4），按它过滤=字幕漏字/半句。
+    # 锚：词时间全部离谱（1000s 外）时，选词仍按文本顺序铺满 VAD 段（时间唯一来源=物理测量）。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import vadwords
+        tmp = tempfile.mkdtemp(prefix="t44_")
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp)
+            os.makedirs("materials/packs/p1"); os.makedirs("projects/t44/materials")
+            os.makedirs("projects/t44/storylines")
+            mp4 = os.path.join("materials/packs/p1", "M1.mp4")
+            r = subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                                "-i", "sine=frequency=440:duration=4", "-c:a", "aac", mp4],
+                               capture_output=True, text=True)
+            assert r.returncode == 0, "夹具合成失败"
+            json.dump({"files": [{"id": "M1", "file": "M1.mp4", "kind": "video",
+                                  # ASR 词时间全部离谱（真实 1000s 处）——旧逻辑会选不到词回退 story
+                                  "transcript": {"text": "甲乙丙丁",
+                                                 "words": [{"text": "甲", "start": 1000, "end": 1001},
+                                                           {"text": "乙", "start": 1001, "end": 1002},
+                                                           {"text": "丙", "start": 1002, "end": 1003},
+                                                           {"text": "丁", "start": 1003, "end": 1004}]}}]},
+                      open("materials/packs/p1/pack.json", "w", encoding="utf-8"))
+            json.dump({"packs": ["p1"]}, open("projects/t44/materials/library.json", "w"))
+            json.dump({"beats": [{"no": 1, "story": "回退摘要不应出现",
+                                  "narration": {"mode": "original"},
+                                  "tracks": [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 4}]}]},
+                      open("projects/t44/storylines/t44.json", "w", encoding="utf-8"))
+            old_argv = sys.argv
+            sys.argv = ["vadwords.py", "t44", "--story", "t44"]
+            try:
+                vadwords.main()
+            finally:
+                sys.argv = old_argv
+            sl2 = json.load(open("projects/t44/storylines/t44.json"))
+            rep = json.load(open("projects/t44/vad-report.json"))
+            w1 = "".join(w["t"] for w in sl2["beats"][0]["narration"]["words"])
+            ok = (w1 == "甲乙丙丁" and rep[0].get("text_from") == "transcript")
+            check("T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段）",
+                  ok, "text=%s from=%s" % (w1, rep[0].get("text_from")))
+        finally:
+            os.chdir(old_cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t45_content_type_gates():
+    # 回归锚（2026-09-16 agent-037 实锤双断链）：提示词 advisory 拦不住——
+    # ① M0269 voiceover 读稿画面照样 A 轨 original 裸奔；② B 轨选了 M0275 对话画面（管线
+    # B 轨无音频通道）→ 嘴动无声穿帮。锚：validate 硬剔除——deny 类/voiceover 禁 A，
+    # 说话类画面禁 B。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import draft as D
+        mats = {
+            "V": {"id": "V", "kind": "video", "usable": True, "duration": 10,
+                  "visual": {"content_type": "voiceover", "desc": "手持文件低头朗读"}},
+            "ME": {"id": "ME", "kind": "video", "usable": True, "duration": 10,
+                   "visual": {"content_type": "meta", "desc": "导演说戏"}},
+            "DG": {"id": "DG", "kind": "video", "usable": True, "duration": 10,
+                   "visual": {"content_type": "dialogue", "desc": "两人面对面沟通细节"},
+                   "transcript": {"words": []}},
+            "CL": {"id": "CL", "kind": "video", "usable": True, "duration": 10,
+                   "visual": {"content_type": "narration", "desc": "空镜施工工艺"},
+                   "transcript": {"words": []}},
+        }
+        draft = {"beats": [
+            {"story": "s", "tracks": [{"role": "A", "source_id": "V", "src_in": 0, "duration": 4}]},
+            {"story": "s", "tracks": [{"role": "A", "source_id": "ME", "src_in": 0, "duration": 4}]},
+            {"story": "s", "tracks": [{"role": "A", "source_id": "DG", "src_in": 0, "duration": 4},
+                                      {"role": "B", "source_id": "DG", "src_in": 0, "duration": 3}]},
+            {"story": "s", "tracks": [{"role": "A", "source_id": "CL", "src_in": 0, "duration": 4},
+                                      {"role": "B", "source_id": "CL", "src_in": 0, "duration": 3}]},
+        ]}
+        beats = D.validate(draft, mats, [])
+        ok_struct = len(beats) == 2  # voiceover/meta 两幕被剔除，只剩 DG-A 与 CL 双轨
+        ok_dg = ([t["role"] for t in beats[0]["tracks"]] == ["A"]
+                 and beats[0]["tracks"][0]["source_id"] == "DG")          # B 哑口型被剔
+        ok_cl = [t["role"] for t in beats[1]["tracks"]] == ["A", "B"]    # 干净素材双轨保留
+        check("T45 content_type 强制门（voiceover/meta 禁A/drop、说话画面禁B、干净素材不受影响）",
+              ok_struct and ok_dg and ok_cl,
+              "beats=%d dg=%s cl=%s" % (len(beats), ok_dg, ok_cl))
+    except Exception as e:
+        check("T45 content_type 强制门（voiceover/meta 禁A/drop、说话画面禁B、干净素材不受影响）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t46_loudnorm_chain():
+    # 回归锚（2026-09-16 agent-037 实锤）：管线无全局响度位，R6 恒 warn"渲染后修"。
+    # 锚：渲染混音链默认带 loudnorm=I=-16（EBU R128 平台锚）；audio.loudnorm=false 可关；
+    # 真渲 2s 正弦实测 integrated ≈ -16 LUFS（±1）。
+    import tempfile
+    ass_dir = os.path.join(ROOT, "assets", "preview")
+    ass_path = os.path.join(ass_dir, "_t46.ass")
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline
+        tmp = tempfile.mkdtemp(prefix="t46_")
+        src = os.path.join(tmp, "src.mp4")
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "testsrc2=size=480x854:rate=25:duration=2",
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", "-shortest", src], check=True)
+        os.makedirs(ass_dir, exist_ok=True)
+        open(ass_path, "w", encoding="utf-8").write(
+            "[Script Info]\nTitle: t\nScriptType: v4.00+\nPlayResX: 480\nPlayResY: 854\n"
+            "[V4+ Styles]\n"
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            "Style: Default,Arial,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n"
+            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,t\n")
+        seg = {"no": 1, "src_in": 0, "dur": 2.0, "tl_in": 0.0, "transition": None,
+               "tracks": [{"role": "A", "media": src, "src_in": 0, "dur": 2.0}],
+               "effects": {"stickers": [], "sfx": []}}
+        base = {"width": 480, "height": 854, "fps": 25, "duration": 2.0,
+                "media": src, "words": [], "segments": [seg]}
+        p_on = dict(base)          # 缺省=开（2026-09-16：修复前无此键）
+        p_true = dict(base, loudnorm=True)
+        p_off = dict(base, loudnorm=False)
+        f_on = " ".join(pipeline.build_cmd(p_on, ass_path, os.path.join(tmp, "a.mp4")))
+        f_true = " ".join(pipeline.build_cmd(p_true, ass_path, os.path.join(tmp, "b.mp4")))
+        f_off = " ".join(pipeline.build_cmd(p_off, ass_path, os.path.join(tmp, "c.mp4")))
+        ok_filter = ("loudnorm=I=-16" in f_on) and ("loudnorm=I=-16" in f_true) \
+                    and ("loudnorm" not in f_off)
+        out = os.path.join(tmp, "out.mp4")
+        cmd = pipeline.build_cmd(p_on, ass_path, out)
+        rr = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+        if rr.returncode != 0:
+            check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）", False,
+                  "渲染失败: %s" % (rr.stderr or "")[-160:])
+            return
+        pv = subprocess.run([FFMPEG, "-hide_banner", "-nostats", "-i", out,
+                             "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
+                            capture_output=True, text=True)
+        m = re.search(r"I:\s*(-?[\d.]+)\s*LUFS", pv.stderr)
+        lufs = float(m.group(1)) if m else None
+        ok_loud = lufs is not None and abs(lufs - (-16)) <= 1.0
+        check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）",
+              ok_filter and ok_loud, "filter=%s lufs=%s" % (ok_filter, lufs))
+    except Exception as e:
+        check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        if os.path.exists(ass_path):
+            os.remove(ass_path)
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1718,6 +1922,10 @@ def main():
     t40_beat_preview()
     t41_registry()
     t42_advance_gate()
+    t43_proofread_review_gate()
+    t44_vadwords_no_asr_time()
+    t45_content_type_gates()
+    t46_loudnorm_chain()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

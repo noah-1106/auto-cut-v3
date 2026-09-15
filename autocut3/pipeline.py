@@ -480,6 +480,9 @@ def build_plan(project_dir, sid=None):
     plan["bgm_loop"] = audio.get("bgm_loop")                 # None=按曲长自动
     if audio.get("bgm_volume") is not None:
         plan["bgm_volume"] = float(audio["bgm_volume"])
+    # 全局响度归一位（2026-09-16 agent-037 实锤：R6 曾恒 warn"管线无 loudnorm 位"）：
+    # True=EBU R128 锚 -16 LUFS（单遍 loudnorm）；数字=自定义 I；false=关（特殊混音需求）
+    plan["loudnorm"] = audio.get("loudnorm", True)
     plan["meta"] = story.get("meta", {})
     sfx = f"-{real_sid}" if real_sid else ""
     with open(f"{project_dir}/plan{sfx}.json", "w", encoding="utf-8") as f:
@@ -719,7 +722,9 @@ def build_cmd(plan, ass_path, out_path):
         j0 = next(i for i, tup in enumerate(beat_v) if tup[2] is sg)
         fc.append(f"[{sidx}:a]adelay={int(round((a_starts[j0] + at) * 1000))}:all=1[sx{k}]")
         mix += f"[sx{k}]"; n_in += 1
-    fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0[amix]")
+    _ln = plan.get("loudnorm", True)
+    _lnf = "" if _ln is False else ",loudnorm=I=%s:TP=-1.5:LRA=11" % (-16 if _ln is True else float(_ln))
+    fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0{_lnf}[amix]")
     cmd = [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
         "-filter_complex", ";".join(fc),
         "-map", "[vout]", "-map", "[amix]", "-t", f"{total}",
@@ -814,7 +819,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         ms = int(float(sfx.get("at", 0)) * 1000); sd = float(sfx.get("duration", 0.4))
         fc.append(f"[{sidx}:a]atrim=0:{sd},adelay={ms}:all=1,volume=1.4[sx{k}]")
         mix += f"[sx{k}]"; n_in += 1
-    fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0[amix]")
+    fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[amix]")
     return [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
         "-filter_complex", ";".join(fc), "-map", "[voutp]", "-map", "[amix]", "-t", f"{dur}",
         "-c:v", hw_encoder(), "-b:v", "1.5M", "-c:a", "aac", "-b:a", "96k", out_path]

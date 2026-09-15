@@ -122,6 +122,15 @@ def _step_proofread(pdir):
     if errs:
         return ("failed", "校对失败: %s" % ",".join(errs[:3]))
     left = [m for m, a in todo if not a]
+    # 人工复核门（2026-09-16 agent-037 实锤：「违科」类语义存疑组进 review-queue 后
+    # 环节照样 done，未校错字直达成片）：queue 里有 pending = 门不开
+    q = _jload(os.path.join(pdir, "review-queue.json"), {})
+    qitems = ((q or {}).get("items") or []) if isinstance(q, dict) else (q or [])
+    qleft = [it for it in qitems if str(it.get("status")) == "pending"]
+    if qleft:
+        return ("pending", "待人工复核 %d 组（review-queue.json：%s…）" %
+                (len(qleft), "、".join("%s %s→%s" % (it.get("material"), it.get("find"), it.get("replace"))
+                                     for it in qleft[:3])))
     return ("done" if not left else "pending",
             "词轨已校对" if not left else "待校对 %d/%d" % (len(left), len(todo)))
 
@@ -356,7 +365,7 @@ def advance(project, intent=None, story=None, only=None):
             # 产物 previews/beat-*.mp4 供人/Agent 抽查；任一幕失败=拦截
             sid0 = story or _latest_story(pdir)
             import pipeline
-            plan0 = pipeline.build_plan(pdir, sid0)
+            plan0, _sid0 = pipeline.build_plan(pdir, sid0)  # 返回 (plan, real_sid) 元组——不解包直接 ["segments"] 会 TypeError（2026-09-16 agent-037 实锤）
             bad = []
             for seg in plan0["segments"]:
                 rb = subprocess.run([py, os.path.join(ac, "pipeline.py"), "beat", name,

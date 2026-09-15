@@ -114,7 +114,7 @@ def build_dossier(packs):
                 if ct in ("meta", "ambient", "broll"):
                     line += " ⛔%s类素材：禁作口播A轨" % ct
                 if ct == "voiceover":
-                    line += " 🎙voiceover：念稿/配音录制——词轨可作旁白音轨源，画面不建议作A轨主体（维护者 2026-09-14：M0269 错判修复）"
+                    line += " 🎙voiceover：念稿/配音录制——词轨=旁白音轨源；画面禁作A轨主体（validate 硬剔除，维护者 2026-09-14/16：M0269 错判修复）也禁作B轨（读稿画面哑口型）"
                 if v.get("usage"):
                     line += "（用途：%s）" % v["usage"]
             if kind == "image":
@@ -185,6 +185,11 @@ def build_prompt(dossier, intent, transitions):
 4. 幕数 2-4；单幕时长 3-20 秒；总时长 20-90 秒
 5. transition_out 只能取：%s，或 null
 6. 第一幕优先用带开场钩子台词的素材；空镜/环境素材适合做 B 轨叠画或转场幕
+6b. B 轨铁律（validate 硬剔除，2026-09-16 agent-037 实锤 M0275/M0243 哑口型）：画面里有人在
+   说话/对话/朗读的素材（dialogue/voiceover 类，或描述含对话/沟通/讲解等）禁作 B 轨——
+   B 轨无音频通道，嘴动无声必然穿帮。B 轨只用纯空镜/工艺画面
+6c. ⛔类（meta/ambient/broll）与 voiceover 画面禁作 A 轨（validate 硬剔除）；voiceover 素材的
+   词轨价值=旁白音，画面不配
 7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
 8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
    禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
@@ -274,6 +279,20 @@ def validate(draft, mats, transitions):
             if m.get("kind") != "video":
                 continue  # 图片/音频不可作轨道（图片无音轨、音频无画面）——起草硬约束
             role = "B" if t.get("role") == "B" else "A"
+            # content_type 强制门（2026-09-16 agent-037 实锤：提示词 advisory 拦不住，
+            # M0269 voiceover 读稿画面照样 A 轨 original 裸奔成片）——标记→消费断链收口：
+            # A 轨禁 {meta 说戏, ambient/broll 无声幕, voiceover 读稿画面}（dossier 同集合；
+            # voiceover 词轨的正确取用=旁白/dub 音轨源，画面不配）；
+            # B 轨哑口型铁律：管线 B 轨无音频通道，画面含说话人却无声 = 必然穿帮——
+            # dialogue/voiceover 类或画面描述含说话类关键词的素材禁入 B。
+            vis = m.get("visual") or {}
+            ct = vis.get("content_type")
+            if role == "A" and ct in ("meta", "ambient", "broll", "voiceover"):
+                continue
+            if role == "B" and (ct in ("dialogue", "voiceover") or
+                                any(k in (vis.get("desc") or "")
+                                    for k in ("对话", "说话", "沟通", "交谈", "朗读", "讲解", "口播", "采访", "讨论"))):
+                continue
             # 截字修复（2026-09-11 苏炜回看）：ASR 词尾时间戳偏紧，出点压着词尾会咬掉最后一字的尾音。
             # A 轨出点向后留 0.35s 气口（不越素材物理边界）；B 轨是画中画无语音，不处理。
             # 死尾巴修剪（2026-09-11 二次回看）：出点也不晚于末实词尾+0.8s——话说完人杵着 2s 是废段。
