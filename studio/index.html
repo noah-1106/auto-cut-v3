@@ -1097,7 +1097,7 @@ async function uploadCover(inp){
   }catch(e){setStatus('✗ '+e);}
 }
 async function genCover(){
-  const p=prompt('封面图提示词（竖版 9:16，建议注明：风格/场景/无文字）','竖版短视频封面底图：现代简约客厅，浅木色地板，暖光，无文字无人物');
+  const p=prompt('封面图提示词（竖版 9:16，建议注明：风格/场景/无文字）','竖版短视频封面底图：干净产品场景，主体居中，留白给标题，无文字无人物');
   if(!p)return;
   setStatus('✨ 封面生成中（image-01，约 10-30s）…');
   try{
