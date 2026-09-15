@@ -1229,12 +1229,13 @@ def t38_cover_sink():
         r_first = run("first-frame")
         r_beat = run("beat-frame", beat_no=1, at=0.2)
         r_ai = run("ai-generated")
-        ai_ok = r_ai == os.path.join(pd, "cover", "cover-demo.jpg") and \
+        want = os.path.normpath(os.path.join(pd, "cover", "cover-demo.jpg"))
+        ai_ok = bool(r_ai) and os.path.normpath(r_ai) == want and \
             open(r_ai, "rb").read() == open(os.path.join(pd, "cover", "generated.jpg"), "rb").read()
         os.remove(os.path.join(pd, "cover", "generated.jpg"))
         shutil.copyfile(jpg, os.path.join(pd, "cover", "upload.jpg"))
         r_up = run("upload")
-        up_ok = r_up == os.path.join(pd, "cover", "cover-demo.jpg")
+        up_ok = bool(r_up) and os.path.normpath(r_up) == want
         check("T38 封面收口五策略归一 cover{sid}.jpg（AI/上传不直返槽位路径）",
               all([r_out, r_first, r_beat, ai_ok, up_ok]),
               "out=%s first=%s beat=%s ai=%s upload=%s" % (

@@ -6,6 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](.)
 [![Zero pip deps](https://img.shields.io/badge/dependencies-zero%20pip-brightgreen)](.)
 [![ffmpeg 6.0+](https://img.shields.io/badge/ffmpeg-6.0%2B-green)](https://ffmpeg.org)
+[![Powered by MiniMax](https://img.shields.io/badge/powered%20by-MiniMax-4126eb)](https://www.minimaxi.com)
 
 **一句话**：把一批手机实拍素材，自动变成一条带卡拉OK字幕、BGM、转场的竖版口播短视频。人（浏览器 Studio）和 Agent（CLI/HTTP）双端同权操作，全程文件传递、每个节点可独立失败。
 
