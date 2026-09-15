@@ -1,8 +1,28 @@
-# auto-cut v3 · 装修口播短视频流水线
+# auto-cut v3 · 口播短视频自动剪辑流水线
 
-**一句话**：把一批装修工地的手机实拍素材，变成一条带卡拉OK字幕、BGM、转场的竖版口播短视频。人（浏览器 Studio）和 Agent（CLI/HTTP）双端同权操作，全程文件传递、每个节点可独立失败。
+[![CI](https://github.com/noah-1106/auto-cut-v3/actions/workflows/ci.yml/badge.svg)](https://github.com/noah-1106/auto-cut-v3/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](.)
+[![Zero pip deps](https://img.shields.io/badge/dependencies-zero%20pip-brightgreen)](.)
+[![ffmpeg 6.0+](https://img.shields.io/badge/ffmpeg-6.0%2B-green)](https://ffmpeg.org)
 
-**业务目标**：Agent 全自动从原始素材到成片；人是规则制定者（改 config 阈值/策略）+ 成片终审，不进流水线当卡点。验收：换新素材包冷启动，全程零人工急救。
+**一句话**：把一批手机实拍素材，自动变成一条带卡拉OK字幕、BGM、转场的竖版口播短视频。人（浏览器 Studio）和 Agent（CLI/HTTP）双端同权操作，全程文件传递、每个节点可独立失败。
+
+**设计哲学**：Agent 全自动从原始素材到成片；人是规则制定者（改 config 阈值/策略）+ 成片终审，不进流水线当卡点。验收标准：换一批新素材包冷启动，全程零人工急救。
+
+---
+
+## 界面速览
+
+**主页**：建项目、效果注册表管理入口，项目卡片直达创作台。
+![主页](docs/screenshots/home.png)
+
+**创作台**：顶部管线进度条（九环节 ✓/○ 实时状态）｜成片监视器｜故事线大纲与全局设定（字幕风格/BGM/段落/封面）｜幕序列金线（横向即时间轴，＋插入新幕，点幕预览秒级低清样张）。
+![创作台](docs/screenshots/studio.png)
+
+**素材库**：项目切片与仓库级素材包，转写文本就地校对，素材卡带审核徽标（✓ 可用 / ◌ 待审 / ✕ 拍摄废片）与缺陷台账。
+![素材库](docs/screenshots/library.png)
 
 ---
 
@@ -65,23 +85,12 @@ python3 autocut3/transcribe.py myproj
 python3 autocut3/understand.py myproj
 
 # ④ AI 起草故事线（读 dossier，产出 storylines/aidraft.json）
-curl -X POST localhost:8765/api/draft/myproj -d '{"intent":"装修避坑干货口播"}' -H 'Content-Type: application/json'
+curl -X POST localhost:8765/api/draft/myproj -d '{"intent":"数码开箱口播"}' -H 'Content-Type: application/json'
 
 # ⑤ 渲染成片
 curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 # 产物：projects/myproj/out-aidraft.mp4 + subtitle-aidraft.ass + qc-report.json
 ```
-
-### 3. 界面速览
-
-**主页**：建项目、效果注册表管理入口，项目卡片直达创作台。
-![主页](docs/screenshots/home.png)
-
-**创作台**：顶部管线进度条（九环节 ✓/○ 实时状态）｜成片监视器｜故事线大纲与全局设定（字幕风格/BGM/段落/封面）｜幕序列金线（横向即时间轴，＋插入新幕，点幕预览秒级低清样张）。
-![创作台](docs/screenshots/studio.png)
-
-**素材库**：项目切片与仓库级素材包，转写文本就地校对，素材卡带审核徽标（✓ 可用 / ◌ 待审 / ✕ 拍摄废片）与缺陷台账。
-![素材库](docs/screenshots/library.png)
 
 ---
 
@@ -116,8 +125,8 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
 Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。**改注册表即改下一次渲染，无需动代码。**
-BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环；当前各曲默认"整条"，细段落待试听审计补。
-音效=12 槽位社交媒体爆款语义（转场嗖/强调击打/提示叮/悬疑渐强/喜剧弹弓/倒计时/快门/成功短奏/错误蜂鸣/低频轰击/弹出泡泡/尴尬蟋蟀），全部 Mixkit 免费商用，来源与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，终审试听备选同清单。
+BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环。
+音效=12 槽位社交媒体爆款语义（转场嗖/强调击打/提示叮/悬疑渐强/喜剧弹弓/倒计时/快门/成功短奏/错误蜂鸣/低频轰击/弹出泡泡/尴尬蟋蟀），Mixkit 免费商用，来源与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`。
 AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）；AI 视频素材走 video_gen.py。
 
 ---
@@ -137,7 +146,7 @@ assets/              # 效果素材本体（registry 的 file 字段指向这里
 materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
-docs/                # 设计文档：pipeline-v2.md(管线改造立项·已落地) dev-log.md(开发流水账) 审查史
+docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
 tests/               # e2e.py(45项全量) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
@@ -165,15 +174,14 @@ python3 tests/audit.py                                     # 代码审计器
 
 | 症状 | 先看什么 |
 |---|---|
-| 上传 Broken pipe / 000 | materials/packs/<包>/ 目录是否存在（v3 已自动兜底建）；文件是否 >500MB |
+| 上传 Broken pipe / 000 | materials/packs/<包>/ 目录是否存在（已自动兜底建）；文件是否 >500MB |
 | "bad filename" | 文件名含 `/` `\` `..` 或以 `.` 开头（中文名是允许的） |
 | 转写 401/超时 | config/services.json 的 key；minimax 云端限制 ≤50MB/≤500s |
 | 渲染卡在 ffmpeg | projects/<proj>/render.status 的 tail 字段有最后 8 行 stderr |
 | 字幕不换页/叠字 | subtitle-*.ass 是否生成；words 词轨是否为空（转写失败会让字幕静默消失） |
 | 字幕与语音错位 | 词轨来源是否 VAD（narration.words）；素材词轨平移方案已废弃（时间戳漂移） |
 | 配音开头有残留杂音 | dubgate 是否跑过；音频是否掐头（按能量包络 0.1s 级定位，不信 ASR 词轨） |
-| 改了代码不生效 | **studio.py 是常驻进程，改完必须重启**（历史上两次"改了没生效"都是模块缓存） |
-| 中文素材引用 400 | 旧版本残留——确保跑在含 `_safe_id` 的版本（git log 有"中文id 全放行"提交） |
+| 改了代码不生效 | **studio.py 是常驻进程，改完必须重启**（两次"改了没生效"都是模块缓存） |
 
 ---
 
@@ -185,10 +193,11 @@ python3 tests/e2e.py      # 45 项端到端（上传/起草/渲染/并发/安全
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
+每次 push 到 main，GitHub Actions 在 windows-latest + ubuntu-latest 双端跑全量 e2e（含真实云端 LLM/ASR/TTS 冒烟，key 走 repository secret）。
 
 ---
 
-## 给 Agent 的硬规则（踩坑提炼，动手前必读——违反=事故重演）
+## 工程铁律（踩坑提炼，贡献者/Agent 动手前必读——违反=事故重演）
 
 1. **ASR 词级时间戳是推测值**（素材间漂移 0~3s、同一音频内不均匀）——禁止直接作裁剪锚/字幕时间源；时间源=vadwords.py 的 VAD 物理测量（silencedetect 语音段）
 2. **词轨黑区**：拍摄口令/嘟囔 ASR 会漏转写——按"能量有语音、词轨无文本"检测并掐除（事故：口令"三二一走"进成片）
@@ -204,12 +213,14 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 已知边界
 
-- 本地 TTS（Audio8-TTS，Apache 2.0）音色库待按客户扩充（当前 narrator_default 一个）
+- 本地 TTS（Audio8-TTS，Apache 2.0）音色库按需扩充（默认 narrator_default 一个）
 - dub 配音成片响度可能偏轻（R6 warn 不拦交付，平台会自行归一，终审核对混音比例）
 
 ## 更多文档
 
-- 开发流水账与版本沿革：`docs/dev-log.md`
-- 管线 v2 改造设计（已落地，保留为史料）：`docs/pipeline-v2.md`
-- 审查史与失败模式清单：项目根 `CLAUDE.md`、`docs/review-*.md`
-- 代码托管：GitHub 私有库；config/services.json 已永久 gitignore（key 走环境变量或 api_key_file）
+- 管线自动化改造设计：`docs/pipeline-v2.md`
+- 素材音效的第三方许可：`assets/sfx/viral/LICENSE-mixkit.txt`
+
+## 贡献
+
+欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（43 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。

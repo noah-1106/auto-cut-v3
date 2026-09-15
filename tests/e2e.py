@@ -648,8 +648,8 @@ def t23_dossier_selfaudit():
         inj1 = json.loads(json.dumps(files["M0124"]))
         ws = inj1["transcript"]["words"]
         for i in range(len(ws) - 3):
-            if [w["text"] for w in ws[i:i + 4]] == ["盛", "梅", "合", "院"]:
-                ws[i]["text"], ws[i + 2]["text"] = "圣", "和"
+            if [w["text"] for w in ws[i:i + 4]] == ["檀", "溪", "公", "馆"]:
+                ws[i]["text"], ws[i + 2]["text"] = "潭", "工"
                 break
         r1 = dossier.propernoun_vote(list({**files, "M0124": inj1}.values()), TERMS)
         # 注入2：窗帘盒 → 窗帘箱（M0109 三字同位二）
