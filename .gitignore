@@ -24,3 +24,5 @@ bin/
 config/services.json
 config/services.*.json
 !config/services.ci.json
+# 项目接管手册含内部失败模式清单与审查史（2026-09-15 Noah 指令）：私有工作文档，本地保留
+CLAUDE.md
