@@ -210,7 +210,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 工程铁律（踩坑提炼，贡献者/Agent 动手前必读——违反=事故重演）
 
-1. **ASR 词级时间戳是推测值**（素材间漂移 0~3s、同一音频内不均匀）——禁止直接作裁剪锚/字幕时间源；时间源=vadwords.py 的 VAD 物理测量（silencedetect 语音段）
+1. **ASR 词级时间戳是推测值**（素材间漂移 0~3s、同一音频内不均匀）——禁止直接作裁剪锚/字幕时间源；时间源=vadwords.py 的 VAD 物理测量（silencedetect 语音段）。**选词也不例外**：vadwords 全文本按字符序铺进全素材 VAD 语音段再按窗口切片，不按 ASR 词时间过滤窗口（事故：按 ASR 时间过滤吃掉句首句尾字=字幕漏字/半句，T44 锚）
 2. **词轨黑区**：拍摄口令/嘟囔 ASR 会漏转写——按"能量有语音、词轨无文本"检测并掐除（事故：口令"三二一走"进成片）
 3. **concat 拼接必占位**：跳过的区间（静音洞等）必须补等长静音段，否则后段整体前移（事故：片尾提前 4s 无 BGM）
 4. **序列化保真**：前端落盘必须透传未知字段——白名单重建=静默丢数据（事故：手工词轨全丢，字幕退化均分）
@@ -219,6 +219,9 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 7. **修复闭环**：修 A 暴露 B 是常态，门禁复跑到全绿才算收敛；修复必须带回归锚进 tests/e2e.py，没锚=没修完
 8. **跨平台纪律（Mac/Windows）**：文件锁一律走 `autocut3/flock.py`（POSIX=flock / Windows=msvcrt，禁直接 import fcntl）；ffmpeg 解析走 `ffmpeg_path()`（env → bin/ffmpeg(.exe) → PATH，禁裸 `"bin/ffmpeg"` 相对路径）；渲染编码走 `hw_encoder()`（平台探测，软编 libx264 只做回退）
 9. **滤镜串内嵌路径=相对路径+无引号**（Windows CI 实锤）：ffmpeg 7+ 新解析器把选项值里的盘符冒号（`D:`）当选项分隔符——引号/转义/正斜杠化都救不了；只有值内零特殊字符才稳（`-filter_complex` 里的路径一律 `os.path.relpath(p, ROOT)`，subprocess 统一 `cwd=ROOT`，现成实现 `pipeline._ass_spec()`；argv 里的 `-i` 路径不受此限）
+10. **proofread 复核门**：review-queue.json 有 pending 组=环节不推进（orchestrate 硬门）——"校对过"≠"复核完"，pending 挂着就放行=错词进成片（事故：「违科」当正确词交付，T43 锚）
+11. **content_type 选段门**：draft validate 硬剔除——voiceover/meta/ambient/broll 禁作 A 轨（读稿画面播原声=总结腔画外音穿帮），dialogue/说话画面禁作 B 轨（B 轨无音频通道=哑口型）；B 轨音频通道刻意不加，禁哑口型在选段时刻强制（T45 锚）
+12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
 
 ---
 
