@@ -1191,6 +1191,56 @@ def t33_vadwords_transcript_text():
               False, "异常: %s" % str(e)[:140])
 
 
+def t38_cover_sink():
+    # 回归锚：2026-09-15 实锤——build_cover 的 ai-generated/upload 分支直返槽位路径
+    # （cover/generated.jpg），前端 files.cover 只认 cover{sid}.jpg → 渲染用了 AI 图
+    # 但 Studio 显示陈旧抽帧封面（aidraft3 哈希不匹配抓获）。锚：五策略全部归一到 cover{sid}.jpg。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline
+        tmp = tempfile.mkdtemp(prefix="t38_")
+        src = os.path.join(tmp, "src.mp4")
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                        "-i", "testsrc2=size=1080x1920:rate=25:duration=2",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", src], check=True)
+        pd = os.path.join(tmp, "proj")
+        os.makedirs(os.path.join(pd, "cover"))
+        shutil.copyfile(src, os.path.join(pd, "out-demo.mp4"))
+        jpg = os.path.join(tmp, "a.jpg")
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-i", src,
+                        "-frames:v", "1", "-q:v", "2", jpg], check=True)
+        shutil.copyfile(jpg, os.path.join(pd, "cover", "generated.jpg"))
+        seg = {"no": 1, "src_in": 0.0, "src_file": src}
+        plan = {"media": src, "segments": [seg], "meta": {"cover": {}}}
+
+        def run(strategy, **kw):
+            c = {"strategy": strategy}
+            c.update(kw)
+            plan["meta"]["cover"] = c
+            out = pipeline.build_cover(plan, pd, "-demo")
+            return out if out and os.path.exists(out) else None
+
+        r_out = run("output-frame", at=0.4)
+        r_first = run("first-frame")
+        r_beat = run("beat-frame", beat_no=1, at=0.2)
+        r_ai = run("ai-generated")
+        ai_ok = r_ai == os.path.join(pd, "cover", "cover-demo.jpg") and \
+            open(r_ai, "rb").read() == open(os.path.join(pd, "cover", "generated.jpg"), "rb").read()
+        os.remove(os.path.join(pd, "cover", "generated.jpg"))
+        shutil.copyfile(jpg, os.path.join(pd, "cover", "upload.jpg"))
+        r_up = run("upload")
+        up_ok = r_up == os.path.join(pd, "cover", "cover-demo.jpg")
+        check("T38 封面收口五策略归一 cover{sid}.jpg（AI/上传不直返槽位路径）",
+              all([r_out, r_first, r_beat, ai_ok, up_ok]),
+              "out=%s first=%s beat=%s ai=%s upload=%s" % (
+                  bool(r_out), bool(r_first), bool(r_beat), ai_ok, up_ok))
+    except Exception as e:
+        check("T38 封面收口五策略归一 cover{sid}.jpg", False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1462,6 +1512,7 @@ def main():
     t35_bgm_segment_render()
     t36_draft_effect_registry()
     t37_review_gate()
+    t38_cover_sink()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
