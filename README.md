@@ -72,6 +72,17 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 # 产物：projects/myproj/out-aidraft.mp4 + subtitle-aidraft.ass + qc-report.json
 ```
 
+### 3. 界面速览
+
+**主页**：建项目、效果注册表管理入口，项目卡片直达创作台。
+![主页](docs/screenshots/home.png)
+
+**创作台**：顶部管线进度条（九环节 ✓/○ 实时状态）｜成片监视器｜故事线大纲与全局设定（字幕风格/BGM/段落/封面）｜幕序列金线（横向即时间轴，＋插入新幕，点幕预览秒级低清样张）。
+![创作台](docs/screenshots/studio.png)
+
+**素材库**：项目切片与仓库级素材包，转写文本就地校对，素材卡带审核徽标（✓ 可用 / ◌ 待审 / ✕ 拍摄废片）与缺陷台账。
+![素材库](docs/screenshots/library.png)
+
 ---
 
 ## 管线全景（系统地图）
