@@ -9,7 +9,7 @@ autocut3 管线核心 v0.1 —— 最小闭环
   - 双视图：本模块只生产 JSON/命令（AI 操作台），渲染产物交 Studio 监视器（人眼/视觉模型）
   - 组件四件套：输入契约 / 生成器 / 校验器(最小) / 后续加缓存
 """
-import json, os, subprocess, sys
+import json, os, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -761,9 +761,14 @@ def build_cover(plan, project_dir, sfx=""):
                         "-i", csrc, "-frames:v", "1", "-q:v", "2", out], capture_output=True)
         return out if os.path.exists(out) else None
     # ai-generated / upload：收口约定——文件在 cover/ 槽里即被采用
+    # 归一到 cover{sfx}.jpg（2026-09-15 实锤：原来直返槽位路径，前端 files.cover 只认
+    # cover-{sid}.jpg → 渲染用了 AI 图但 Studio 显示陈旧抽帧封面）
     for cand in ("upload.jpg", "upload.png", "generated.png", "generated.jpg"):
-        if os.path.exists(f"{cover_dir}/{cand}"):
-            return f"{cover_dir}/{cand}"
+        p = f"{cover_dir}/{cand}"
+        if os.path.exists(p):
+            if os.path.abspath(p) != os.path.abspath(out):
+                shutil.copyfile(p, out)
+            return out
     return None
 
 def build_beat_cmd(plan, seg, ass_path, out_path):
