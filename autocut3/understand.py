@@ -43,7 +43,7 @@ def _audits_done(f, aud):
 
 def _auto_review(f):
     if f.get("review") == "pending-review" and _audits_done(f, f.get("audit") or {}):
-        f["review"] = "reviewed"  # 审计齐=自动过审（Noah 2026-09-15：审核的实质内容 Agent 自己能做）
+        f["review"] = "reviewed"  # 审计齐=自动过审（维护者 2026-09-15：审核的实质内容 Agent 自己能做）
 
 
 def understand_pack(pack_id, material=None, provider=None, force=False):
@@ -117,7 +117,7 @@ def main():
         if not res:
             total["skip"] += len(json.load(open(os.path.join(ROOT, "materials", "packs", pid, "pack.json"), encoding="utf-8")).get("files", []))
     print("UNDERSTAND DONE: +%d (跳过 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]))
-    # 编排闭环（Noah 2026-09-14）：单素材识别全部完成后 → 包级统一理解 digest。
+    # 编排闭环（维护者 2026-09-14）：单素材识别全部完成后 → 包级统一理解 digest。
     # 没有这层，起草 LLM 面对的是扁平列表，悟不出"M0269 是旁白音轨源"这类整体定位——
     # 这是编排缺口，不是识别提示词的错。单素材模式（--material）不触发（盘点需要全量视图）。
     if not a.material and total["done"] > 0:

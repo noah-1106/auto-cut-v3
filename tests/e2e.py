@@ -392,7 +392,7 @@ def _t12_render(dub_src):
                             "-show_entries", "format=duration", "-of", "csv=p=0", out],
                            capture_output=True, text=True)
         dur = float(r.stdout.strip() or 0)
-    # 2026-09-14 dub 盖满语义（新素材包冷启动修复）：配音 > 幕视频时长 → A 轨延展盖满配音，
+    # 2026-09-14 dub 盖满语义（冷启动修复）：配音 > 幕视频时长 → A 轨延展盖满配音，
     # 成片 ≈ 配音实测长 + 幕2 4s——不再 atrim 掐断句子（旧断言 8s=掐断语义，已废）
     rd = subprocess.run([FF, "-v", "error",
                          "-show_entries", "format=duration", "-of", "csv=p=0", dub_src],
@@ -692,7 +692,7 @@ def t23_dossier_selfaudit():
 
 # ---------------------------------------------------------------- T24 proofread v2 分级+队列
 def t26_voiceover_orchestration():
-    """M0269 错判修复的三缺口回归锚（Noah："改完测试了吗"）——
+    """M0269 错判修复的三缺口回归锚（维护者："改完测试了吗"）——
     T26a 念稿指纹检测器（曾跑完就丢，无回归保护）；
     T26b 强制升级分支（dup≥12 时 narration→voiceover，M0269 实测时模型自己判对、分支从未被触发）；
     T26c digest 消费链（dossier 头 + voiceover 表述，此前只有打印验证）。全部离线 tempdir 隔离。"""
@@ -1084,7 +1084,7 @@ def t31_dubfit():
 
 # ---------------------------------------------------------------- T32 起草截断升档重试（冷启动实锤缺口）
 def t32_draft_truncation_retry():
-    # 回归锚：冷启动新素材包实锤——M3 正文超 cap 时 finish_reason=length 返回 JSON 半成品，
+    # 回归锚：新素材包冷启动实锤——M3 正文超 cap 时 finish_reason=length 返回 JSON 半成品，
     # 旧代码非空即 return → extract_json 必炸。锚：length 必须升档重试，2 次调用拿到干净正文。
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
@@ -1124,7 +1124,7 @@ def t32_draft_truncation_retry():
 
 # ---------------------------------------------------------------- T33 original 幕字幕文本=素材台词（非 story 摘要）
 def t33_vadwords_transcript_text():
-    # 回归锚：Noah 实锤——story 是"这一幕讲什么"的分镜摘要，被 vadwords 铺进 VAD 段后
+    # 回归锚：维护者 实锤——story 是"这一幕讲什么"的分镜摘要，被 vadwords 铺进 VAD 段后
     # 字幕=总结腔。锚：original 幕词轨文本=素材窗口 transcript 文本（时间仍 VAD 物理测量），
     # 窗口无词回退 story；dub 幕保持 story 文本（=TTS 念稿）。
     import tempfile, shutil
@@ -1192,9 +1192,9 @@ def t33_vadwords_transcript_text():
 
 
 def t34_narration_vocab_guard():
-    # 回归锚（2026-09-15 Noah 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
+    # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
-    # ① storyline mode=dub 时前端 select 无匹配项→回退显示"视频原声"（Noah 看到原声却渲出 TTS）；
+    # ① storyline mode=dub 时前端 select 无匹配项→回退显示"视频原声"（维护者 看到原声却渲出 TTS）；
     # ② 用户手选"AI 旁白"存成 tts→pipeline 不认→静默渲原声。此处钉死两端同一词汇表。
     en = json.load(open(os.path.join(ROOT, "registry", "enums.json"), encoding="utf-8"))
     ids = sorted(m["id"] for m in en.get("narration_modes") or [])
@@ -1203,7 +1203,7 @@ def t34_narration_vocab_guard():
 
 
 def t35_bgm_segment_render():
-    # 回归锚（2026-09-15 Noah #7）：BGM 段落选择+段落 loop 真渲染。
+    # 回归锚（2026-09-15 维护者 #7）：BGM 段落选择+段落 loop 真渲染。
     # 判别设计：2s 曲 = [0-0.2 静音 | 0.2-0.9 蜂鸣 | 0.9-2 静音]，段落 hook=0.2-0.9，loop=false，幕长 4s——
     # 正确路径=aloop 不启用/apad 补静音 → 1.5s 后恒静；若错回整条语义（stream_loop 整曲循环）→ 蜂鸣每 2s 重复出现。
     reg_p = os.path.join(ROOT, "registry", "bgm.json")
@@ -1251,7 +1251,7 @@ def t35_bgm_segment_render():
 
 
 def t36_draft_effect_registry():
-    # 回归锚（2026-09-15 Noah #11）：效果注册表进提示词 + LLM 选择经 validate 白名单透传。
+    # 回归锚（2026-09-15 维护者 #11）：效果注册表进提示词 + LLM 选择经 validate 白名单透传。
     # 曾双重假消费：提示词没喂注册表 + validate 重建 beats 时恒空 effects/subtitle。
     sys.path.insert(0, os.path.join(ROOT, "autocut3"))
     import draft
@@ -1277,7 +1277,7 @@ def t36_draft_effect_registry():
 
 
 def t37_review_gate():
-    # 回归锚（2026-09-15 Noah #3）：素材审核有实义化——"待审"曾是纯标签，validate 只看 usable，
+    # 回归锚（2026-09-15 维护者 #3）：素材审核有实义化——"待审"曾是纯标签，validate 只看 usable，
     # 待审素材照进成片（名存实亡）。现三层：①审计齐自动过审 ②档案标【未过审——禁用】 ③validate 剔除。
     sys.path.insert(0, os.path.join(ROOT, "autocut3"))
     import draft, transcribe, understand

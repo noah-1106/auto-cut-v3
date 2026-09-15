@@ -421,7 +421,7 @@ function updateSaveChip(){
   c.textContent=DIRTY?'● 未保存（自动保存中…）':'✓ 已自动保存';
 }
 let PULSE=null, CLI_RENDER_SHOWN=null;  // PULSE: /api/pulse 基线；CLI 渲染已展示到的百分比
-let PV_BUSY=false;  // 幕预览渲染中：抑制 PULSE 数据热重载（重建 DOM 会把预览条/滚动位置顶掉——Noah #9 渲染跳动实锤）
+let PV_BUSY=false;  // 幕预览渲染中：抑制 PULSE 数据热重载（重建 DOM 会把预览条/滚动位置顶掉——维护者 #9 渲染跳动实锤）
 
 function setStatus(s){$('status').textContent=s;}
 function fmtT(s){s=Math.round((+s)*10)/10;if(isNaN(s))return'?';const m=Math.floor(s/60);let r=Math.round((s-m*60)*10)/10;if(r>=60){m+=1;r=0}return m+':'+(r<10?'0':'')+r.toFixed(1);}
@@ -928,7 +928,7 @@ function addTrack(i){
   DRAFT.beats[i].tracks.push({role:'B',source_id:null,cut_index:0,src_in:0,duration:A.duration||3,op:'overlay-pip',pos:'top-right',scale:0.3,requirement:''});
   renderBeats();
 }
-function updWin(i,k){  // 素材窗口标注联动：入点/时长编辑时实时刷新起止显示（2026-09-15 Noah：起止时间点要标清楚）
+function updWin(i,k){  // 素材窗口标注联动：入点/时长编辑时实时刷新起止显示（2026-09-15 维护者：起止时间点要标清楚）
   const t=(DRAFT.beats[i].tracks||[])[k];const el=$('win-'+i+'-'+k);if(!t||!el)return;
   const a=+nz(t.src_in,0), b=a+(+nz(t.duration,3));
   el.textContent=(isNaN(a)?'?':a.toFixed(1))+'–'+(isNaN(b)?'?':b.toFixed(1))+'s';
@@ -1157,7 +1157,7 @@ function renderPack(){
 }
 function packCard(f){
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
-  // 审核有实义化（2026-09-15 Noah #3）：待审=该 kind 所需审计未齐（与 draft 门禁同判据）——
+  // 审核有实义化（2026-09-15 维护者 #3）：待审=该 kind 所需审计未齐（与 draft 门禁同判据）——
   // 审计齐即视同过审（transcribe/understand 下次跑时会回写 review 字段，旧数据此处兜齐）
   const kind0=f.kind||'video';
   const need=kind0==='video'?['transcript','visual']:(kind0==='audio'?['transcript']:['visual']);
@@ -1338,7 +1338,7 @@ async function saveCutText(i,val){
   }catch(e){setStatus('✗ '+e);}
 }
 
-/* ═══ 创作台视图（监视器 + 元信息条；独立审计页退役 2026-09-15 Noah——工程对账已并入创作台各轨）═══ */
+/* ═══ 创作台视图（监视器 + 元信息条；独立审计页退役 2026-09-15 维护者——工程对账已并入创作台各轨）═══ */
 function buildViews(){
   const pl=P.plan||{};
   setVideo('monwrap',P.files.out,'暂无成片 · 点「保存并重渲」生成');

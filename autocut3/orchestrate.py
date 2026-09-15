@@ -351,7 +351,7 @@ def advance(project, intent=None, story=None, only=None):
             print("  QC: " + r["one_line"])
             if r["verdict"] == "blocked":
                 raise RuntimeError("QC blocked——按 qc-report.json 的 suggested_fix 修复后重渲")
-            # 幕样张自检（2026-09-15 Noah #9/#11：Agent 要知道可以渲幕检查——此处钉进流程）：
+            # 幕样张自检（2026-09-15 维护者 #9/#11：Agent 要知道可以渲幕检查——此处钉进流程）：
             # 逐幕独立渲染（build_beat_cmd 与全片渲染是两条代码路径，全片过≠单幕过），
             # 产物 previews/beat-*.mp4 供人/Agent 抽查；任一幕失败=拦截
             sid0 = story or _latest_story(pdir)

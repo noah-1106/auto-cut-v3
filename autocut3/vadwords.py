@@ -100,7 +100,7 @@ def main():
             spans, dur = vad_spans(src, ss=ss, t=t)
             audio_desc = "%s[%s+%s]" % (os.path.basename(src), ss, t)
             # 字幕文本=素材实拍台词（proofread 校对后 ASR），story 摘要不进字幕——
-            # VAD 只管时间（物理测量），文本管"人物实际说了什么"（2026-09-14 Noah 实锤：
+            # VAD 只管时间（物理测量），文本管"人物实际说了什么"（2026-09-14 维护者 实锤：
             # story 是"这一幕讲什么"的分镜摘要，被铺进字幕=总结腔字幕）。
             # 窗口无词（空镜/未转写）→ 回退 story 字符，不留空白字幕。
             tw = [w for w in (ftrans.get("words") or [])

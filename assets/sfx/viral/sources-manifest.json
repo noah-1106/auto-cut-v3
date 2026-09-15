@@ -16,7 +16,7 @@
     "cricket":  {"mixkit_id": 1780, "title": "Single cricket screech", "url": "https://mixkit.co/free-sound-effects/discover/cricket/"}
   },
   "audition_alternates": {
-    "_comment": "Noah 终审试听备选（同槽位候选，assets 未入册，可按听感替换）",
+    "_comment": "维护者 终审试听备选（同槽位候选，assets 未入册，可按听感替换）",
     "whoosh":   [{"mixkit_id": 1491, "title": "Arrow whoosh"}, {"mixkit_id": 1489, "title": "Air woosh"}],
     "hit":      [{"mixkit_id": 2047, "title": "Martial arts fast punch"}, {"mixkit_id": 2161, "title": "Air in a hit"}],
     "ding":     [{"mixkit_id": 938, "title": "Uplifting bells notification"}, {"mixkit_id": 933, "title": "Bell notification"}],

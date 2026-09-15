@@ -114,7 +114,7 @@ def build_dossier(packs):
                 if ct in ("meta", "ambient", "broll"):
                     line += " ⛔%s类素材：禁作口播A轨" % ct
                 if ct == "voiceover":
-                    line += " 🎙voiceover：念稿/配音录制——词轨可作旁白音轨源，画面不建议作A轨主体（Noah 2026-09-14：M0269 错判修复）"
+                    line += " 🎙voiceover：念稿/配音录制——词轨可作旁白音轨源，画面不建议作A轨主体（维护者 2026-09-14：M0269 错判修复）"
                 if v.get("usage"):
                     line += "（用途：%s）" % v["usage"]
             if kind == "image":
@@ -128,7 +128,7 @@ def build_dossier(packs):
 
 
 def _reviewed(f):
-    """审核有实义化（2026-09-15 Noah #3）：review=pending-review 且该 kind 所需审计未齐 = 未过审。
+    """审核有实义化（2026-09-15 维护者 #3）：review=pending-review 且该 kind 所需审计未齐 = 未过审。
     transcribe/understand 跑完会自动置 reviewed——pending-review 存续即"Agent 还没审过"，
     draft 提示词标注禁用 + validate 剔除。人保留最终否决权（toggle 拍摄废片）。"""
     if f.get("review") != "pending-review":
@@ -150,7 +150,7 @@ def _reg(name):
 
 
 def _effect_catalog():
-    """效果注册表 → 提示词段落（2026-09-15 Noah #11：字幕样式/贴纸/音效此前未进提示词，
+    """效果注册表 → 提示词段落（2026-09-15 维护者 #11：字幕样式/贴纸/音效此前未进提示词，
     draft 输出恒为空——Agent 无从得知可选效果。id+中文名+语义描述，LLM 按幕选用）。"""
     def _lines(rn, fmt):
         reg = _reg(rn)
@@ -295,7 +295,7 @@ def validate(draft, mats, transitions):
         if not any(t["role"] == "A" for t in tracks):
             tracks[0]["role"] = "A"
         to = b.get("transition_out")
-        # 效果选择透传（2026-09-15 Noah #11）：注册表白名单校验后保留 LLM 选择——
+        # 效果选择透传（2026-09-15 维护者 #11）：注册表白名单校验后保留 LLM 选择——
         # 曾恒空丢弃（假消费）：提示词没喂注册表 + validate 重建 beats 时空 effects/subtitle
         _subs = _reg("subtitles.json")
         _stks = _reg("stickers.json")

@@ -104,7 +104,7 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         if ow:
             for w in ow:
                 _ws, _we = round(tl0 + float(w["s"]), 1), round(tl0 + float(w["e"]), 1)
-                # 幕内钳制与 dub 通道同源（新素材包实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）
+                # 幕内钳制与 dub 通道同源（真实项目实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）
                 _ws, _we = max(_ws, tl0), min(_we, tl1)
                 if _we - _ws < 0.08:
                     continue
@@ -623,12 +623,12 @@ def build_cmd(plan, ass_path, out_path):
     for j, (_l, _a, sg) in enumerate(beat_v):
         a_starts.append(round(_aa, 2))
         _aa += float(sg["dur"]) - (_overlap_d(plan, plan["segments"][j - 1]) if j else 0.0)
-    # BGM 区间化（2026-09-14 维护者项目问答）：前端每幕"继承贯穿 BGM"开关接通渲染——
+    # BGM 区间化（真实项目问答）：前端每幕"继承贯穿 BGM"开关接通渲染——
     # inherit=true → 贯穿曲（meta.audio.bgm_id）；inherit=false+bgm=<id> → 幕级独立换曲；
     # inherit=false+bgm=null → 该幕无 BGM（人声/旁白裸奔）。连续同源幕合为一组共享 input，
     # 组段按音频链时轴（a_starts 同源逻辑）切齐后 concat——组间硬切，组首尾各自淡入淡出。
     # 曲长 < 段长自动循环（-stream_loop），afade 收尾由 atrim 精确截断。
-    # 段落化（2026-09-15 Noah 问答 #7）：music.segment / meta.audio.bgm_segment 引用注册表
+    # 段落化（2026-09-15 维护者 问答 #7）：music.segment / meta.audio.bgm_segment 引用注册表
     # segments 段落名——组渲染改为「取段落窗口 + aloop 段落循环 / apad 不足补静音」，
     # 不再用曲位=时间轴位语义；loop 标志（幕级 music.loop / 全局 bgm_loop）覆盖注册表默认。
     _reg_bgm = load(f"{ROOT}/registry/bgm.json") if os.path.exists(f"{ROOT}/registry/bgm.json") else {}
@@ -637,7 +637,7 @@ def build_cmd(plan, ass_path, out_path):
         if mu.get("inherit", True):
             if not plan.get("bgm"):
                 return (None, None, None)
-            _seg = mu.get("segment") or plan.get("bgm_segment")   # 幕级覆盖贯穿曲段落（Noah #7）
+            _seg = mu.get("segment") or plan.get("bgm_segment")   # 幕级覆盖贯穿曲段落（维护者 #7）
             _lp = mu.get("loop") if mu.get("loop") is not None else plan.get("bgm_loop")
             return (("global", _seg, _lp), plan.get("bgm"), (plan.get("bgm_id"), _seg, _lp))
         bid = mu.get("bgm")

@@ -2,14 +2,14 @@ __pycache__/
 *.pyc
 .DS_Store
 nohup.out
-# 项目工作区整体不入库（2026-09-15 Noah 指令）：故事线/报告/封面/成片=私人项目数据
+# 项目工作区整体不入库（2026-09-15 维护者 指令）：故事线/报告/封面/成片=私人项目数据
 # 或随时可重渲的派生物，与代码库无关；本地文件保留，git 只跟踪源码+注册表+资产
 projects/*
 !projects/.gitkeep
-# TTS 参考音色/运行时（2026-09-15 Noah 指令不放仓库）：声纹数据在仓库外
+# TTS 参考音色/运行时（2026-09-15 维护者 指令不放仓库）：声纹数据在仓库外
 # ~/.local/share/autocut3/audio8/（venv+模型+voices 全在那）；试听产物走 assets/preview/（下方已 ignore）
 assets/preview/
-# 过去的测试内容（2026-09-15 Noah 指令历史清史）：PoC 实证样张/视觉 A/B 实验/旧脚手架，
+# 过去的测试内容（2026-09-15 维护者 指令历史清史）：PoC 实证样张/视觉 A/B 实验/旧脚手架，
 # 本地保留随时可查，永不回库
 docs/poc/
 docs/ab-vision-*/
@@ -24,5 +24,6 @@ bin/
 config/services.json
 config/services.*.json
 !config/services.ci.json
-# 项目接管手册含内部失败模式清单与审查史（2026-09-15 Noah 指令）：私有工作文档，本地保留
+# 项目接管手册含内部失败模式清单与审查史（2026-09-15 维护者 指令）：私有工作文档，本地保留
 CLAUDE.md
+.claude/

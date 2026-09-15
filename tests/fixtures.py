@@ -157,7 +157,7 @@ def ensure():
 
 
 def remove():
-    """夹具清理：跑完即删（磁盘不残留任何测试数据——Noah 迎接新素材，持久化夹具=污染源）。
+    """夹具清理：跑完即删（磁盘不残留任何测试数据——维护者 迎接新素材，持久化夹具=污染源）。
     双保险：只删带 fixture 标记的包/项目；E2E_KEEP_FIXTURES=1 时保留（调试用）。"""
     if os.environ.get("E2E_KEEP_FIXTURES") == "1":
         print("  [fixtures] E2E_KEEP_FIXTURES=1，保留夹具（调试模式）")

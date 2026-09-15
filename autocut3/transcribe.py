@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _audits_done(f, aud):
-    """审核有实义化（2026-09-15 Noah #3）：审计（转写+画面识别）即审核的实质内容——
+    """审核有实义化（2026-09-15 维护者 #3）：审计（转写+画面识别）即审核的实质内容——
     该 kind 所需的审计全部 done/n/a 即视为已过审。返回 True=已可自动过审。"""
     need = {"video": ("transcript", "visual"), "audio": ("transcript",), "image": ("visual",)}.get(
         f.get("kind", "video"), ())
@@ -100,7 +100,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
                            "has_speech": has_speech, "at": r["at"]}
         _dup = _dup_len(r["text"])
         if _dup >= 12:
-            f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（Noah 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
+            f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（维护者 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
         aud["transcript"] = "done"
         _auto_review(f)
         changed = True

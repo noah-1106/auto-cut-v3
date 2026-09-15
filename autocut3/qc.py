@@ -68,7 +68,7 @@ def check_windows(sl, files, rules):
                 continue
             if ((b.get("narration") or {}).get("mode") or "original") == "dub":
                 # 配音幕：原声整段被配音轨替换（pipeline 音频链 dub 分支），A 轨素材自带词轨
-                # 对成片无语义——R1 死尾/R2 咬字/R3 静音洞按原声检查=误报（2026-09-14 维护者项目实锤）
+                # 对成片无语义——R1 死尾/R2 咬字/R3 静音洞按原声检查=误报（真实项目实锤）
                 continue
             words = _real_words(f)
             dur_m = float(f.get("duration") or 0)
