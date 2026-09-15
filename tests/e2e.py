@@ -1345,7 +1345,7 @@ def t40_beat_preview():
                 okv = False
         check("T40 幕预览渲染（/api/beat 产物存在且为有效视频）",
               code == 200 and r.get("ok") and okv,
-              "code=%s ok=%s valid=%s log=%s" % (code, r.get("ok"), okv, str(r.get("log"))[:60]))
+              "code=%s ok=%s valid=%s log=…%s" % (code, r.get("ok"), okv, str(r.get("log"))[-300:]))
     except Exception as e:
         check("T40 幕预览渲染", False, "异常: %s" % str(e)[:140])
 
