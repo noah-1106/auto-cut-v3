@@ -101,6 +101,12 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
 # 配音版（整线 TTS）：python3 autocut3/draft.py <pid> --intent "..." --save --dub
 ```
 - `--intent` 必填（编排器 storyline 环节也要求）。不加 `--save` 只打印不落盘。
+- **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
+  （本地 audio8 默认注册音色 `narrator_default`）。换音色=先注册参考音色再改配置：
+  `python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"`——
+  **硬契约：参考音频 0.5–30s 且逐字稿一字不差**，否则克隆出来的是哑嗓子；
+  注册后 `tts.py synth --text "..." --voice <名字>` 验证音色可用再跑 draft --dub。
+  云端 minimax 同理走 `tts` 段 provider 切换。
 - 产物：`storylines/aidraft.json`（beats[]）。**LLM 可能截断**（finish_reason=length）——
   落盘后必须逐幕核对结构完整（每幕有 no/story/tracks/narration），缺=重跑，不许带伤前进。
 - draft 提示词已内置硬规则（content_type 选段门、效果注册表白名单、旁白词汇表），但
@@ -133,6 +139,17 @@ python3 autocut3/pipeline.py make  <pid> [sid]      # 只产 plan+ASS 不渲（�
 - 渲染成功尾部**自动跑 QC**；进度看 `projects/<pid>/render.status`
   （running/stage/pct/tail）。Studio `GET /api/render-progress/<proj>?story=<sid>` 同源。
 - 渲染中途失败：读 render.status 的 tail 找 ffmpeg 报错；**改完输入重渲，不要手动拼视频**。
+- **转场微调旋钮**（Studio 渲染 URL 的 query 参数，写入 `projects/<pid>/params.json`，
+  渲染时覆写本故事线用到的转场模板参数，不动注册表）：
+  | 旋钮 | 类型 | 作用（pipeline.py 消费点） |
+  |---|---|---|
+  | `duration` | 秒(float) | 转场过渡时长（xfade duration；注册表模板默认值可被它临时覆盖） |
+  | `hold` | 秒(float) | flash 型转场的白闪帧时长 |
+  | `grain` | 强度(int) | flash 型转场白帧的噪点强度（ffmpeg noise alls 值） |
+  | `flash` | 亮度(float) | flash 转场窗口内的亮度增益峰值（flash_peak，正弦包络） |
+
+  例：`POST /api/render-start/<proj>?story=<sid>&duration=0.6&grain=40`。只对**本故事线
+  实际用到**的转场 id 生效；params.json 长期存在，想恢复模板默认就删掉该文件或重发空参数。
 
 ### 阶段 6 · 质检与交付（qc）
 ```bash
@@ -147,9 +164,26 @@ python3 autocut3/qc.py <pid> --story <sid>
 - **交付判据**：QC deliverable（或 fix-then-deliver 已修重跑到 deliverable）+ 成片存在 +
   交付说明含：成片路径/时长/响度、QC verdict、warn 清单、对雇主兜底假设的确认。
 
+### 阶段 6.5 · 封面收口（cover）
+封面统一落 `projects/<pid>/cover/cover-<sid>.jpg`（工程只认这个槽位文件名）。五途径
+（enums.json `cover_strategies`），故事线 `meta.cover.strategy` 选其一：
+
+| strategy | 怎么出图 | 备注 |
+|---|---|---|
+| `first-frame`（默认） | 首幕 A 轨入点帧抽帧 | 全自动，无需人工 |
+| `output-frame` | 成片渲染后抽帧（`meta.cover.at` 秒，默认 0.4） | 封面=发布本体，含字幕/贴纸全要素 |
+| `beat-frame` | 指定幕指定时刻（`meta.cover.beat_no` + `at` 秒） | 要填幕号+时刻 |
+| `ai-generated` | AI 出图放 `cover/generated.png`（或 .jpg） | `POST /api/cover-gen/<proj>`（image_gen） |
+| `upload` | 外部图放 `cover/upload.jpg`（或 .png） | `POST /api/cover-upload/<proj>` |
+
+任何途径最终都被归一到 `cover-<sid>.jpg`（pipeline.build_cover 收口）。AI/上传后不
+重渲也会在下一次渲染时被采用；验收封面就看 cover-<sid>.jpg 一张。
+
 ---
 
 ## 4. 工具卡全集（命令 / 参数 / 产出 / 何时用）
+
+> Windows 上 `python3` 一律换 `python`（本文按 macOS/Linux 书写）；ffmpeg 同理用 `bin\ffmpeg.exe`。
 
 ### 4.1 素材段
 | 命令 | 参数 | 产出 | 何时用 |
@@ -196,6 +230,20 @@ python3 autocut3/orchestrate.py <pid> --step vadwords --story <sid>   # 单步
 | `image_gen.py "<prompt>" <out> [--ar 9:16]` | AI 封面/贴图 |
 | `video_gen.py gen <pid> --prompt "..." [--image --duration --res]` + `poll <pid>` | AI 生成片段（预留口） |
 
+### 4.6 切片子系统（cuts，老项目形态，见到再碰）
+
+部分老项目（v1 形态）不用 packs，而是**单条长素材** `projects/<pid>/materials/src.mp4`
+切成 cuts：`projects/<pid>/materials/cuts.json`（ASR 切分产物，cuts[].{cut_index,in,out,
+duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/library.json` 的
+`cuts[]` 档案（含 usable 拍摄层决策/audit，时间 0.1s 量化）。原则：usable 只评拍摄层
+（说错/卡等/重复/气口），创作取用仍在 storyline。
+
+相关路由（新 packs 项目用不到，别混）：`GET /api/library/<proj>/clip/<cut_index>`
+（cut 预览 mp4）、`POST /api/proofread-cut/<proj>`（cut 台词人工校对，等长替换）、
+`POST /api/library/<proj>/usable`（cut 级废片，body `{"cut_index":0,"usable":false,
+"defects":[...]}`）。**packs 与 cuts 是两条素材轨，一个项目里通常只有一套在役**——
+先看 `materials/library.json` 有 `packs` 还是有 `cuts`。
+
 ---
 
 ## 5. 故事线数据契约（直接读写 storylines/<sid>.json 前必读）
@@ -224,6 +272,9 @@ python3 autocut3/orchestrate.py <pid> --step vadwords --story <sid>   # 单步
 - `words[].s/e` 是相对**幕起点**的秒。
 - 兼容顶层键（手写也可用）：`subtitle_style`、`audio.{bgm_id,bgm,bgm_segment,bgm_loop,bgm_volume,loudnorm}`。
 - B 轨仅视频素材、无音频通道、禁说话画面；`op:"overlay-pip"` + pos（tl/tr/bl/br）+ scale。
+- **"当前故事线"= `storylines/*.json` 里 mtime 最新的那条**（qc.py `--story` 省略、
+  编排器取当前线、Studio 默认展示，全按这个规则）。副作用：你改了一条旧线，
+  它就变成"当前线"——多线并存时**渲染/QC 永远显式带 `--story`**，别靠默认值。
 
 ---
 
@@ -311,3 +362,26 @@ Studio 路由（http://127.0.0.1:8765）：
 - [ ] warn 清单已抄录进交付说明
 - [ ] 兜底假设（时长/平台/风格）已请雇主确认
 - [ ] 交付说明：成片路径+时长+响度、verdict、warn、改动历史、遗留问题
+
+---
+
+## 附录 A · Studio POST 请求体形参（经 HTTP 驱动时照抄）
+
+| 路由 | body / query | 说明 |
+|---|---|---|
+| `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 只允许字母数字下划线中划线 |
+| `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
+| `POST /api/pack-upload/<pid>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；>500MB 易断 |
+| `POST /api/pack-mount/<proj>/<pid>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
+| `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
+| `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。改 beats 后记得重跑 vadwords |
+| `POST /api/storyline-delete/<proj>?story=<sid>` | 无 body | 删线 |
+| `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409 |
+| `POST /api/render/<proj>?story=&...` | 无 body | 同步渲染（600s 超时），长片用 render-start |
+| `GET  /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
+| `POST /api/pack/<pid>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
+| `POST /api/library/<proj>/usable` | `{"cut_index":0,"usable":false,"defects":[...]}` | cut 级废片（cuts 形态项目） |
+| `POST /api/proofread-pack/<pid>/<fid>` | 词轨等长替换结构（走 Studio 界面更稳） | 人工校对单条转写 |
+| `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
+| `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers |
+| `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
