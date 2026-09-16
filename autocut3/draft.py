@@ -262,7 +262,10 @@ def extract_json(text):
 def validate(draft, mats, transitions):
     """修复式校验：越界钳制、废片剔除、保证每幕有 A 轨、转场白名单。"""
     beats = []
-    for b in (draft.get("beats") or [])[:4]:
+    # 全量校验不截断（2026-09-16 Noah 实锤 bug：基线起的 [:4] 把第 5 幕起静默丢弃——
+    # C 类静默数据丢失，同 T32"截断当成功"一族）。提示词引导 2-4 幕是软约束，
+    # LLM 给 6 幕就校 6 幕，多幕原样保留（下游渲染/QC 均不限幕数）。
+    for b in (draft.get("beats") or []):
         tracks = []
         for t in (b.get("tracks") or []):
             m = mats.get(t.get("source_id"))

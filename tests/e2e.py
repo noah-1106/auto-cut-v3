@@ -29,6 +29,7 @@
   T45 content_type 强制门（voiceover/meta 禁A/drop、说话画面禁B、干净素材不受影响）
   T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
   T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
+  T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制，2026-09-16 Noah 实锤 [:4] 静默丢弃 bug）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1691,6 +1692,35 @@ def t47_proofread_pending_not_done():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t48_validate_no_beat_truncation():
+    # 回归锚（2026-09-16 Noah 实锤）：draft.validate 自基线起 `[:4]` 截断——LLM 给 6 幕
+    # 只落 4 幕，第 5 幕起静默丢弃（C 类静默数据丢失，同 T32 截断当成功一族）。
+    # 锚：6 幕全过 validate = 6 幕全留，且第 5/6 幕同样吃钳制（不是旁路放行）。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import draft as D
+        mats = {"M%d" % i: {"id": "M%d" % i, "kind": "video", "usable": True, "duration": 30,
+                            "visual": {"content_type": "narration", "desc": "空镜"},
+                            "transcript": {"words": []}}
+                for i in range(1, 7)}
+        draft = {"beats": [
+            {"story": "s%d" % i,
+             "tracks": [{"role": "A", "source_id": "M%d" % i, "src_in": 0, "duration": 4}]}
+            for i in range(1, 7)]}
+        beats = D.validate(draft, mats, [])
+        # 第 6 幕 duration 故意越界（40s > 素材 30s）→ 钳到 30s，证明第 5 幕起也在校验不在旁路
+        draft["beats"][5]["tracks"][0]["duration"] = 40
+        beats2 = D.validate(draft, mats, [])
+        ok = (len(beats) == 6) and (len(beats2) == 6) and (beats2[5]["tracks"][0]["duration"] <= 30)
+        check("T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制）",
+              ok, "beats=%d clamp=%s" % (len(beats2), beats2[5]["tracks"][0]["duration"] if len(beats2) == 6 else "-"))
+    except Exception as e:
+        check("T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1972,6 +2002,7 @@ def main():
     t45_content_type_gates()
     t46_loudnorm_chain()
     t47_proofread_pending_not_done()
+    t48_validate_no_beat_truncation()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

@@ -199,8 +199,8 @@ python3 tests/audit.py                                     # 代码审计器
 ## 测试与质量
 
 ```bash
-python3 tests/e2e.py      # 50 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
-                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（48 项离线，日常回归用这个）
+python3 tests/e2e.py      # 54 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（52 项离线，日常回归用这个）
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
@@ -238,4 +238,4 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 贡献
 
-欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（53 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。
+欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（54 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。

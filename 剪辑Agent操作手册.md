@@ -41,9 +41,9 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
    materials/dub/ 下的 mp3）/ `none`（无旁白）。**没有 "tts" 这个值**——TTS 只是 dub 的
    音频来源。
 6. **"4 幕"不是幕数上限**（三层区别，卡3 实踩）：draft 提示词只**引导** LLM 写 2–4 幕
-   （软约束）；draft 内部 validate 只处理**前 4 幕**——LLM 若给了 5 幕，第 5 幕起被
-   **静默丢弃**；渲染链不限幕数。**手改 storylines/<sid>.json 加幕不受任何限制**
-   （validate 只在 draft 时跑），要 6 幕 8 幕直接 beats 里加。
+   （软约束）；validate 对超出幕数**原样全量校验、不截断**（基线曾有 `[:4]` 静默丢弃
+   第 5 幕起的 bug，2026-09-16 已修，T48 锚）；渲染链不限幕数。要 6 幕 8 幕直接
+   beats 里加。
 
 ---
 
