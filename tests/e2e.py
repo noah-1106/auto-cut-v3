@@ -28,6 +28,7 @@
   T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段，2026-09-15 agent-037 实锤）
   T45 content_type 强制门（voiceover/meta 禁A/drop、说话画面禁B、干净素材不受影响）
   T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
+  T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1646,6 +1647,50 @@ def t46_loudnorm_chain():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t47_proofread_pending_not_done():
+    # 回归锚（2026-09-16 n006 实锤复发，n004 曾人肉拦截未根治）：上传初值
+    # audit.proofread="pending" 是非空串，旧 not a 判定放过=校对从未跑也报 done
+    # （19/19 pending 虚报"词轨校对 done"，校对轮被迫返工）。锚：只有 done/auto-done
+    # 算过；pending 一律待校对。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import orchestrate as ORCH
+        tmp = tempfile.mkdtemp(prefix="t47_")
+        old_root = ORCH.ROOT
+        try:
+            ORCH.ROOT = tmp
+            os.makedirs(os.path.join(tmp, "materials/packs/tp"), exist_ok=True)
+            json.dump({"files": [
+                {"id": "M1", "kind": "video", "usable": True,
+                 "transcript": {"text": "x", "words": [{"text": "x", "start": 0, "end": 1}]},
+                 "audit": {"proofread": "pending"}},        # 上传初值——旧逻辑误判 done
+                {"id": "M2", "kind": "video", "usable": True,
+                 "transcript": {"text": "y", "words": [{"text": "y", "start": 0, "end": 1}]},
+                 "audit": {"proofread": "auto-done"}}]},     # 已过
+                      open(os.path.join(tmp, "materials/packs/tp/pack.json"), "w", encoding="utf-8"))
+            pdir = os.path.join(tmp, "projects/t47")
+            os.makedirs(os.path.join(pdir, "materials"), exist_ok=True)
+            json.dump({"packs": ["tp"]}, open(os.path.join(pdir, "materials/library.json"), "w"))
+            st1, d1 = ORCH._step_proofread(pdir)  # 有 pending → 环节 pending
+            # 全部校对完成 → done
+            pj = json.load(open(os.path.join(tmp, "materials/packs/tp/pack.json"), encoding="utf-8"))
+            pj["files"][0]["audit"]["proofread"] = "done"
+            json.dump(pj, open(os.path.join(tmp, "materials/packs/tp/pack.json"), "w", encoding="utf-8"))
+            st2, d2 = ORCH._step_proofread(pdir)
+            ok = (st1 == "pending" and "1/2" in d1) and (st2 == "done")
+            check("T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过）",
+                  ok, "pending=%s:%s all-done=%s:%s" % (st1, d1[:24], st2, d2[:16]))
+        finally:
+            ORCH.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1926,6 +1971,7 @@ def main():
     t44_vadwords_no_asr_time()
     t45_content_type_gates()
     t46_loudnorm_chain()
+    t47_proofread_pending_not_done()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

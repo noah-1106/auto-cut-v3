@@ -121,7 +121,10 @@ def _step_proofread(pdir):
     errs = [m for m, a in todo if a and str(a).startswith("error")]
     if errs:
         return ("failed", "校对失败: %s" % ",".join(errs[:3]))
-    left = [m for m, a in todo if not a]
+    # 严格判定（2026-09-16 n006 实锤复发，n004 曾人肉拦截未根治）：上传初值
+    # "pending" 是非空串，曾被 not a 放过=校对从未跑也报 done（19/19 pending 虚报）。
+    # 只有 done/auto-done 算过；pending/其它未知值一律算待校对。
+    left = [m for m, a in todo if a not in ("done", "auto-done")]
     # 人工复核门（2026-09-16 agent-037 实锤：「违科」类语义存疑组进 review-queue 后
     # 环节照样 done，未校错字直达成片）：queue 里有 pending = 门不开
     q = _jload(os.path.join(pdir, "review-queue.json"), {})

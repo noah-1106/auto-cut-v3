@@ -232,9 +232,10 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 更多文档
 
+- **剪辑 Agent 操作手册：`AGENTS.md`**（六阶段 SOP + 工具卡 + 数据契约 + 注册表维护 + 坑位清单——Agent 动手前必读）
 - 管线自动化改造设计：`docs/pipeline-v2.md`
 - 素材音效的第三方许可：`assets/sfx/viral/LICENSE-mixkit.txt`
 
 ## 贡献
 
-欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（48 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。
+欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（53 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。
