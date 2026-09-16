@@ -86,7 +86,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 ```bash
 python3 autocut3/transcribe.py <pid>            # ASR 词轨+文本 → pack.json transcript
 python3 autocut3/understand.py <pid>            # 视觉理解 → pack.json visual + digest
-python3 autocut3/proofread.py <包id>            # ⚠ 参数是【素材包id】不是项目id！见坑清单
+python3 autocut3/proofread.py <pid>            # 参数=项目名（与 transcribe 同构，2026-09-16 修根）；队列必落 projects/<pid>/
 python3 autocut3/dossier.py <pid>               # 素材档案（LLM 读全量转写+视觉合成）
 python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/音量跳变等）
 ```
@@ -220,7 +220,7 @@ python3 autocut3/qc.py <pid> --story <sid>
 |---|---|---|---|
 | `transcribe.py <pid>` | `--pack --material --asr --force` | pack.json transcript + audit.transcript | 新素材入库后必跑；--force 重跑已转写的 |
 | `understand.py <pid>` | `--pack --material --vision --force` | pack.json visual + digest | 转写后必跑；批处理自动 build_digest |
-| `proofread.py <包id>` | `--dry --material` | 词轨修正写回 pack.json + `projects/<包id>/review-queue.json` ⚠落点见坑#3 | 转写后必跑；--dry 预演不落盘 |
+| `proofread.py <项目> [--pack X]` | `--dry --material --pack` | 词轨修正写回 pack.json + 复核队列（**固定落 `projects/<项目>/review-queue.json`**，与门禁同目录） | 转写后必跑；--dry 预演不落盘；--pack 限定项目内某包 |
 | `dossier.py <pid>` | 无 | `projects/<pid>/dossier.json` 素材档案 | 理解后；draft 的提示词原料 |
 | `disposition.py <pid>` | 无 | `projects/<pid>/disposition.json` 缺陷台账 | dossier 后；draft 档案行会带⚠ |
 
@@ -360,13 +360,13 @@ Studio 路由（http://127.0.0.1:8765）：
 
 ## 8. 坑位清单（每个都是真实事故，按发生顺序读）
 
-1. **proofread 的参数是素材包 id，不是项目 id**（n006 坑 #3）：跑
-   `proofread.py zhangqiang-ningbo` 会把复核队列写到 `projects/zhangqiang-ningbo/`，
-   而编排器读 `projects/<你的项目>/`——队列错位=门禁永远等不到复核。跑前先想：
-   "projects/<这个参数>/ 是不是我正在做的项目目录？"**迁完队列的验证**：把
-   review-queue.json 放进正确项目目录后，跑 `orchestrate.py <pid>`——proofread 环节
-   显示"待人工复核 N 组"=门禁已看见；还显示"待校对 N/N"=文件没放对目录（或 proofread
-   根本没跑）。
+1. ~~proofread 的参数是素材包 id，不是项目 id~~ **已修根（2026-09-16，T49 锚）**：
+   proofread 入口已改为项目名（`proofread.py <项目> [--pack X]`），队列固定落
+   `projects/<项目>/review-queue.json`，与编排器门禁天然同目录——不存在错位可能。
+   历史教训保留：此坑曾三连发（n004 人肉拦截、n006、wangyalun），**手册提醒拦不住的
+   坑必须修进代码**。若你在老文档/旧会话里看到 `proofread.py <包id>` 的写法，那是
+   修根前的古董。**手动迁过队列后的验证**：跑 `orchestrate.py <pid>`——proofread
+   环节显示"待人工复核 N 组"=门禁已看见；还显示"待校对 N/N"=文件没放对目录。
 2. **`audit.proofread: "pending"` ≠ 已校对**（n004 发现、n006 复发、T47 钉死）：
    上传初值就是 "pending"，只有 `done`/`auto-done` 算过。看状态用 orchestrate 严格判据，
    不要自己数非空。

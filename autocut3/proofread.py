@@ -37,20 +37,20 @@ def _load_terms():
         return []
 
 
-def _queue_load(pid):
-    p = os.path.join(ROOT, "projects", pid, "review-queue.json")
+def _queue_load(project):
+    p = os.path.join(ROOT, "projects", project, "review-queue.json")
     if os.path.exists(p):
         try:
             return json.load(open(p, encoding="utf-8"))
         except Exception:
             pass
-    return {"project": pid, "items": []}
+    return {"project": project, "items": []}
 
 
-def _queue_add(pid, item):
-    q = _queue_load(pid)
+def _queue_add(project, item):
+    q = _queue_load(project)
     q["items"].append(item)
-    d = os.path.join(ROOT, "projects", pid)
+    d = os.path.join(ROOT, "projects", project)
     if not os.path.isdir(d):
         os.makedirs(d)
     p = os.path.join(d, "review-queue.json")
@@ -113,7 +113,8 @@ def _pack_locked(fn):
 
 
 @_pack_locked
-def run(pid, dry=False, material=None):
+def _run_pack(pid, project, dry=False, material=None):
+    """单包校对（调用方已持该包 .lock）。复核队列统一落项目目录——与编排器门禁同目录。"""
     pk_path = os.path.join(ROOT, "materials", "packs", pid, "pack.json")
     pk = json.load(open(pk_path, encoding="utf-8"))
     terms = _load_terms()
@@ -170,11 +171,29 @@ def run(pid, dry=False, material=None):
         print(f"  {f['id']}: auto {len(applied)} 组 {[a['find']+'→'+a['replace'] for a in applied] or '无'} | 转人工 {len(queued)} 组")
     if not dry:
         for item in pending_queue:
-            _queue_add(pid, item)
+            _queue_add(project, item)
         json.dump(pk, open(pk_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-        print(f"PROOFREAD DONE: auto {total_fix} 处已写回（等长，时间戳未动）；needs-human {total_review} 组进 review-queue.json")
+        print(f"PROOFREAD DONE[{pid}]: auto {total_fix} 处已写回（等长，时间戳未动）；needs-human {total_review} 组进 review-queue.json")
     else:
-        print(f"PROOFREAD DRY: auto {total_fix} 处 / 转人工 {total_review} 组（未写回）")
+        print(f"PROOFREAD DRY[{pid}]: auto {total_fix} 处 / 转人工 {total_review} 组（未写回）")
+
+
+def run(project, dry=False, material=None, pack=None):
+    """入口（2026-09-16 修根：参数与 transcribe/understand 同构=项目名）。
+    原实现位置参数收【包 id】、队列写 projects/<包id>/——包名≠项目名时复核队列与编排器
+    门禁错位（n004 人肉拦截、n006、wangyalun 三连发；手册提醒拦不住，改入口根治）。
+    现遍历项目挂载包逐包校对（每包独立 .lock），队列固定落 projects/<项目>/。"""
+    pdir = os.path.join(ROOT, "projects", project)
+    if not os.path.isdir(pdir):
+        if os.path.isdir(os.path.join(ROOT, "materials", "packs", project)):
+            raise SystemExit("proofread 参数是【项目名】不是包 id——要对包 %s 校对：python3 autocut3/proofread.py <项目名> --pack %s" % (project, project))
+        raise SystemExit("项目不存在: %s" % project)
+    lib = json.load(open(os.path.join(pdir, "materials", "library.json"), encoding="utf-8"))
+    packs = [p for p in (lib.get("packs") or []) if not pack or p == pack]
+    if not packs:
+        raise SystemExit("项目 %s 未挂载素材包%s" % (project, "（--pack %s 与挂载列表无匹配）" % pack if pack else "（library.json packs 为空）"))
+    for pid in packs:
+        _run_pack(pid, project, dry, material)
 
 
 if __name__ == "__main__":
@@ -182,8 +201,9 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser()
-    ap.add_argument("pid")
+    ap.add_argument("project", help="项目名（与 transcribe/understand 同构；不是包 id）")
+    ap.add_argument("--pack", help="只校对指定素材包（项目内）")
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--material", help="只校对指定素材（试点用）")
     a = ap.parse_args()
-    run(a.pid, a.dry, a.material)
+    run(a.project, a.dry, a.material, a.pack)

@@ -30,6 +30,7 @@
   T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
   T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
   T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制，2026-09-16 Noah 实锤 [:4] 静默丢弃 bug）
+  T49 proofread 队列落点=项目目录（包名≠项目名也不同步错位，2026-09-16 n004/n006/wangyalun 三连发修根）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1721,6 +1722,58 @@ def t48_validate_no_beat_truncation():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t49_proofread_queue_lands_in_project():
+    # 回归锚（2026-09-16 修根：n004 人肉/n006/wangyalun 三连发）：proofread 原收包 id、
+    # 队列写 projects/<包id>/，包名≠项目名时门禁永远等不到复核。锚：入口=项目名，
+    # 包叫 tp49、项目叫 t49proj（故意不同名），队列必须落 projects/t49proj/ 且
+    # projects/tp49/ 下不得出现队列。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import proofread
+        tmp = tempfile.mkdtemp(prefix="t49_")
+        old_root = proofread.ROOT
+        try:
+            proofread.ROOT = tmp
+            os.makedirs(os.path.join(tmp, "materials", "packs", "tp49"))
+            os.makedirs(os.path.join(tmp, "config"))
+            os.makedirs(os.path.join(tmp, "projects", "t49proj", "materials"))
+            json.dump({"terms": ["龙骨"]}, open(os.path.join(tmp, "config", "lexicon.json"), "w"))
+            ws = [{"text": ch, "start": round(0.1 * i, 1), "end": round(0.1 * i + 0.1, 1)}
+                  for i, ch in enumerate("轮骨不牢")]
+            json.dump({"files": [{"id": "M1", "audit": {}, "transcript": {"words": ws}}]},
+                      open(os.path.join(tmp, "materials", "packs", "tp49", "pack.json"), "w"))
+            json.dump({"packs": ["tp49"]},
+                      open(os.path.join(tmp, "projects", "t49proj", "materials", "library.json"), "w"))
+            old_llm = proofread.chat_llm
+            proofread.chat_llm = lambda msgs: '[{"find":"轮骨","replace":"龙骨"}]'
+            try:
+                proofread.run("t49proj")   # 词表命中=auto 直改，不产生队列
+            finally:
+                proofread.chat_llm = old_llm
+            # 第二轮：非词表修正→必入队（入队才产生队列文件）
+            old_llm = proofread.chat_llm
+            proofread.chat_llm = lambda msgs: '[{"find":"龙骨","replace":"轻钢"}]'
+            try:
+                proofread.run("t49proj")
+            finally:
+                proofread.chat_llm = old_llm
+            in_proj = os.path.exists(os.path.join(tmp, "projects", "t49proj", "review-queue.json"))
+            in_pack_dir = os.path.exists(os.path.join(tmp, "projects", "tp49", "review-queue.json"))
+            q = json.load(open(os.path.join(tmp, "projects", "t49proj", "review-queue.json")))
+            ok = in_proj and not in_pack_dir and len(q["items"]) == 1 and q["project"] == "t49proj"
+            check("T49 proofread 队列落点=项目目录（包名≠项目名也不同步错位）",
+                  ok, "in_proj=%s in_packdir=%s items=%d" % (in_proj, in_pack_dir, len(q["items"])))
+        finally:
+            proofread.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T49 proofread 队列落点=项目目录（包名≠项目名也不同步错位）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -1911,7 +1964,7 @@ def t24_proofread_v2():
             proofread.ROOT = tmp
             os.makedirs(os.path.join(tmp, "materials", "packs", "tpid"))
             os.makedirs(os.path.join(tmp, "config"))
-            os.makedirs(os.path.join(tmp, "projects", "tpid"))
+            os.makedirs(os.path.join(tmp, "projects", "tproj", "materials"))
             json.dump({"terms": ["龙骨", "檀溪公馆", "窗帘盒"]},
                       open(os.path.join(tmp, "config", "lexicon.json"), "w"), ensure_ascii=False)
             ws, t = [], 0.0
@@ -1921,20 +1974,22 @@ def t24_proofread_v2():
             json.dump({"files": [{"id": "T24M", "duration": round(t, 1), "audit": {},
                                   "transcript": {"words": ws}}]},
                       open(os.path.join(tmp, "materials", "packs", "tpid", "pack.json"), "w"), ensure_ascii=False)
+            json.dump({"packs": ["tpid"]},
+                      open(os.path.join(tmp, "projects", "tproj", "materials", "library.json"), "w"), ensure_ascii=False)
             old_llm = proofread.chat_llm
             proofread.chat_llm = lambda msgs: ('[{"find":"轮骨","replace":"龙骨"},'
                                                '{"find":"方可以了","replace":"放可以了"},'
                                                '{"find":"龙骨","replace":"轻钢龙骨"},'
                                                '{"find":"大家都看到过吧","replace":"大家均看到过吧"}]')
-            proofread.run("tpid", dry=True)
-            assert not os.path.exists(os.path.join(tmp, "projects", "tpid", "review-queue.json")), "dry 不得落队列"
+            proofread.run("tproj", dry=True)
+            assert not os.path.exists(os.path.join(tmp, "projects", "tproj", "review-queue.json")), "dry 不得落队列"
             pk_dry = json.load(open(os.path.join(tmp, "materials", "packs", "tpid", "pack.json")))
             assert pk_dry["files"][0]["transcript"]["words"][0]["text"] == "轮", "dry 不得写词轨"
-            proofread.run("tpid", dry=False)
+            proofread.run("tproj", dry=False)
             pk_now = json.load(open(os.path.join(tmp, "materials", "packs", "tpid", "pack.json")))
             text = "".join(w["text"] for w in pk_now["files"][0]["transcript"]["words"])
             ok_fix = ("龙骨不牢" in text) and ("轮骨" not in text) and ("方可以了" in text)
-            q = json.load(open(os.path.join(tmp, "projects", "tpid", "review-queue.json")))
+            q = json.load(open(os.path.join(tmp, "projects", "tproj", "review-queue.json")))
             ok_q = len(q["items"]) == 2 and q["items"][0]["find"] == "方可以了"
             ok_log = pk_now["files"][0].get("proofread_log", [{}])[0].get("replace") == "龙骨"
             check("T24 proofread v2 分级+队列（词表auto/转人工/拒绝/dry纪律）",
@@ -2003,6 +2058,7 @@ def main():
     t46_loudnorm_chain()
     t47_proofread_pending_not_done()
     t48_validate_no_beat_truncation()
+    t49_proofread_queue_lands_in_project()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

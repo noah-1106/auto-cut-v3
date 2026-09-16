@@ -327,9 +327,8 @@ def advance(project, intent=None, story=None, only=None):
                     len(d.get("inventory", {}).get("a_roll_candidates", [])),
                     len(d.get("inventory", {}).get("broll_pool", []))), flush=True)
         elif key == "proofread":
-            for pid in _packs(pdir):
-                import proofread as PF
-                PF.run(pid)
+            import proofread as PF
+            PF.run(name)  # 2026-09-16 修根后入口=项目名（内部逐挂载包校对，队列落本项目目录）
         elif key == "dossier":
             _run([py, os.path.join(ac, "dossier.py"), name], "素材档案")
         elif key == "disposition":
