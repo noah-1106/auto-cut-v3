@@ -1627,6 +1627,11 @@ def t46_loudnorm_chain():
                     and ("loudnorm" not in f_off)
         out = os.path.join(tmp, "out.mp4")
         cmd = pipeline.build_cmd(p_on, ass_path, out)
+        # 编码器钉 libx264：本锚测的是 loudnorm 滤镜链，不是编码器。CI Windows 无 GPU，
+        # nvenc 探测（-h encoder= 只查存在性）会选中但运行时载不了 nvcuda.dll——渲染
+        # 入口 pipeline.py:907 有软编运行时回退兜住（T8/T9 实证），测试直调 build_cmd
+        # 没有那层回退，必须自钉确定性编码器。
+        cmd[cmd.index("-c:v") + 1] = "libx264"
         rr = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
         if rr.returncode != 0:
             # 失败诊断全量上日志（ffmpeg 9 新 CLI 报错风格不同，截 160 字不够定位）：
