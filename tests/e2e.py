@@ -1629,8 +1629,12 @@ def t46_loudnorm_chain():
         cmd = pipeline.build_cmd(p_on, ass_path, out)
         rr = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
         if rr.returncode != 0:
+            # 失败诊断全量上日志（ffmpeg 9 新 CLI 报错风格不同，截 160 字不够定位）：
+            # 打印完整 stderr + 实际使用的二进制与编码器选择
+            print("T46 DIAG ffmpeg=%s" % (cmd[0],))
+            print("T46 DIAG stderr:\n%s" % (rr.stderr or "")[-2000:])
             check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）", False,
-                  "渲染失败: %s" % (rr.stderr or "")[-160:])
+                  "渲染失败 rc=%s" % rr.returncode)
             return
         pv = subprocess.run([FFMPEG, "-hide_banner", "-nostats", "-i", out,
                              "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
