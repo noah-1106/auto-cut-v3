@@ -232,7 +232,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 更多文档
 
-- **剪辑 Agent 操作手册：`AGENTS.md`**（六阶段 SOP + 工具卡 + 数据契约 + 注册表维护 + 坑位清单——Agent 动手前必读）
+- **剪辑 Agent 操作手册：`剪辑Agent操作手册.md`**（六阶段 SOP + 工具卡 + 数据契约 + 注册表维护 + 坑位清单——Agent 动手前必读）
 - 管线自动化改造设计：`docs/pipeline-v2.md`
 - 素材音效的第三方许可：`assets/sfx/viral/LICENSE-mixkit.txt`
 
