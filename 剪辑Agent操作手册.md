@@ -40,6 +40,10 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 5. **narration.mode 只有三种**：`original`（素材原声，默认）/ `dub`（AI 配音，audio 指向
    materials/dub/ 下的 mp3）/ `none`（无旁白）。**没有 "tts" 这个值**——TTS 只是 dub 的
    音频来源。
+6. **"4 幕"不是幕数上限**（三层区别，卡3 实踩）：draft 提示词只**引导** LLM 写 2–4 幕
+   （软约束）；draft 内部 validate 只处理**前 4 幕**——LLM 若给了 5 幕，第 5 幕起被
+   **静默丢弃**；渲染链不限幕数。**手改 storylines/<sid>.json 加幕不受任何限制**
+   （validate 只在 draft 时跑），要 6 幕 8 幕直接 beats 里加。
 
 ---
 
@@ -116,6 +120,11 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
 ### 阶段 4 · 故事线全面检查 + 逐幕审核（最容易被跳过，雇主的核心里程碑）
 **不许"故事线写完直接渲染"**。按此清单逐幕过：
 1. **逐幕读 story**：是可直接朗读的口语吗？≤120 字？有没有总结腔/书面腔？
+   **审 aidraft 只认这三个字段的层次**：`beats[].story`=口播台词/分镜（你要审的）；
+   `beats[].tracks`=画面取段；`narration.words`=字幕词轨（vadwords 产物，只看不编）。
+   故事线里**没有 "text" 字段**——"text" 是素材层 `pack.json transcript.text`
+   （原始转写全文），别在故事线里找它，也别把三层混着改（改台词=dub 改 story /
+   original 改转写，改时间=重跑 vadwords，见阶段 4.5）。
 2. **逐幕读 tracks**：A 轨 source_id 在 pack.json 里存在吗？`src_in`+`duration` 在素材时长内吗？
    B 轨有没有说话画面（desc 含对话/口播/采访…）？content_type 合规吗？
 3. **narration.mode 与意图一致吗**（原声线全 original；配音线是 dub 且 audio 文件存在）？
@@ -128,6 +137,27 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
    或 Studio `GET /api/beat/<proj>/<幕号>?story=<sid>`。逐幕看：画面对吗？字幕跟人声同步吗？
    静音洞/截半句吗？**有问题改 storylines/<sid>.json 再试渲该幕**，不要直接全片渲染。
 - **放行判据**：每幕审过 + 重点幕试渲看过 + 修改已落盘。
+
+### 阶段 4.5 · 改稿 SOP（手改 storylines/<sid>.json 之后必走）
+
+```
+手改 JSON → 按需重跑 vadwords → make 预检 → beat 试渲改过的幕 → render
+```
+
+1. **先判改动类型，决定要不要重跑 vadwords**（字幕词轨是派生数据，源变了不重跑=旧字幕）：
+
+   | 改了什么 | 重跑 vadwords？ | 理由 |
+   |---|---|---|
+   | 素材转写文本（proofread 修正） | **必须** | original 幕字幕文本=转写拼接（vadwords.py 选词源） |
+   | `story`（dub 幕台词） | **必须** | dub 幕字幕=story 字符铺 VAD 段 |
+   | A 轨 `src_in` / `duration`（窗口） | **必须** | 窗口决定哪些词/哪些语音段进幕 |
+   | A 轨 `source_id`（换素材） | **必须** | 词轨来源整个换掉 |
+   | `narration.mode` original↔dub↔none | **必须** | 词轨生成路径不同 |
+   | 转场 / 贴纸 / 音效 / 字幕样式 / BGM / 封面 / title/outline | **不用** | 不消费 narration.words |
+2. `python3 autocut3/pipeline.py make <pid> <sid>`——plan+ASS 能生成=结构没坏（字段名错/
+   素材缺在这里报错，比渲染到一半炸便宜得多）。
+3. 改过的幕**逐个** `pipeline.py beat <pid> <幕号> <sid>` 试渲确认；没改动的幕不用重看。
+4. 全绿 → render。只改了转场/样式这类，跳过 vadwords，make 过即可直接 render。
 
 ### 阶段 5 · 渲染（render）
 前置（全满足才渲）：素材段全绿 → review-queue 空 → 故事线审核完 → vadwords 已跑
@@ -271,6 +301,8 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
   改字幕文本=改素材转写（original 幕）或 story（dub 幕）后重跑 vadwords。
 - `words[].s/e` 是相对**幕起点**的秒。
 - 兼容顶层键（手写也可用）：`subtitle_style`、`audio.{bgm_id,bgm,bgm_segment,bgm_loop,bgm_volume,loudnorm}`。
+  **BGM 用法约定**：不用 BGM=**不写 `bgm_id` 键**（写 null 虽同效，统一删键别两式混用）；
+  用时 id 必须已在 `registry/bgm.json` 登记——拼错不存在的 id 渲染直接 SystemExit 拦。
 - B 轨仅视频素材、无音频通道、禁说话画面；`op:"overlay-pip"` + pos（tl/tr/bl/br）+ scale。
 - **"当前故事线"= `storylines/*.json` 里 mtime 最新的那条**（qc.py `--story` 省略、
   编排器取当前线、Studio 默认展示，全按这个规则）。副作用：你改了一条旧线，
@@ -331,7 +363,10 @@ Studio 路由（http://127.0.0.1:8765）：
 1. **proofread 的参数是素材包 id，不是项目 id**（n006 坑 #3）：跑
    `proofread.py zhangqiang-ningbo` 会把复核队列写到 `projects/zhangqiang-ningbo/`，
    而编排器读 `projects/<你的项目>/`——队列错位=门禁永远等不到复核。跑前先想：
-   "projects/<这个参数>/ 是不是我正在做的项目目录？"
+   "projects/<这个参数>/ 是不是我正在做的项目目录？"**迁完队列的验证**：把
+   review-queue.json 放进正确项目目录后，跑 `orchestrate.py <pid>`——proofread 环节
+   显示"待人工复核 N 组"=门禁已看见；还显示"待校对 N/N"=文件没放对目录（或 proofread
+   根本没跑）。
 2. **`audit.proofread: "pending"` ≠ 已校对**（n004 发现、n006 复发、T47 钉死）：
    上传初值就是 "pending"，只有 `done`/`auto-done` 算过。看状态用 orchestrate 严格判据，
    不要自己数非空。
@@ -348,6 +383,12 @@ Studio 路由（http://127.0.0.1:8765）：
 9. **concat 跳过必占位**：改渲染链时跳过区间必须补等长静音段，否则后段前移。
 10. **改代码/配置后**：跑 `python3 tests/e2e.py --fast`（53 项）+ `python3 tests/audit.py`
     （P1 必须 0）；改 studio.py 后重启进程再用行为探针验证。
+11. **气口 +0.35s 卷词头**（draft validate 的 A 轨钳制：出点=词尾+0.35s 气口，防咬字）：
+    词尾与下一句**零间隙**时，+0.35 气口会把下句词头卷进本幕——观众听到下一句的第一个
+    字，转场/切幕都救不了（声音已进本幕音轨）。识别：beat 试渲听幕尾有没有不属于本幕
+    台词的字，或对 vad-report 里该幕字密/语音段起止。修法：**切点后移**——增大该幕
+    A 轨 `src_in`（或缩 `duration`），让词尾落在幕内更深处，使 +0.35 落在句间静音里；
+    **不要手编 narration.words**（词轨是 vadwords 的重跑产物，手改时间必错位）。
 
 ---
 
