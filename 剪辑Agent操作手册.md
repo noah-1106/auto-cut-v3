@@ -4,7 +4,7 @@
 > 本文每一条命令、字段、阈值都对照代码核实（2026-09-16），与 README（系统地图）、
 > CLAUDE.md（约束+事故清单）配套。三者冲突时以本文的操作细节为准、以 CLAUDE.md 的约束为纲。
 >
-> **零容忍纪律**（违反即事故，n006 批次真实代价）：
+> **零容忍纪律**（违反即事故）：
 > 1. **授权闸门**：雇主已建好的 job/工作流 = 唯一执行通道。禁止自建平行 job，禁止"先跑起来再说"。
 > 2. **崩溃必须留痕**：任何一步 error，续作第一件事是写事故记录（时间点/最后产物/最后动作），不允许 error+null 裸奔。
 > 3. **源素材零写入**：`materials/packs/<pid>/` 里的 MP4/JPG 原片禁止任何写操作（管线自身审计字段除外）。
@@ -40,7 +40,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 5. **narration.mode 只有三种**：`original`（素材原声，默认）/ `dub`（AI 配音，audio 指向
    materials/dub/ 下的 mp3）/ `none`（无旁白）。**没有 "tts" 这个值**——TTS 只是 dub 的
    音频来源。
-6. **"4 幕"不是幕数上限**（三层区别，卡3 实踩）：draft 提示词只**引导** LLM 写 2–4 幕
+6. **"4 幕"不是幕数上限**（三层区别）：draft 提示词只**引导** LLM 写 2–4 幕
    （软约束）；validate 对超出幕数**原样全量校验、不截断**（基线曾有 `[:4]` 静默丢弃
    第 5 幕起的 bug，2026-09-16 已修，T48 锚）；渲染链不限幕数。要 6 幕 8 幕直接
    beats 里加。
@@ -77,7 +77,8 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 - 确认项目存在：`projects/<pid>/project.json`；没有则先建（Studio `POST /api/project-create/`）。
 - 确认挂载：`projects/<pid>/materials/library.json` 的 `packs[]` 就是**唯一事实源**。
   挂包/卸包走 Studio `POST /api/pack-mount/<proj>/<pid>/mount|unmount`——**不要手编 library.json**。
-- **核对任务书指定的包名**（n006 坑 #1：预建项目误挂 zhangqiang2，浪费 2.1G 转写）。
+- **核对任务书指定的包名**（挂错包=白转写一轮，还得两包逐字节对账）：挂载前确认包 id
+  与任务书一致，发现预建项目挂错包先卸载重挂再开工。
 - 清点：`pack.json.files[]` 数量与源目录一致；每条 MP4 大小与源一致；**源目录 mtime 前后各记一次**（零写入签字）。
 - **放行判据**：挂载 done + 清点一致 + 兜底假设（画幅/平台/时长/风格）已登记并注明依据。
 
@@ -86,7 +87,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 ```bash
 python3 autocut3/transcribe.py <pid>            # ASR 词轨+文本 → pack.json transcript
 python3 autocut3/understand.py <pid>            # 视觉理解 → pack.json visual + digest
-python3 autocut3/proofread.py <pid>            # 参数=项目名（与 transcribe 同构，2026-09-16 修根）；队列必落 projects/<pid>/
+python3 autocut3/proofread.py <pid>            # 参数=项目名（与 transcribe 同构）；队列必落 projects/<pid>/
 python3 autocut3/dossier.py <pid>               # 素材档案（LLM 读全量转写+视觉合成）
 python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/音量跳变等）
 ```
@@ -358,36 +359,31 @@ Studio 路由（http://127.0.0.1:8765）：
 
 ---
 
-## 8. 坑位清单（每个都是真实事故，按发生顺序读）
+## 8. 操作红线清单（每条背后都有真实事故，背景见仓库 CLAUDE.md 失败模式清单——此处只留规则）
 
-1. ~~proofread 的参数是素材包 id，不是项目 id~~ **已修根（2026-09-16，T49 锚）**：
-   proofread 入口已改为项目名（`proofread.py <项目> [--pack X]`），队列固定落
-   `projects/<项目>/review-queue.json`，与编排器门禁天然同目录——不存在错位可能。
-   历史教训保留：此坑曾三连发（n004 人肉拦截、n006、wangyalun），**手册提醒拦不住的
-   坑必须修进代码**。若你在老文档/旧会话里看到 `proofread.py <包id>` 的写法，那是
-   修根前的古董。**手动迁过队列后的验证**：跑 `orchestrate.py <pid>`——proofread
-   环节显示"待人工复核 N 组"=门禁已看见；还显示"待校对 N/N"=文件没放对目录。
-2. **`audit.proofread: "pending"` ≠ 已校对**（n004 发现、n006 复发、T47 钉死）：
-   上传初值就是 "pending"，只有 `done`/`auto-done` 算过。看状态用 orchestrate 严格判据，
-   不要自己数非空。
-3. **review-queue 非空不许静默继续**（T43）：有 pending 组=有人工活，汇报雇主。
-4. **original 幕改字幕 ≠ 改 story**（§1.2）：改素材转写（等长替换铁律：长度必须相等，
-   否则破坏字符-时间对齐），然后重跑 vadwords。
+1. **proofread 的参数是项目名，不是包 id**——`proofread.py <项目> [--pack X]`，队列固定落
+   `projects/<项目>/review-queue.json`（与编排器门禁同目录，不存在错位可能）。
+   ⚠ 旧文档/旧会话里可能见过 `proofread.py <包id>` 的写法，那是过时用法，别照抄。
+   手动迁过队列后的验证：跑 `orchestrate.py <pid>`——proofread 环节显示
+   "待人工复核 N 组"=门禁已看见；还显示"待校对 N/N"=文件没放对目录。
+2. **`audit.proofread: "pending"` ≠ 已校对**：上传初值就是 "pending"，只有
+   `done`/`auto-done` 算过。看状态用 orchestrate 严格判据，不要自己数非空。
+3. **review-queue 非空不许静默继续**：有 pending 组=有人工活，汇报雇主。
+4. **original 幕改字幕 ≠ 改 story**：改素材转写（等长替换铁律：长度必须相等，否则破坏
+   字符-时间对齐），然后重跑 vadwords。
 5. **B 轨禁说话画面**（哑口型）；**voiceover/meta 画面禁 A 轨**（读稿画面播原声=穿帮）。
    draft validate 会硬剔除，但 LLM 选段仍要人工复核。
-6. **故事线写完必须全面检查+逐幕审核再渲染**（阶段 4）。LLM finish_reason=length
-   截断会产出缺字段的幕。
+6. **故事线写完必须全面检查+逐幕审核再渲染**（阶段 4）。LLM 可能截断
+   （finish_reason=length）产出缺字段的幕。
 7. **渲染失败/任务崩溃必须留痕**（时间点+最后产物+最后动作），续作从记录接着走。
-8. **ASR 词时间禁用**（字幕漏字/半句根因）：任何"按词时间过滤/对齐"的念头都停手，
-   时间源只有 vadwords 的 VAD。
+8. **ASR 词时间禁用**：任何"按词时间过滤/对齐"的念头都停手，时间源只有 vadwords 的 VAD。
 9. **concat 跳过必占位**：改渲染链时跳过区间必须补等长静音段，否则后段前移。
-10. **改代码/配置后**：跑 `python3 tests/e2e.py --fast`（53 项）+ `python3 tests/audit.py`
+10. **改代码/配置后**：跑 `python3 tests/e2e.py --fast` + `python3 tests/audit.py`
     （P1 必须 0）；改 studio.py 后重启进程再用行为探针验证。
-11. **气口 +0.35s 卷词头**（draft validate 的 A 轨钳制：出点=词尾+0.35s 气口，防咬字）：
-    词尾与下一句**零间隙**时，+0.35 气口会把下句词头卷进本幕——观众听到下一句的第一个
-    字，转场/切幕都救不了（声音已进本幕音轨）。识别：beat 试渲听幕尾有没有不属于本幕
-    台词的字，或对 vad-report 里该幕字密/语音段起止。修法：**切点后移**——增大该幕
-    A 轨 `src_in`（或缩 `duration`），让词尾落在幕内更深处，使 +0.35 落在句间静音里；
+11. **气口 +0.35s 卷词头**：A 轨出点自动留词尾+0.35s 气口（防咬字），词尾与下一句
+    **零间隙**时会把下句词头卷进本幕——观众听到下一句的第一个字，转场/切幕都救不了。
+    识别：beat 试渲听幕尾有没有不属于本幕台词的字。修法：**切点后移**——增大该幕
+    A 轨 `src_in`（或缩 `duration`），让 +0.35 落在句间静音里；
     **不要手编 narration.words**（词轨是 vadwords 的重跑产物，手改时间必错位）。
 
 ---
