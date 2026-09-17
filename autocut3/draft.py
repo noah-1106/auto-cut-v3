@@ -21,6 +21,7 @@ import argparse, json, os, re, sys, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr  # noqa: E402  复用 load_services / resolve_key
+import flock  # noqa: E402  write_json 原子落盘
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -400,8 +401,8 @@ def save_storyline(pid, draft, beats):
     _au = draft.get("audio") or {}
     if isinstance(_au, dict) and _au.get("bgm_id"):
         sl.setdefault("meta", {}).setdefault("audio", {})["bgm_id"] = str(_au["bgm_id"])
-    with open(os.path.join(sp, sid + ".json"), "w", encoding="utf-8") as fh:
-        json.dump(sl, fh, ensure_ascii=False, indent=1)
+    # 原子落盘（实证 2026-09-17：超时幸存进程 + Agent 重跑并存，非原子 dump 会交错写坏故事线）
+    flock.write_json(os.path.join(sp, sid + ".json"), sl)
     return sid
 
 
@@ -478,7 +479,7 @@ def main():
                 for k, b2 in enumerate(slb):
                     if (beats[k].get("narration") or {}).get("mode") == "dub":
                         b2["narration"] = beats[k]["narration"]
-                json.dump(sl, open(sp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+                flock.write_json(sp, sl)
             else:
                 print("  幕数不一致（草稿 %d vs 落盘 %d），配音信息不写回" % (len(beats), len(slb)), flush=True)
         print("DUB: %d/%d 幕配音完成" % (ok_n, len(beats)), flush=True)

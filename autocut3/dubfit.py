@@ -23,6 +23,7 @@ import argparse, difflib, json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr
+import flock  # write_json 原子落盘
 
 PUNCT = r"[，。！？、,.!?;；:：\s]"
 
@@ -171,7 +172,7 @@ def main():
                                           ("ok", "start", "end", "rounds", "d1", "d2", "d3")}))
 
     if changed:  # 序列化保真：全量回写（json 透传所有未知字段，硬规则 4）
-        json.dump(sl, open(sfile, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        flock.write_json(sfile, sl, indent=2)
     passed = not fails
     json.dump({"story": sid, "passed": passed, "fails": fails, "beats": report},
               open(os.path.join(pdir, "dubfit-report.json"), "w", encoding="utf-8"),

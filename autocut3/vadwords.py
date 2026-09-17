@@ -13,6 +13,7 @@
 import argparse, json, os, re, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr  # 平台解析链 ffmpeg_path/ffprobe_path（硬规则 8：禁裸 bin/ffmpeg 相对路径）
+import flock  # write_json 原子落盘
 FF = asr.ffmpeg_path()
 
 
@@ -132,8 +133,8 @@ def main():
                        "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0,
                        "text_from": text_from})
         print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]))
-    json.dump(sl, open(sfile, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    json.dump(report, open(os.path.join(pdir, "vad-report.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    flock.write_json(sfile, sl)  # 原子落盘（与 draft 双跑同险：读者永不读半截故事线）
+    flock.write_json(os.path.join(pdir, "vad-report.json"), report)
     print("VAD 词轨已写入 %s ✓" % sfile)
 
 

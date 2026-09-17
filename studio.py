@@ -30,6 +30,7 @@ def _safe_id(s):
     return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.\u4e00-\u9fff]{1,40}", s) and ".." not in s
 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
+import flock  # write_json 原子落盘（Agent 轮询故事线与人保存并发，读者不读半截）
 PIPE = os.path.join(ROOT, "autocut3", "pipeline.py")
 RENDER_JOBS = {}  # "name:sid" → {running,stage,pct,tail,ok}（R2 渲染进度：pipeline 以 PCT/STAGE 行协议输出）
 def _resolve_ff():
@@ -1091,11 +1092,7 @@ class H(BaseHTTPRequestHandler):
                         story["meta"][k] = v
             if isinstance(body.get("beats"), list):
                 story["beats"] = body["beats"]  # 幕序列整体替换（编号幕，编辑器持有全文）
-            if sid:  # 多故事线：写入 storylines/<sid>.json
-                json.dump(story, open(sp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-                return self._json({"ok": True, "storyline": story})
-            with open(sp, "w", encoding="utf-8") as f:
-                json.dump(story, f, ensure_ascii=False, indent=1)
+            flock.write_json(sp, story)  # 多故事线=storylines/<sid>.json，旧版=storyline.json
             return self._json({"ok": True, "storyline": story})
         if u.path.startswith("/api/render/"):
             name = u.path.split("/")[3]
