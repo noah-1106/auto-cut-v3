@@ -28,7 +28,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+          # gyan.dev（NFSN 托管）偶发 503（2026-09-17/18 两连击）——退避重试 4 次
+          $ok = $false
+          foreach ($i in 1..4) {
+            try {
+              Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+              $ok = $true; break
+            } catch {
+              Write-Host "download attempt $i failed: $($_.Exception.Message) — retry in 30s"
+              Start-Sleep -Seconds 30
+            }
+          }
+          if (-not $ok) { throw "ffmpeg download failed after 4 attempts (gyan.dev 503?)" }
           Expand-Archive ffmpeg.zip -DestinationPath .
           $d = (Get-ChildItem -Directory -Filter "ffmpeg-*" | Select-Object -First 1).FullName
           New-Item -ItemType Directory -Path bin | Out-Null
