@@ -9,7 +9,7 @@ autocut3 管线核心 v0.1 —— 最小闭环
   - 双视图：本模块只生产 JSON/命令（AI 操作台），渲染产物交 Studio 监视器（人眼/视觉模型）
   - 组件四件套：输入契约 / 生成器 / 校验器(最小) / 后续加缓存
 """
-import json, os, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -503,12 +503,23 @@ def pos_xy(pos, w, h, sw, sh, margin=30, sub_clear=360):
     return table.get(pos, (margin, margin))
 
 def word_time(words, at_word, seg):
-    """贴纸词点触发：在该幕时间窗内找含关键词的词的起始时刻。"""
+    """贴纸词点触发：在该幕时间窗内找含关键词的词的起始时刻。
+    匹配两级（2026-09-18 agent 实锤：vadwords 词轨单字粒度，多字 at_word「低价」substring
+    永不命中 → 曾静默回退 0.4s 零告警）：①词项 substring；②字符序列——窗口内连续词项
+    逐字拼出 at_word，命中取首词起点。两级全空才回退，且回退必打渲染日志 warn
+    （word_drops 同族，commit 62a6429）。"""
     if not at_word:
         return None
-    for wd in words:
-        if seg["tl_in"] - 0.05 <= wd["s"] < seg["tl_in"] + float(seg["dur"]) and at_word in wd["t"]:
+    win = [wd for wd in words
+           if seg["tl_in"] - 0.05 <= wd["s"] < seg["tl_in"] + float(seg["dur"])]
+    for wd in win:
+        if at_word in wd["t"]:
             return wd["s"]
+    n = len(at_word)
+    for i in range(len(win) - n + 1):
+        if "".join(wd["t"] for wd in win[i:i + n]) == at_word:
+            return win[i]["s"]
+    print("⚠ 贴纸 at_word「%s」未命中幕%s 词轨，回退 t0=0.4s" % (at_word, seg.get("no")), flush=True)
     return None
 
 
@@ -785,49 +796,144 @@ def build_cmd(plan, ass_path, out_path):
         "-c:a", "aac", "-b:a", "128k", out_path]
     return cmd
 
+def _cover_frame(plan, c, out):
+    """代表帧抽取（素材侧——渲染前即可出封面，2026-09-18 Noah 封面前置裁定的地基）：
+    指定幕(beat_no)+幕内偏移(at)，缺省首幕入点；拼接源(src.mp4)优先，回退该幕源文件。"""
+    segs = plan.get("segments") or []
+    seg = next((s for s in segs if s.get("no") == c.get("beat_no")), None) if c.get("beat_no") else None
+    seg = seg or (segs[0] if segs else None)
+    if not seg:
+        return None
+    csrc = plan["media"] if os.path.exists(plan.get("media") or "") else seg.get("src_file")
+    if not (csrc and os.path.exists(csrc)):
+        return None
+    subprocess.run([FF, "-y", "-loglevel", "error", "-ss", str(float(seg["src_in"]) + float(c.get("at", 0))),
+                    "-i", csrc, "-frames:v", "1", "-q:v", "2", out], capture_output=True)
+    return out if os.path.exists(out) else None
+
+
+_COVER_FONT = os.path.join(ROOT, "assets", "fonts", "LXGWWenKai-Regular.ttf")
+
+
+def _compose_cover_title(base, title, out, w=1080, h=1920):
+    """核心标题合成（确定性 drawtext——AI 画中文字=假字高危，标题一律本地渲染叠加）。
+    ≤10 字/行自动折行，排版画面上部（y=8% 起、行距 120px/1080 宽基准），白字黑描边任何底图可读，
+    统一成片画幅收口；tmp+os.replace 原子换名，合成中断不留半截封面。"""
+    lines = [title[i:i + 10] for i in range(0, len(title), 10)]
+    fd, ext = os.path.splitext(out)
+    tfd = fd + ".title"
+    os.makedirs(tfd, exist_ok=True)
+    vf = ["scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1" % (w, h, w, h)]
+    for i, ln in enumerate(lines):
+        tf = os.path.join(tfd, "l%d.txt" % i)
+        open(tf, "w", encoding="utf-8").write(ln)  # textfile 传参：绕开 drawtext 转义地狱
+        vf.append("drawtext=fontfile=%s:textfile=%s:fontcolor=0xFFFFFF:fontsize=88:"
+                  "borderw=7:bordercolor=0x101010@0.85:x=(w-text_w)/2:y=h*0.08+%d"
+                  % (_ff_escape_path(_COVER_FONT), _ff_escape_path(tf), i * 120))
+    tmp = fd + ".t" + ext
+    r = subprocess.run([FF, "-y", "-loglevel", "error", "-i", base, "-frames:v", "1",
+                        "-vf", ",".join(vf), "-q:v", "2", tmp], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(tmp):
+        raise RuntimeError("封面标题合成失败 %r: %s" % (title[:16], (r.stderr or "")[-200:]))
+    os.replace(tmp, out)
+
+
 def build_cover(plan, project_dir, sfx=""):
-    """封面收口：任何来源（首帧/AI生成/上传）都落进 cover/ 槽，工程统一拼装。"""
+    """封面收口（2026-09-18 新流程——生成+检查在渲染前，Noah 裁定）：
+    · 非 AI = 素材代表帧（first-frame/beat-frame）或已上传图；ai-generated = 代表帧底图
+      + prompt 走 image-01 subject_reference 保主体生成（⚠ 底图含真人脸会被平台审核拦 1026，
+      含人封面用帧截图策略 + title_text——真脸保真唯一路线）
+    · output-frame = 渲染后成片抽帧（唯一后置特例：封面=发布产物本体，含字幕全要素）
+    · title_text 非空 → 一律本地 drawtext 合成核心标题
+    · 任何产物归一 cover{sfx}.jpg 槽（前端 files.cover 只认这个名，2026-09-15 实锤）"""
     c = (plan.get("meta") or {}).get("cover", {}) or {}
     strategy = c.get("strategy", "first-frame")
     cover_dir = f"{project_dir}/cover"
     os.makedirs(cover_dir, exist_ok=True)
     out = f"{cover_dir}/cover{sfx}.jpg"
+    title = str(c.get("title_text") or "").strip()
+    base = None
     if strategy == "output-frame":
-        # 渲染完成后从成片抽帧（2026-09-14：封面必须=发布产物本体的帧，含字幕/调色/贴纸全要素）
         op = os.path.join(project_dir, f"out{sfx}.mp4")
         if os.path.exists(op):
             subprocess.run([FF, "-y", "-loglevel", "error", "-ss", str(float(c.get("at", 0.4))),
                             "-i", op, "-frames:v", "1", "-q:v", "2", out], capture_output=True)
-            return out if os.path.exists(out) else None
+            base = out if os.path.exists(out) else None
+    elif strategy == "upload":
+        for cand in ("upload.jpg", "upload.png", "generated.png", "generated.jpg"):
+            p = f"{cover_dir}/{cand}"
+            if os.path.exists(p):
+                base = p
+                break
+    else:  # first-frame / beat-frame / ai-generated：底图一律素材代表帧
+        base = _cover_frame(plan, c, f"{cover_dir}/.frame{sfx}.jpg")
+        if strategy == "ai-generated":
+            prompt = str(c.get("prompt") or "").strip()
+            if not base:
+                return None
+            if not prompt:
+                raise RuntimeError("AI 封面缺 prompt（meta.cover.prompt）——写作建议见操作手册封面章节")
+            import image_gen
+            try:
+                image_gen.gen_image(prompt, out, aspect_ratio="9:16", base_image=base)
+            except RuntimeError as e:
+                raise RuntimeError("AI 封面生成失败——底图含真人脸会被平台审核拦(1026)，"
+                                   "含人封面改 first-frame/beat-frame + title_text: %s" % e)
+            base = out if os.path.exists(out) else None
+    if not base:
         return None
-    if strategy == "first-frame" and plan["segments"]:
-        s = plan["segments"][0]
-        # 封面源：拼接源片 src.mp4（n001 遗留）→ 回退首 A 轨源文件（纯素材包项目）
-        csrc = plan["media"] if os.path.exists(plan["media"]) else s.get("src_file")
-        if csrc and os.path.exists(csrc):
-            subprocess.run([FF, "-y", "-loglevel", "error", "-ss", str(s["src_in"]),
-                            "-i", csrc, "-frames:v", "1", "-q:v", "2", out],
-                           capture_output=True)
-            return out if os.path.exists(out) else None
-        return None
-    if strategy == "beat-frame" and c.get("beat_no"):
-        seg = next((s for s in plan["segments"] if s.get("no") == c["beat_no"]), plan["segments"][0])
-        csrc = plan["media"] if os.path.exists(plan["media"]) else seg.get("src_file")
-        if not (csrc and os.path.exists(csrc)):
-            return None
-        subprocess.run([FF, "-y", "-loglevel", "error", "-ss", str(float(seg["src_in"]) + float(c.get("at", 0))),
-                        "-i", csrc, "-frames:v", "1", "-q:v", "2", out], capture_output=True)
-        return out if os.path.exists(out) else None
-    # ai-generated / upload：收口约定——文件在 cover/ 槽里即被采用
-    # 归一到 cover{sfx}.jpg（2026-09-15 实锤：原来直返槽位路径，前端 files.cover 只认
-    # cover-{sid}.jpg → 渲染用了 AI 图但 Studio 显示陈旧抽帧封面）
-    for cand in ("upload.jpg", "upload.png", "generated.png", "generated.jpg"):
-        p = f"{cover_dir}/{cand}"
-        if os.path.exists(p):
-            if os.path.abspath(p) != os.path.abspath(out):
-                shutil.copyfile(p, out)
-            return out
-    return None
+    w, h = int(plan.get("width") or 1080), int(plan.get("height") or 1920)
+    if title:
+        _compose_cover_title(base, title, out, w, h)
+    else:
+        # 归一到成片画幅（2026-09-18 e2e 实锤：素材横拍竖裁时原始帧方向≠成片——封面=发布
+        # 产物形态，一律画幅收口；base==out 原位换名，!=out 兼掉旧 copyfile）
+        fd, ext = os.path.splitext(out)
+        tmp = fd + ".t" + ext
+        r = subprocess.run([FF, "-y", "-loglevel", "error", "-i", base, "-frames:v", "1",
+                            "-vf", "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1"
+                                   % (w, h, w, h), "-q:v", "2", tmp], capture_output=True, text=True)
+        if r.returncode != 0 or not os.path.exists(tmp):
+            raise RuntimeError("封面画幅归一失败: %s" % (r.stderr or "")[-200:])
+        os.replace(tmp, out)
+    return out if os.path.exists(out) else None
+
+
+def cover_check(img, plan_wh=None):
+    """封面体检（渲染前闸门判据）：在盘/非损坏/方向与成片画幅一致/非空白。返回 (ok, 说明)。
+    plan_wh=(w,h) 传入=按成片画幅判方向（横版项目横版封面合法，2026-09-18 e2e 实锤：
+    曾写死竖版把横版夹具全拦）；缺省仍按竖版（主业务竖版短视频）。"""
+    if not (img and os.path.exists(img)):
+        return False, "封面文件缺失"
+    kb = os.path.getsize(img) // 1024
+    if kb < 20:
+        return False, "封面过小 %dKB（疑似损坏）" % kb
+    fp = next((c for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
+                           os.path.join(ROOT, "bin", "ffprobe.exe")) if c and os.path.exists(c)),
+              None) or shutil.which("ffprobe")
+    orient = "竖版" if not plan_wh or plan_wh[1] >= plan_wh[0] else "横版"
+    if fp:
+        r = subprocess.run([fp, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=width,height", "-of", "csv=p=0", img],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        try:
+            w, h = (int(x) for x in r.stdout.strip().split(","))
+            if plan_wh:
+                if (h >= w) != (plan_wh[1] >= plan_wh[0]):
+                    return False, "封面方向与画幅不符（封面 %dx%d，画幅 %dx%d）" % (w, h, plan_wh[0], plan_wh[1])
+            elif w >= h:
+                return False, "封面非竖版（%dx%d）" % (w, h)
+        except Exception:
+            return False, "封面尺寸探测失败（损坏）"
+    r = subprocess.run([FF, "-hide_banner", "-loglevel", "error", "-i", img,
+                        "-vf", "scale=1:1,format=gray", "-frames:v", "1",
+                        "-f", "rawvideo", "-"], capture_output=True)
+    if not r.stdout:
+        return False, "封面解码失败（损坏）"
+    luma = r.stdout[0]
+    if luma < 8 or luma > 247:
+        return False, "封面疑似空白（平均亮度 %d）" % luma
+    return True, "%s %dKB 亮度%d" % (orient, kb, luma)
 
 def build_beat_cmd(plan, seg, ass_path, out_path):
     """单幕独立渲染：多轨叠加 + 贴纸 + 音效 + 本幕字幕（时间轴已重定基），秒级反馈。"""
@@ -932,6 +1038,22 @@ def render(plan, project_dir, sid=None):
 
     _status(stage="plan", pct=2)
     sfx, real_sid = art_suffix(project_dir, sid)  # P2#7：原引用未定义的 real_sid，直接 import render() 会 NameError
+    # 封面闸门（2026-09-18 Noah 裁定：封面生成+检查在渲染前——人先验封面再耗渲染；
+    # output-frame 例外：成片抽帧天然后置，渲染后收口）
+    _cov_strategy = ((plan.get("meta") or {}).get("cover") or {}).get("strategy", "first-frame")
+    print("STAGE cover", flush=True)
+    _status(stage="cover", pct=1)
+    cover = None
+    if _cov_strategy != "output-frame":
+        try:
+            cover = build_cover(plan, project_dir, sfx)
+            _ok, _why = cover_check(cover, (plan.get("width"), plan.get("height")))
+        except Exception as _e:
+            _ok, _why = False, str(_e)[:200]
+        if not _ok:
+            _status(running=False, ok=False, tail=["封面不过: " + _why])
+            print("RENDER FAIL: 封面闸门不过——" + _why, flush=True)
+            sys.exit(1)
     ass, npages = build_ass(plan, project_dir, f"subtitle{sfx}.ass")
     out = os.path.join(project_dir, f"out{sfx}.mp4")
     cmd = build_cmd(plan, ass, out) + ["-progress", "pipe:1", "-nostats"]
@@ -969,7 +1091,8 @@ def render(plan, project_dir, sid=None):
         _status(running=False, ok=False, tail=["".join(errbuf)[-400:]])
         print("RENDER FAIL:", "".join(errbuf)[-800:], flush=True)
         sys.exit(1)
-    cover = build_cover(plan, project_dir, sfx)
+    if _cov_strategy == "output-frame":
+        cover = build_cover(plan, project_dir, sfx)  # 成片抽帧特例：渲染后才存在 out{sfx}.mp4
     # QC 审片层（delivery gate）：渲染后自动体检，结论并入渲染尾行与 status.tail——QC 自身异常不阻塞渲染结果
     try:
         import qc
@@ -994,9 +1117,19 @@ if __name__ == "__main__":
     if not os.path.isdir(project):
         raise SystemExit(f"无项目目录: {arg2}")
     sid = None
+    batch = None
+    resume = False
     if cmd == "beat":
-        beat_no = int(sys.argv[3])
-        sid = sys.argv[4] if len(sys.argv) > 4 else None
+        a3 = sys.argv[3]
+        if a3 == "--batch":
+            batch = sys.argv[4]; resume = True
+            sid = sys.argv[5] if len(sys.argv) > 5 else None
+        elif a3.startswith("--batch="):
+            batch = a3.split("=", 1)[1]; resume = True
+            sid = sys.argv[4] if len(sys.argv) > 4 else None
+        else:
+            batch = a3  # 单幕旧形态 "beat <proj> 3"：明确重渲，不跳已有预览（迭代单幕场景）
+            sid = sys.argv[4] if len(sys.argv) > 4 else None
     else:
         sid = sys.argv[3] if len(sys.argv) > 3 else None
     plan, real_sid = build_plan(project, sid)
@@ -1005,7 +1138,32 @@ if __name__ == "__main__":
     if cmd == "make":
         ass, npages = build_ass(plan, project, f"subtitle{sfx}.ass")
         print(f"ASS: {ass}  字幕页 {npages}")
+    elif cmd == "cover":
+        # 封面单独出（渲染前闸门的独立入口——人/Agent 可迭代封面而不耗渲染）
+        cover = build_cover(plan, project, sfx)
+        ok, why = cover_check(cover, (plan.get("width"), plan.get("height"))) if cover else (False, "封面缺失")
+        print(("COVER OK: %s（%s）" % (os.path.basename(cover), why)) if ok else "COVER FAIL: " + why)
+        sys.exit(0 if ok else 1)
     elif cmd == "render":
         render(plan, project, real_sid)
     elif cmd == "beat":
-        render_beat(plan, project, beat_no, real_sid)
+        # 断点续渲（2026-09-18 agent 建议 P4）：--batch 1-6 顺序逐幕渲，已完成幕（预览在场
+        # 且 >0 字节）跳过——幕预览重渲迭代时不必从头来。单幕旧形态 "beat <proj> 3" 不变。
+        rng = str(batch)
+        m = re.fullmatch(r"(\d+)(?:-(\d+))?", rng)
+        if not m:
+            raise SystemExit("幕号形态应如 3 或 1-6，收到: %r" % rng)
+        nos = [int(m.group(1))] if not m.group(2) else list(range(int(m.group(1)), int(m.group(2)) + 1))
+        _sfx, _rs = art_suffix(project, real_sid)  # 与 render_beat 同参——预览文件名必须同口径
+        _tag = f"{_sfx.lstrip('-')}_" if _sfx else ""
+        for _n in nos:
+            if not any(s.get("no") == _n for s in plan["segments"]):
+                print("BEAT SKIP: 幕%s 不在故事线" % _n)
+                continue
+            _out = f"{project}/previews/beat_{_tag}{_n}.mp4"
+            if resume and os.path.exists(_out) and os.path.getsize(_out) > 0:
+                print(f"BEAT SKIP: 幕{_n} 预览已在（断点续渲跳过） {_out}")
+                continue
+            render_beat(plan, project, _n, real_sid)
+        if len(nos) > 1:
+            print("BATCH DONE: 幕 %d-%d" % (nos[0], nos[-1]))

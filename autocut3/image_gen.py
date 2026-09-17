@@ -6,9 +6,16 @@
   {"model":"image-01","prompt":...,"aspect_ratio":"9:16"}
 → data.image_urls[0] 为下载地址（同步返回，无轮询）。
 
+图生图实证（2026-09-18 真 key 矩阵探测）：
+  subject_reference=[{"type":"character","image_file":"data:image/jpeg;base64,…"}]
+  · data URI 底图通道通（合成中性图/空镜帧均 status=0 出图）
+  · ⚠ 含真人脸的底图一律 1026「input new_sensitive」审核拦截（换纯场景词照拦，
+    与提示词无关）——含人封面禁走 AI 路线，用素材代表帧+drawtext 标题（pipeline.build_cover）
+  · /files/upload 的 purpose 在 CN 站全拒（2013），本地文件→data URI 是唯一可用底图通道
+
 用法：
-  python3 autocut3/image_gen.py "prompt" out.jpg [--ar 9:16]
-  import image_gen; image_gen.gen_image(prompt, out_path)
+  python3 autocut3/image_gen.py "prompt" out.jpg [--ar 9:16] [--base 底图.jpg]
+  import image_gen; image_gen.gen_image(prompt, out_path, base_image="底图.jpg")
 """
 import argparse, base64, json, os, sys, urllib.request, urllib.error
 
@@ -25,10 +32,16 @@ def _backend():
     return be
 
 
-def gen_image(prompt, out_path, aspect_ratio="9:16", model=None, timeout_s=180):
+def gen_image(prompt, out_path, aspect_ratio="9:16", model=None, timeout_s=180, base_image=None):
+    """base_image=本地底图路径 → data URI 进 subject_reference（保主体图生图）。
+    底图含真人脸会被平台审核拦（1026，见模块头）——调用方负责选空镜底图并给出可读失败。"""
     be = _backend()
     body = {"model": model or be.get("model", "image-01"),
             "prompt": prompt, "aspect_ratio": aspect_ratio}
+    if base_image:
+        with open(base_image, "rb") as fh:
+            uri = "data:image/jpeg;base64," + base64.b64encode(fh.read()).decode()
+        body["subject_reference"] = [{"type": "character", "image_file": uri}]
     req = urllib.request.Request(
         be["base_url"].rstrip("/") + "/image_generation",
         data=json.dumps(body).encode("utf-8"),
@@ -66,5 +79,6 @@ if __name__ == "__main__":
     ap.add_argument("prompt")
     ap.add_argument("out")
     ap.add_argument("--ar", default="9:16")
+    ap.add_argument("--base", help="底图路径（subject_reference 保主体；含真人脸会被平台审核拦）")
     a = ap.parse_args()
-    print(gen_image(a.prompt, a.out, aspect_ratio=a.ar))
+    print(gen_image(a.prompt, a.out, aspect_ratio=a.ar, base_image=a.base))

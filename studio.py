@@ -453,12 +453,32 @@ class H(BaseHTTPRequestHandler):
             if not os.path.isdir(pd):
                 return self._json({"err": "no such project"}, 404)
             try:
-                import image_gen
+                import image_gen, pipeline as PL
+                # 底图=素材代表帧（2026-09-18 封面新流程：AI 封面=代表帧底图+提示词保主体生成）
+                plan, _rs = PL.build_plan(pd, body.get("story") or None)
                 cdir = os.path.join(pd, "cover"); os.makedirs(cdir, exist_ok=True)
-                image_gen.gen_image(prompt, os.path.join(cdir, "generated.jpg"), aspect_ratio="9:16")
+                base = PL._cover_frame(plan, {"beat_no": body.get("beat_no"), "at": body.get("at") or 0},
+                                       os.path.join(cdir, ".base-sample.jpg"))
+                image_gen.gen_image(prompt, os.path.join(cdir, "sample.jpg"),
+                                    aspect_ratio="9:16", base_image=base)
+            except Exception as e:
+                return self._json({"err": str(e)[:220]}, 500)
+            return self._json({"ok": True, "note": "样张已落 cover/sample.jpg——满意后把提示词填进封面配置并保存，渲染前正式收口",
+                               "sample": f"projects/{name}/cover/sample.jpg"})
+        if u.path.startswith("/api/cover-make/"):
+            # 正式出封面（渲染前闸门的 Studio 入口——人可迭代封面而不耗渲染；与 render 同一 build_cover）
+            name = u.path.split("/")[3]
+            qs = parse_qs(u.query)
+            sid = (qs.get("story") or [None])[0]
+            if not _safe(name):
+                return self._json({"err": "bad project"}, 400)
+            try:
+                r = subprocess.run([sys.executable, PIPE, "cover", f"{ROOT}/projects/{name}"] + ([sid] if sid else []),
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
             except Exception as e:
                 return self._json({"err": str(e)[:200]}, 500)
-            return self._json({"ok": True, "note": "已落 cover/generated.jpg——封面策略选「AI 生成封面」后随渲染生效"})
+            lines = [l for l in (r.stdout or "").strip().splitlines() if l.startswith(("COVER OK", "COVER FAIL"))]
+            return self._json({"ok": r.returncode == 0, "line": lines[-1] if lines else "无输出"})
         if u.path.startswith("/api/library/") and "/clip/" in u.path:
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）

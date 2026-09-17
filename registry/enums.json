@@ -39,32 +39,32 @@
  ],
  "cover_strategies": [
   {
-   "id": "output-frame",
-   "name": "成片抽帧",
-   "desc": "渲染完成后从成片抽帧——封面=发布产物本体（含字幕/调色/贴纸全要素）"
-  },
-  {
    "id": "first-frame",
    "name": "首帧封面",
-   "desc": "取第一幕素材入点帧 + 标题叠加",
-   "engineer_note": "工程自动抽取，无需人工"
+   "desc": "取第一幕素材入点帧，标题（title_text）本地合成在上部——含真人脸封面的唯一保真路线",
+   "engineer_note": "工程自动抽取，渲染前闸门收口"
   },
   {
    "id": "beat-frame",
    "name": "指定幕帧",
-   "desc": "取指定幕的指定时刻画面",
+   "desc": "取指定幕（beat_no）指定时刻（at）的画面 + 标题合成",
    "engineer_note": "需填 beat_no 与时刻"
   },
   {
    "id": "ai-generated",
    "name": "AI 生成封面",
-   "desc": "由图图/生成模型按故事线出图",
-   "engineer_note": "生成图放入 cover/ 即被收口"
+   "desc": "代表帧底图 + 提示词走 image-01 保主体生成 + 标题本地合成；底图含真人脸会被平台审核拦（1026）——含人封面改用帧截图策略",
+   "engineer_note": "prompt 必填，写作建议见操作手册封面章节；样张接口 /api/cover-gen"
+  },
+  {
+   "id": "output-frame",
+   "name": "成片抽帧",
+   "desc": "渲染完成后从成片抽帧——封面=发布产物本体（含字幕/调色/贴纸全要素）；唯一渲染后收口的策略"
   },
   {
    "id": "upload",
    "name": "外部上传",
-   "desc": "设计稿/截图直接上传",
+   "desc": "设计稿/截图直接上传，可选标题叠加",
    "engineer_note": "上传后自动落位 cover/"
   }
  ],

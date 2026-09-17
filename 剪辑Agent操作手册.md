@@ -93,6 +93,10 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 - **核对任务书指定的包名**（挂错包=白转写一轮，还得两包逐字节对账）：挂载前确认包 id
   与任务书一致，发现预建项目挂错包先卸载重挂再开工。
 - 清点：`pack.json.files[]` 数量与源目录一致；每条 MP4 大小与源一致；**源目录 mtime 前后各记一次**（零写入签字）。
+- **竖拍方向核对（2026-09-18 补，手机素材普遍"编码横放 + rotation=-90"）**：逐条 MP4 读
+  ffprobe `side_data_list[].rotation` 核对真实方向；**rotation≠0 的素材 `pack.json` 该条
+  `geometry._rotation` 必须在场**（mount 走 video_meta.probe 自动落；手工挂载/复挂后人工核对）。
+  缺 _rotation 又不横竖对账 = 后续画幅/裁切全错。
 - **放行判据**：挂载 done + 清点一致 + 兜底假设（画幅/平台/时长/风格）已登记并注明依据。
 
 ### 阶段 2 · 素材审核（transcribe → understand → digest → proofread → dossier/disposition）
@@ -104,6 +108,8 @@ python3 autocut3/proofread.py <pid>            # 参数=项目名（与 transcri
 python3 autocut3/dossier.py <pid>               # 素材档案（LLM 读全量转写+视觉合成）
 python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/音量跳变等）
 ```
+- 手工跑 ASR（绕过 transcribe.py，仅排障时）须**先抽 16k 单声道 wav** 再送：
+  `asr.extract_audio(src, wav)` 现成（管线内转写自动做，asr.py；手工直送原始 MP4 = ASR 服务端拒/慢）。
 - **素材"过审"的自动规则**：该素材 kind 所需审计全 done → `files[].review` 自动
   `"pending-review"→"reviewed"`。draft 只会用过审素材；人保留废片否决权
   （Studio `POST /api/pack/<pid>/<fid>/usable`，body 可置 `usable:false`/`review`）。
@@ -214,20 +220,39 @@ python3 autocut3/qc.py <pid> --story <sid>
 - **交付判据**：QC deliverable（或 fix-then-deliver 已修重跑到 deliverable）+ 成片存在 +
   交付说明含：成片路径/时长/响度、QC verdict、warn 清单、对雇主兜底假设的确认。
 
-### 阶段 6.5 · 封面收口（cover）
-封面统一落 `projects/<pid>/cover/cover-<sid>.jpg`（工程只认这个槽位文件名）。五途径
-（enums.json `cover_strategies`），故事线 `meta.cover.strategy` 选其一：
+### 阶段 6.5 · 封面收口（cover）——渲染前闸门
+**位置（2026-09-18 Noah 裁定）：封面生成+检查在渲染之前。** 封面槽
+`projects/<pid>/cover/cover-<sid>.jpg` 在盘、新于故事线、体检过（竖版/非空白）才放行渲染
+（编排器 cover 环节 / render 内建闸门，pipeline.cover_check）。唯一例外：output-frame
+（成片抽帧天然后置）。单独出封面不耗渲染：`python3 autocut3/pipeline.py cover <pid> <sid>`
+（Studio「出封面」按钮同一入口）。
 
-| strategy | 怎么出图 | 备注 |
+**策略矩阵**（enums.json `cover_strategies`，故事线 `meta.cover` 选）：
+
+| strategy | 怎么出图 | 适用 |
 |---|---|---|
-| `first-frame`（默认） | 首幕 A 轨入点帧抽帧 | 全自动，无需人工 |
-| `output-frame` | 成片渲染后抽帧（`meta.cover.at` 秒，默认 0.4） | 封面=发布本体，含字幕/贴纸全要素 |
-| `beat-frame` | 指定幕指定时刻（`meta.cover.beat_no` + `at` 秒） | 要填幕号+时刻 |
-| `ai-generated` | AI 出图放 `cover/generated.png`（或 .jpg） | `POST /api/cover-gen/<proj>`（image_gen） |
-| `upload` | 外部图放 `cover/upload.jpg`（或 .png） | `POST /api/cover-upload/<proj>` |
+| `first-frame`（默认） | 首幕素材入点帧 + 标题合成 | **含真人脸封面的唯一保真路线** |
+| `beat-frame` | 指定幕指定时刻（`beat_no`+`at`）+ 标题合成 | 代表帧选人脸正脸/表情最好的时刻 |
+| `ai-generated` | **代表帧底图**（`beat_no`+`at`，缺省首幕）+ `prompt` 走 image-01 保主体生成 + 标题合成 | **空镜/B-roll 场景封面**（⚠ 底图含真人脸会被平台审核拦 1026，实测与提示词无关） |
+| `output-frame` | 渲染后成片抽帧（`at` 秒） | 封面=发布本体，含字幕全要素（唯一后置） |
+| `upload` | 外部图放 `cover/upload.jpg`（或 .png），可选标题 | 设计稿 |
 
-任何途径最终都被归一到 `cover-<sid>.jpg`（pipeline.build_cover 收口）。AI/上传后不
-重渲也会在下一次渲染时被采用；验收封面就看 cover-<sid>.jpg 一张。
+**封面标题**：`meta.cover.title_text` = 核心故事标题（一句话钩子）。任何策略下非空即由管线
+**本地 drawtext 确定性合成**到画面上部（白字黑描边、≤10 字/行自动折行、1080×1920 收口）——
+**禁让 AI 在图里画文字**（image-01 中文字形=假字高危，2026-09-18 封面曾中招同类）。
+
+**AI 封面提示词写作建议**（`meta.cover.prompt`，样张接口 `POST /api/cover-gen/<proj>`
+body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式出）：
+1. 开头固定写「**保持参考图主体/场景不变**」——这是保主体生成的锚，缺了会面目全非
+2. 只写**风格方向**：色调 / 光线 / 氛围 / 构图（如「暖色自然光，背景轻微虚化」）
+3. 注明「**上半部分留白**」——标题由管线合成在上部，别让 AI 把画面填满
+4. **禁写**「画面中出现文字 / 标题 / 水印」——AI 画中文=假字，标题走 title_text
+5. **禁写**改变人物身份的词（换人/变老/变性别）——且真脸底图本就会被平台拦截，AI 策略只用于空镜
+6. 中文直写即可（image-01 中文理解强），≤1500 字，短句列表优于长段落
+
+示例（空镜底图）：`保持参考图场景不变，室内装修工地，暖色自然光，画面干净通透，背景轻微虚化，上半部分留白`
+
+任何途径最终归一到 `cover-<sid>.jpg`（pipeline.build_cover 收口）；验收封面就看这张。
 
 ---
 

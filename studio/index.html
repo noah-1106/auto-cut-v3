@@ -787,17 +787,21 @@ function buildCreator(){
     '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="BGM 相对音量 0–1（默认 0.22）"></div>'+
     '<div class="mf"><label>画幅氛围</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:'自然'},{id:'warm',name:'暖调'},{id:'cool',name:'冷调'}],m.style.grade)+'</select></div>';
   $('coverops').innerHTML=
-    '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="output-frame=成片抽帧（含字幕全要素）/ first-frame=素材首帧 / beat-frame=指定幕抽帧 / ai-generated=AI 生成图 / upload=已上传图">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
-    '<div class="mf"><label>封面标题</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value"></div>'+
-    ((m.cover.strategy==='beat-frame')?
-      '<div class="mf"><label>幕号</label><input type="text" style="width:56px" value="'+esc(String(m.cover.beat_no||1))+'" onchange="DRAFT.meta.cover.beat_no=parseInt(this.value)||1"></div>'+
+    '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
+    '<div class="mf"><label>封面标题</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value" title="核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）"></div>'+
+    ((m.cover.strategy==='beat-frame'||m.cover.strategy==='ai-generated')?
+      '<div class="mf"><label>底图幕号</label><input type="text" style="width:56px" value="'+esc(String(m.cover.beat_no||1))+'" onchange="DRAFT.meta.cover.beat_no=parseInt(this.value)||1" title="'+(m.cover.strategy==='ai-generated'?'AI 底图取自该幕':'封面取自该幕')+'"></div>'+
       '<div class="mf"><label>幕内秒</label><input type="text" style="width:56px" value="'+esc(String(m.cover.at||0))+'" onchange="DRAFT.meta.cover.at=parseFloat(this.value)||0"></div>':'')+
-    '<div><button class="ghost" onclick="$(\'covfile\').click()">⬆ 上传封面</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>'+
-    '<div><button class="ghost" onclick="genCover()">✨ AI 生成封面</button></div>';
+    ((m.cover.strategy==='ai-generated')?
+      '<div class="mf"><label>提示词</label><textarea rows="3" style="width:100%" oninput="DRAFT.meta.cover.prompt=this.value" placeholder="保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白">'+esc(m.cover.prompt||'')+'</textarea></div>'+
+      '<div style="font-size:11px;color:var(--muted);line-height:1.6;border-left:2px solid var(--line);padding-left:8px">提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截（1026）——含人封面请改用「首帧/指定幕帧」+标题</div>'+
+      '<div><button class="ghost" onclick="genCover()">✨ AI 试样（出样张）</button></div>':'')+
+    '<div><button class="ghost" onclick="makeCover()">🖼 出封面（保存→生成→体检）</button></div>'+
+    '<div><button class="ghost" onclick="$(\'covfile\').click()">⬆ 上传封面</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>';
   const cw=$('coverwrap');
   cw.innerHTML='<img alt="封面" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#000;min-height:120px;object-fit:cover">';
   const cim=cw.querySelector('img');
-  cim.onerror=()=>phReplace(cim,'暂无封面 · 保存并重渲后生成');
+  cim.onerror=()=>phReplace(cim,'暂无封面 · 「出封面」按钮或渲染前自动生成');
   cim.src=P.files.cover;
   renderBeats();
   updateSaveChip();
@@ -1101,17 +1105,32 @@ async function uploadCover(inp){
   }catch(e){setStatus('✗ '+e);}
 }
 async function genCover(){
-  const p=prompt('封面图提示词（竖版 9:16，建议注明：风格/场景/无文字）','竖版短视频封面底图：干净产品场景，主体居中，留白给标题，无文字无人物');
-  if(!p)return;
-  setStatus('✨ 封面生成中（image-01，约 10-30s）…');
+  // AI 试样（2026-09-18 新流程）：底图=当前封面配置的幕号/幕内秒（缺省首幕），prompt 必填；
+  // 样张落 cover/sample.jpg 只供预览——正式封面=保存后「出封面」/渲染前闸门收口
+  const p=(DRAFT.meta.cover.prompt||'').trim();
+  if(!p){setStatus('✗ 先填提示词（写法见提示框）');return;}
+  setStatus('✨ AI 试样中（image-01+底图，约 10-30s）…');
   try{
-    const r=await(await fetch('/api/cover-gen/'+P.name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:p})})).json();
+    const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
+    const r=await(await fetch('/api/cover-gen/'+P.name+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:p,beat_no:DRAFT.meta.cover.beat_no||1,at:DRAFT.meta.cover.at||0})})).json();
     if(r.ok){
       DRAFT.meta.cover.strategy='ai-generated';
-      setStatus('✓ '+r.note);
-      const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src='projects/'+P.name+'/cover/generated.jpg?t='+Date.now();
-      buildCreator();
+      setStatus('✓ 样张已出——满意后保存，再「出封面」正式收口');
+      const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=r.sample+'?t='+Date.now();
     }else setStatus('✗ '+(r.err||'生成失败'));
+  }catch(e){setStatus('✗ '+e);}
+}
+async function makeCover(){
+  // 正式出封面（渲染前闸门的人侧入口）：先保存故事线（封面配置要落盘）→ pipeline cover → 体检
+  setStatus('🖼 出封面中…');
+  try{
+    await saveStory(true);
+    const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
+    const r=await(await fetch('/api/cover-make/'+P.name+q,{method:'POST'})).json();
+    if(r.ok){
+      setStatus('✓ '+(r.line||'封面就绪'));
+      const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();
+    }else setStatus('✗ '+(r.line||r.err||'封面失败'));
   }catch(e){setStatus('✗ '+e);}
 }
 async function previewBeat(no){

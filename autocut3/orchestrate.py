@@ -27,6 +27,8 @@
   vadwords   当前故事线每幕 narration.words 在场（VAD 物理测量时间源）
   dubfit     无 dub 幕=na；有则每幕 narration.dubfit 在场且 dubfit-report passed
   dubgate    读 dubgate-report.json（dubfit/dubgate 产物）passed——D1-D3 同源
+  cover      cover/cover-<sid>.jpg 在盘、新于故事线、体检过（竖版/非空白）；
+             output-frame 策略=na（成片抽帧渲染后收口）——2026-09-18 Noah 封面前置裁定
   render     out-<sid>.mp4 存在且新于故事线
   qc         qc-report.json 存在（verdict=blocked→failed）
   aigen      预留槽位（video_gen 口）——默认 na，接活时在此登记判据
@@ -212,6 +214,35 @@ def _step_dubgate(pdir):
     return ("pending", "%d 个 dub 幕待过门禁" % len(dubs))
 
 
+def _step_cover(pdir):
+    """封面（2026-09-18 Noah 裁定：封面生成+检查在渲染前——闸门环）。
+    判据=当前故事线封面槽在盘、新于故事线、体检过（竖版/非空白）。"""
+    sid, sl = _active_story(pdir)
+    if not sid:
+        return ("pending", "先有成片故事线")
+    cov = (sl.get("meta") or {}).get("cover") or {}
+    if cov.get("strategy") == "output-frame":
+        return ("na", "成片抽帧策略——渲染后自动收口")
+    cp = f"{pdir}/cover/cover-{sid}.jpg"
+    sp = f"{pdir}/storylines/{sid}.json"
+    if os.path.exists(cp) and os.path.getmtime(cp) >= os.path.getmtime(sp):
+        import pipeline
+        _pp = f"{pdir}/plan-{sid}.json"
+        _wh = None
+        if os.path.exists(_pp):  # 画幅感知（横版项目横版封面合法；无 plan 缺省竖版）
+            try:
+                _pl = json.load(open(_pp, encoding="utf-8"))
+                _wh = (_pl.get("width"), _pl.get("height"))
+            except Exception:
+                pass
+        ok, why = pipeline.cover_check(cp, _wh)
+        if ok:
+            return ("done", "封面就绪（%s）" % why)
+        return ("failed", "封面体检不过: %s——重出（pipeline.py cover %s %s）" % (why, os.path.basename(pdir), sid))
+    return ("pending", "待出封面（pipeline.py cover %s %s；AI=底图+提示词，含人封面走帧截图+标题——见手册）"
+            % (os.path.basename(pdir), sid))
+
+
 def _step_render(pdir):
     sid, sl = _active_story(pdir)
     if not sid:
@@ -255,6 +286,7 @@ STEPS = [
     ("vadwords",    "VAD 词轨",   _step_vadwords),
     ("dubfit",      "配音裁剪",   _step_dubfit),
     ("dubgate",     "配音门禁",   _step_dubgate),
+    ("cover",       "封面",       _step_cover),
     ("render",      "渲染",       _step_render),
     ("qc",          "审片 QC",    _step_qc),
     ("aigen",       "AI 生成素材", _step_aigen),
@@ -263,7 +295,7 @@ STEPS = [
 # 全自动推进段：素材处理段无条件自动；storyline 需要 intent 门；之后自动
 _ADVANCE_AUTO = {"mount", "transcribe", "understand", "digest", "proofread", "dossier", "disposition"}
 _ADVANCE_INTENT = {"storyline"}   # 需要 --intent
-_ADVANCE_STORY = {"vadwords", "dubfit", "dubgate", "render", "qc"}
+_ADVANCE_STORY = {"vadwords", "dubfit", "dubgate", "cover", "render", "qc"}
 
 
 def status(project):
@@ -347,6 +379,9 @@ def advance(project, intent=None, story=None, only=None):
         elif key == "dubgate":
             sid = story or _latest_story(pdir)
             _run([py, os.path.join(ac, "dubgate.py"), name, "--story", sid], "配音门禁")
+        elif key == "cover":
+            sid = story or _latest_story(pdir)
+            _run([py, os.path.join(ac, "pipeline.py"), "cover", name, sid], "封面")
         elif key == "render":
             sid = story or _latest_story(pdir)
             print(f"  ▸ render story={sid}（进度见 render.status / Studio）…", flush=True)
