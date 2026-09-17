@@ -227,6 +227,10 @@ python3 autocut3/qc.py <pid> --story <sid>
 > Windows 上 `python3` 一律换 `python`（本文按 macOS/Linux 书写）；ffmpeg 同理用 `bin\ffmpeg.exe`。
 
 ### 4.1 素材段
+> transcribe / understand 内部都是**素材级 3 并发**（2026-09-18 实测 MiniMax 双端点 3+3
+> 并发无 429 后落地）——19 条素材包约比串行快 3 倍；限流自动退避，被 429 拦会等 2/4s 重试，
+> 不是卡死。两者可同时开跑（不同模型端点，互不占锁以外的资源）。
+
 | 命令 | 参数 | 产出 | 何时用 |
 |---|---|---|---|
 | `transcribe.py <pid>` | `--pack --material --asr --force` | pack.json transcript + audit.transcript | 新素材入库后必跑；--force 重跑已转写的 |

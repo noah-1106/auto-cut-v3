@@ -32,6 +32,8 @@
   T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制，2026-09-16 Noah 实锤 [:4] 静默丢弃 bug）
   T49 proofread 队列落点=项目目录（包名≠项目名也不同步错位，2026-09-16 n004/n006/wangyalun 三连发修根）
   T50 VLM 转码预设阶梯（ultrafast 首选，超限回退 veryfast 再抛错，2026-09-17 批量素材提速）
+  T51 transcribe 素材级并发（3 线程真并行峰值≥3 + 写回全量，2026-09-18 实测 3+3 并发无 429 后落地）
+  T52 retry429 退避（429 线性退避重试，非 429 直接抛，2026-09-18 并发配套）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1836,6 +1838,104 @@ def t50_transcode_preset_ladder():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t51_transcribe_concurrency():
+    # 回归锚（2026-09-18 Noah 实测 3xASR+3xVLM 并发无 429 后落地）：transcribe_pack 素材级
+    # 3 线程池——并发峰值必须真到 3（防退化成串行），且写回仍单写者全量（防并发改造
+    # 把 [:4] 截断那类"静默丢数据"带进多线程版）。
+    import tempfile, threading, time
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import transcribe, asr
+        tmp = tempfile.mkdtemp(prefix="t51_")
+        old_root = transcribe.ROOT
+        try:
+            transcribe.ROOT = tmp
+            pk_dir = os.path.join(tmp, "materials", "packs", "tp51")
+            os.makedirs(pk_dir)
+            files = []
+            for i in range(6):
+                mid = "M%d" % (i + 1)
+                open(os.path.join(pk_dir, mid + ".mp4"), "wb").write(b"\x00")
+                files.append({"id": mid, "file": mid + ".mp4", "kind": "video", "audit": {}})
+            json.dump({"files": files}, open(os.path.join(pk_dir, "pack.json"), "w"))
+            active = {"n": 0, "peak": 0}
+            alock = threading.Lock()
+
+            def _fake(src, provider=None):
+                with alock:
+                    active["n"] += 1
+                    active["peak"] = max(active["peak"], active["n"])
+                time.sleep(0.3)  # 网络等待模拟：串行=1.8s+，3并发≈0.6s+
+                with alock:
+                    active["n"] -= 1
+                return {"provider": "minimax", "tier": "sent", "text": "测试文本",
+                        "words": [{"text": "测", "start": 0.0, "end": 0.5}],
+                        "duration": 5.0, "at": "now"}
+            old_tr = asr.transcribe
+            asr.transcribe = _fake   # transcribe._one 经模块引用调用，补丁生效
+            try:
+                t0 = time.time()
+                out = transcribe.transcribe_pack("tp51")
+                wall = time.time() - t0
+            finally:
+                asr.transcribe = old_tr
+            pk = json.load(open(os.path.join(pk_dir, "pack.json")))
+            all_done = all(f["audit"].get("transcript") == "done" and f.get("transcript", {}).get("text")
+                           for f in pk["files"])
+            ok = (len(out) == 6 and all_done and active["peak"] >= 3 and wall < 1.5)
+            check("T51 transcribe 素材级并发（峰值≥3 真并行，写回全量不丢）",
+                  ok, "peak=%d wall=%.2fs done=%s" % (active["peak"], wall, all_done))
+        finally:
+            transcribe.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T51 transcribe 素材级并发（峰值≥3 真并行，写回全量不丢）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t52_retry429_backoff():
+    # 回归锚（2026-09-18 并发配套）：asr.retry429 只对 HTTP 429 退避重试，其余异常直接抛
+    # （防把"素材超长"这类业务错也裹进重试，白等 12 秒再失败）。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import asr
+        import urllib.error
+        calls = {"n": 0}
+        old_time = asr.time
+        asr.time = type("ft", (), {"sleep": staticmethod(lambda s: None)})()  # 只换 asr 命名空间里的引用，不碰真 time 模块
+        try:
+            def _flaky():
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise urllib.error.HTTPError("u", 429, "Too Many", {}, None)
+                return "ok"
+            r_ok = asr.retry429(_flaky)
+            n_429 = calls["n"]
+            calls["n"] = 0
+
+            def _boom():
+                calls["n"] += 1
+                raise urllib.error.HTTPError("u", 500, "ISE", {}, None)
+            try:
+                asr.retry429(_boom)
+                raise_500 = "no-raise"   # 不该走到
+            except urllib.error.HTTPError:
+                raise_500 = "raised"
+            n_500 = calls["n"]
+        finally:
+            asr.time = old_time
+        check("T52 retry429 退避（429 重试成功，非 429 直接抛）",
+              r_ok == "ok" and n_429 == 2 and raise_500 == "raised" and n_500 == 1,
+              "429: %d 次, 500: %d 次" % (n_429, n_500))
+    except Exception as e:
+        check("T52 retry429 退避（429 重试成功，非 429 直接抛）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2122,6 +2222,8 @@ def main():
     t48_validate_no_beat_truncation()
     t49_proofread_queue_lands_in_project()
     t50_transcode_preset_ladder()
+    t51_transcribe_concurrency()
+    t52_retry429_backoff()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

@@ -14,13 +14,16 @@
   files[i].audit.visual         = "done"
 供应商由 config/services.json vision 段登记，--vision 可临时覆盖。
 """
-import argparse, json, os, sys
+import argparse, concurrent.futures as cf, json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import asr  # noqa: E402  digest 时间戳用（datetime_iso）
+import asr  # noqa: E402  digest 时间戳用（datetime_iso）+ retry429 退避
 import vision  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 素材级并发数：与 transcribe.py 同值同依据（2026-09-18 实测 3xVLM 并发 26-37s 无 429 无减速）
+WORKERS = 3
 
 
 def project_packs(pid):
@@ -46,15 +49,28 @@ def _auto_review(f):
         f["review"] = "reviewed"  # 审计齐=自动过审（维护者 2026-09-15：审核的实质内容 Agent 自己能做）
 
 
+def _one(f, src, kind, provider):
+    """单条素材的网络调用（线程池内执行）。只发请求不碰 pack.json——结果由主线程
+    单写者合并；429 走 asr.retry429 线性退避。"""
+    try:
+        r = asr.retry429(lambda: vision.understand(src, kind, provider=provider,
+                                                   words=(f.get("transcript") or {}).get("words"),
+                                                   dup=int((f.get("transcript") or {}).get("scripted_dup") or 0)))  # 念稿指纹随词轨入视觉（M0269 错判修复）
+        return {"ok": True, "r": r}
+    except Exception as e:
+        return {"ok": False, "err": str(e)[:120]}
+
+
 def understand_pack(pack_id, material=None, provider=None, force=False):
     pdir = os.path.join(ROOT, "materials", "packs", pack_id)
     pp = os.path.join(pdir, "pack.json")
     import flock as fcntl
-    lockf = open(os.path.join(pdir, ".lock"), "w")  # 与 transcribe 同锁：读-改-写全程独占
+    lockf = open(os.path.join(pdir, ".lock"), "w")  # 与 transcribe 同锁：读-改-写全程独占（并发在锁内，写者仍单一）
     fcntl.flock(lockf, fcntl.LOCK_EX)
     pk = json.load(open(pp, encoding="utf-8"))
     out = {}
     changed = False
+    todo = []
     for f in pk.get("files", []):
         aud = f.setdefault("audit", {})
         if aud.get("visual") == "done" and not force:
@@ -72,19 +88,26 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
         if not os.path.exists(src):
             out[f["id"]] = {"ok": False, "err": "文件缺失"}
             continue
-        try:
-            r = vision.understand(src, kind, provider=provider,
-                                  words=(f.get("transcript") or {}).get("words"),
-                                  dup=int((f.get("transcript") or {}).get("scripted_dup") or 0))  # 念稿指纹随词轨入视觉（M0269 错判修复）
-        except Exception as e:
-            out[f["id"]] = {"ok": False, "err": str(e)[:120]}
-            continue
-        f["visual"] = r
-        aud["visual"] = "done"
-        _auto_review(f)
-        changed = True
-        out[f["id"]] = {"ok": True, "desc": (r.get("desc") or "")[:44], "ocr_n": len(r.get("ocr") or []),
-                       "content_type": r.get("content_type") or "", "schema": r.get("schema", 1)}
+        todo.append((f, src, kind))
+    if todo:
+        print("  · 并发理解 %d 条（%d 线程）…" % (len(todo), WORKERS), flush=True)
+    with cf.ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        futs = {ex.submit(_one, f, src, kind, provider): f for f, src, kind in todo}
+        for fu in cf.as_completed(futs):
+            f = futs[fu]
+            aud = f.setdefault("audit", {})
+            mid = f["id"]
+            res = fu.result()
+            if not res["ok"]:
+                out[mid] = {"ok": False, "err": res["err"]}
+                continue
+            r = res["r"]
+            f["visual"] = r
+            aud["visual"] = "done"
+            _auto_review(f)
+            changed = True
+            out[mid] = {"ok": True, "desc": (r.get("desc") or "")[:44], "ocr_n": len(r.get("ocr") or []),
+                        "content_type": r.get("content_type") or "", "schema": r.get("schema", 1)}
     if changed:
         with open(pp, "w", encoding="utf-8") as fh:
             json.dump(pk, fh, ensure_ascii=False, indent=1)

@@ -10,9 +10,23 @@
 
 跨平台：ffmpeg 解析顺序 = $FFMPEG env → 仓内 bin/（mac）→ PATH；纯标准库。
 """
-import json, os, re, shutil, subprocess, sys, urllib.request, uuid
+import json, os, re, shutil, subprocess, sys, time, urllib.error, urllib.request, uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def retry429(fn, tries=3, base_s=2.0):
+    """HTTP 429 限流退避（2026-09-18 素材级并发配套）：线性退避重试，其余异常直接抛。
+    MiniMax 不公布限额数字（按账号 tier 浮动）——2026-09-18 实测当前账号 3并发x双端点
+    无 429；退避兜底防更高负载/账号降档时被拦死。fn 需幂等（纯网络调用，无本地副作用）。"""
+    for i in range(tries):
+        try:
+            return fn()
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and i < tries - 1:
+                time.sleep(base_s * (i + 1))
+                continue
+            raise
 
 
 def load_services():

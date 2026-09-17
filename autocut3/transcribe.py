@@ -9,12 +9,16 @@
   files[i].audit.transcript     = "done"
 供应商由 config/services.json 登记（换供应商不改代码），--asr 可临时覆盖做 A/B 对比。
 """
-import argparse, json, os, re, sys  # re：_dup_len 念稿指纹检测（漏 import=NameError 雷，Claude 审查同族）
+import argparse, concurrent.futures as cf, json, os, re, sys  # re：_dup_len 念稿指纹检测（漏 import=NameError 雷，Claude 审查同族）
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 素材级并发数（2026-09-18 Noah 指令实测后落地）：3 并发 x ASR/VLM 双端点同时打 MiniMax
+# 无 429、无减速；锁仍整包独占（网络等待期不占锁语义变更，写 pack.json 依旧主线程单写者）。
+WORKERS = 3
 
 
 def _audits_done(f, aud):
@@ -67,17 +71,27 @@ def _dup_len(text, min_len=12):
     return best
 
 
+def _one(f, src, provider):
+    """单条素材的网络调用（线程池内执行）。只发请求不碰 pack.json——结果由主线程
+    单写者合并（flock 纪律不变）；429 走 asr.retry429 线性退避。"""
+    try:
+        r = asr.retry429(lambda: asr.transcribe(src, provider=provider))
+        return {"ok": True, "r": r}
+    except Exception as e:
+        return {"ok": False, "err": str(e)[:120]}
+
+
 def transcribe_pack(pack_id, material=None, provider=None, force=False):
     """转写一个素材包内待处理的条目，返回 {id: 摘要}。"""
     pdir = os.path.join(ROOT, "materials", "packs", pack_id)
     pp = os.path.join(pdir, "pack.json")
-    lockf = _locked(pdir)  # 全程独占：处理完才放锁
+    lockf = _locked(pdir)  # 全程独占：处理完才放锁（并发在锁内，写者仍单一）
     pk = json.load(open(pp, encoding="utf-8"))
     out = {}
     changed = False
+    todo = []
     for f in pk.get("files", []):
         aud = f.setdefault("audit", {})
-        print("  · 转写中 %s (%dMB)…" % (f.get("id"), int((f.get("size_mb") or 0))), flush=True) if not (aud.get("transcript") == "done" and not force) else None
         if aud.get("transcript") == "done" and not force:
             continue
         if material and f.get("id") != material:
@@ -88,23 +102,32 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
         if not os.path.exists(src):
             out[f["id"]] = {"ok": False, "err": "文件缺失"}
             continue
-        try:
-            r = asr.transcribe(src, provider=provider)
-        except Exception as e:
-            aud["transcript"] = "error:" + str(e)[:80]  # 失败标记（Claude P3-①）：跳过≠无声吞掉
-            out[f["id"]] = {"ok": False, "err": str(e)[:120]}
-            continue
-        has_speech = bool(r["words"])
-        f["transcript"] = {"provider": r["provider"], "tier": r["tier"], "text": r["text"],
-                           "words": r["words"], "duration": r["duration"],
-                           "has_speech": has_speech, "at": r["at"]}
-        _dup = _dup_len(r["text"])
-        if _dup >= 12:
-            f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（维护者 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
-        aud["transcript"] = "done"
-        _auto_review(f)
-        changed = True
-        out[f["id"]] = {"ok": True, "tier": r["tier"], "words": len(r["words"]),
+        todo.append((f, src))
+    if todo:
+        print("  · 并发转写 %d 条（%d 线程）…" % (len(todo), WORKERS), flush=True)
+    with cf.ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        futs = {ex.submit(_one, f, src, provider): f for f, src in todo}
+        for fu in cf.as_completed(futs):
+            f = futs[fu]
+            aud = f.setdefault("audit", {})
+            mid = f["id"]
+            res = fu.result()
+            if not res["ok"]:
+                aud["transcript"] = "error:" + res["err"][:80]  # 失败标记（Claude P3-①）：跳过≠无声吞掉
+                out[mid] = {"ok": False, "err": res["err"]}
+                continue
+            r = res["r"]
+            has_speech = bool(r["words"])
+            f["transcript"] = {"provider": r["provider"], "tier": r["tier"], "text": r["text"],
+                               "words": r["words"], "duration": r["duration"],
+                               "has_speech": has_speech, "at": r["at"]}
+            _dup = _dup_len(r["text"])
+            if _dup >= 12:
+                f["transcript"]["scripted_dup"] = _dup  # 念稿/重录指纹（维护者 2026-09-14：M0269 错判根因之一——台词逐字重复两遍无人消费）
+            aud["transcript"] = "done"
+            _auto_review(f)
+            changed = True
+            out[mid] = {"ok": True, "tier": r["tier"], "words": len(r["words"]),
                         "text": (r["text"] or "")[:40], "has_speech": has_speech}
     if changed:
         with open(pp, "w", encoding="utf-8") as fh:
