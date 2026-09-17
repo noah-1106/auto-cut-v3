@@ -162,7 +162,7 @@ def _effect_catalog():
     sfxs = _lines("sfx.json", _fmt)
     return ("[效果注册表]（按幕选用；拿不准就留空，禁止编造表外 id）\n"
             "字幕样式 subtitle.style：%s\n"
-            "贴纸 effects.stickers（词点触发，at_word=该幕台词里的触发词）：%s\n"
+            "贴纸 effects.stickers（词点触发；text=从本幕口播蒸馏的强调短语，≤6 字必给；at_word=该幕台词里的触发词）：%s\n"
             "音效 effects.sfx（时刻触发，at=幕内秒）：%s"
             % ("、".join(subs) or "（无）", "、".join(stks) or "（无）", "、".join(sfxs) or "（无）"))
 
@@ -199,7 +199,8 @@ def build_prompt(dossier, intent, transitions):
 8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
    禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
 9. 效果按幕选用（字幕风格/贴纸/音效，见效果注册表）：每幕至多 1 个字幕样式、2 个贴纸、2 个音效；
-   只选与幕内容语义匹配的（强调用 hit、提示用 ding、转场处才用 whoosh），宁缺毋滥
+   只选与幕内容语义匹配的，宁缺毋滥。贴纸 text 铁律：**从本幕口播词蒸馏的强调短语，
+   不超过 6 个字**（"横厅布局""得房率高"这种；照抄整句/超过 6 字=稀释成字幕，validate 硬剔除）
 
 [输出] 只输出合法 JSON（无 markdown 代码块、无解释）：
 {"title":"故事线标题","outline":"这条线在讲什么（2-3句）",
@@ -208,7 +209,7 @@ def build_prompt(dossier, intent, transitions):
 {"role":"B","source_id":"素材id","src_in":0,"duration":秒,"pos":"top-right","scale":0.3,"requirement":"叠画理由"}],
 "narration":{"mode":"original"},"transition_out":null,
 "subtitle":{"style":"字幕样式id 或省略"},
-"effects":{"stickers":[{"asset":"贴纸id","at_word":"触发词","duration":1.2,"pos":"top-center"}],
+"effects":{"stickers":[{"asset":"贴纸样式id","text":"≤6字强调短语","at_word":"触发词","duration":1.2,"pos":"top-center"}],
 "sfx":[{"asset":"音效id","at":0.0,"duration":0.4}]}}],
 "audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
     ", ".join("%s(%s：%s)" % (k, v.get("name", ""), (v.get("desc") or "")[:24]) for k, v in _bgm_reg().items() if not k.startswith("_")) or "（无 BGM 注册，bgm_id 填 null）")
@@ -336,11 +337,21 @@ def validate(draft, mats, transitions):
         _stks = _reg("stickers.json")
         _sfxs = _reg("sfx.json")
         _eff = b.get("effects") or {}
-        _stickers = [{"asset": s.get("asset"), "at_word": str(s.get("at_word") or "")[:12],
-                      "duration": min(6.0, max(0.3, float(s.get("duration") or 1.2))),
-                      "pos": s.get("pos") if s.get("pos") in
-                      ("top-left", "top-center", "top-right", "center", "bottom-left", "bottom-right") else "top-center"}
-                     for s in (_eff.get("stickers") or [])[:2] if s.get("asset") in _stks]
+        # 贴纸文字门（2026-09-18 文字模板制，v1 规矩代码化）：text=从本幕口播蒸馏的强调
+        # 短语，≤6 字；>6 字=稀释成字幕，硬剔除；缺失允许（回退注册表 default_text，
+        # 老故事线无 text 不断链）
+        _stickers = []
+        for s in (_eff.get("stickers") or [])[:2]:
+            if s.get("asset") not in _stks:
+                continue
+            t = str(s.get("text") or "").strip()
+            if len(t) > 6:
+                continue
+            _stickers.append({"asset": s.get("asset"), "text": t,
+                              "at_word": str(s.get("at_word") or "")[:12],
+                              "duration": min(6.0, max(0.3, float(s.get("duration") or 1.2))),
+                              "pos": s.get("pos") if s.get("pos") in
+                              ("top-left", "top-center", "top-right", "center", "bottom-left", "bottom-right") else "top-center"})
         _sfxl = [{"asset": s.get("asset"), "at": max(0.0, float(s.get("at") or 0)),
                   "duration": min(3.0, max(0.1, float(s.get("duration") or 0.4)))}
                  for s in (_eff.get("sfx") or [])[:2] if s.get("asset") in _sfxs]

@@ -34,6 +34,7 @@
   T50 VLM 转码预设阶梯（ultrafast 首选，超限回退 veryfast 再抛错，2026-09-17 批量素材提速）
   T51 transcribe 素材级并发（3 线程真并行峰值≥3 + 写回全量，2026-09-18 实测 3+3 并发无 429 后落地）
   T52 retry429 退避（429 线性退避重试，非 429 直接抛，2026-09-18 并发配套）
+  T53 贴纸文字模板（drawtext 现画+缓存+default 回退；validate ≤6字硬门，v1 规矩代码化）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1946,6 +1947,51 @@ def t52_retry429_backoff():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t53_sticker_text_templates():
+    # 回归锚（2026-09-18 文字模板制）：贴纸=样式模板+≤6字短语（v1 规矩回归——文字跟内容走，
+    # 不再是固定 PNG 三选一）。锚三件事：①sticker_file drawtext 现画真 PNG（透明底）+缓存命中
+    # +无 text 回退 default_text；②validate text 门：>6 字剔除、≤6 字透传、缺失保留（老线兼容）。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline, draft as D
+        reg = json.load(open(os.path.join(ROOT, "registry", "stickers.json"), encoding="utf-8"))
+        conf = dict(reg["zhuyi"]); conf["id"] = "zhuyi"
+        p1 = pipeline.sticker_file(conf, {"text": "横厅布局"})
+        p1b = pipeline.sticker_file(conf, {"text": "横厅布局"})          # 缓存命中（同路径）
+        p2 = pipeline.sticker_file(conf, {})                              # 无 text → default_text
+        ok_png = os.path.exists(p1) and os.path.getsize(p1) > 1000 and (p1 == p1b) \
+                 and os.path.exists(p2) and p2 != p1
+        q = subprocess.run([FF, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=pix_fmt", "-of", "csv=p=0", p1], capture_output=True, text=True)
+        ok_alpha = "rgba" in (q.stdout or "")
+
+        mats = {"CL": {"id": "CL", "kind": "video", "usable": True, "duration": 10,
+                       "visual": {"content_type": "narration", "desc": "干净"}}}
+        def _st(text):
+            return {"asset": "zhuyi", "text": text, "at_word": "x", "duration": 1.0, "pos": "top-center"}
+        _tr = [{"role": "A", "source_id": "CL", "src_in": 0, "duration": 4}]
+        dr = {"beats": [
+            {"story": "a", "tracks": _tr, "effects": {"stickers": [_st("超过六个字的长短语")]}},   # 8字 → 剔除
+            {"story": "b", "tracks": _tr, "effects": {"stickers": [_st("得房率高")]}},             # 4字 → 透传
+            {"story": "c", "tracks": _tr, "effects": {"stickers": [_st("")] }},                    # 缺 text → 保留
+            {"story": "d", "tracks": _tr, "effects": {"stickers": [dict(_st("好"), asset="表外id")]}},  # 表外 id → 剔除
+        ]}
+        beats = D.validate(dr, mats, [])
+        sk = [b["effects"]["stickers"] for b in beats]
+        ok_gate = (len(beats) == 4 and len(sk[0]) == 0
+                   and sk[1][0]["text"] == "得房率高"
+                   and len(sk[2]) == 1 and sk[2][0]["text"] == ""
+                   and len(sk[3]) == 0)
+        check("T53 贴纸文字模板（drawtext 现画+缓存+回退；validate ≤6字硬门）",
+              ok_png and ok_alpha and ok_gate,
+              "png=%s alpha=%s gate=%s" % (ok_png, ok_alpha, ok_gate))
+    except Exception as e:
+        check("T53 贴纸文字模板（drawtext 现画+缓存+回退；validate ≤6字硬门）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2234,6 +2280,7 @@ def main():
     t50_transcode_preset_ladder()
     t51_transcribe_concurrency()
     t52_retry429_backoff()
+    t53_sticker_text_templates()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

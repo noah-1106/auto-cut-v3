@@ -405,6 +405,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 const $=id=>document.getElementById(id);
 const nz=(v,d)=>(v===undefined||v===null||v==='')?d:v;
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // 单引号转义：inline onclick 单引号拼接断串/XSS 根（Claude P1-①）
+const cssbg=st=>'background:'+String(st.bg||'0xFFD400').replace('0x','#')+';color:'+String(st.fg||'0x111').replace('0x','#')+';border:2px solid '+String(st.stroke||'0x000').replace('0x','#');  // 贴纸文字模板 swatch（drawtext 的 0xRRGGBB → CSS）
 let P=null, DRAFT=null, VIEW={page:'config',tab:'config',proj:null,story:null};
 let DIRTY=false, SYNC=null;  // DIRTY: 创作台有未落盘改动；SYNC: 当前故事线的 mtime 基线
 let AUTOSAVE_TIMER=null;
@@ -667,6 +668,8 @@ async function renderRegMgr(){
       let prev='';
       if((REGCUR==='bgm'||REGCUR==='sfx')&&e.file)
         prev='<audio controls preload="none" src="/files/'+esc(e.file)+'" style="height:32px;max-width:230px"></audio>';
+      else if(REGCUR==='stickers'&&e.text_style)
+        prev='<span style="display:inline-block;padding:8px 16px;border-radius:8px;font:600 14px var(--sans);'+cssbg(e.text_style)+'">'+esc(e.default_text||'样字')+'</span>';
       else if(REGCUR==='stickers'&&e.file)
         prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=&quot;font:10px var(--mono);color:var(--faint)&quot;>图缺失</span>\'">';
       else if(REGCUR==='subtitles')
@@ -877,6 +880,7 @@ function beatCard(b,i){
   }).join('');
   const stks=((b.effects||{}).stickers||[]).map((s,k)=>
     '<div class="eff"><select onchange="upEff('+i+',\'stickers\','+k+',\'asset\',this.value)">'+optHtml(en.stickers,s.asset)+'</select>'+
+    '<span class="lbl">短语</span><input type="text" style="width:84px" maxlength="6" placeholder="≤6字" value="'+esc(s.text||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'text\',this.value)">'+
     '<span class="lbl">词点</span><input type="text" style="width:64px" value="'+esc(s.at_word||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'at_word\',this.value)">'+
     '<span class="lbl">时长</span><input type="text" value="'+esc(nz(s.duration,1.2))+'" onchange="upEff('+i+',\'stickers\','+k+',\'duration\',this.value)">'+
     '<select onchange="upEff('+i+',\'stickers\','+k+',\'pos\',this.value)">'+optHtml(en.positions,s.pos||'top-center')+'</select>'+
@@ -963,7 +967,7 @@ function collectStory(){
              segment:(b.music&&b.music.segment)||null,   // 段落/循环序列化保真（2026-09-15）：白名单重建曾丢字段
              loop:(b.music&&b.music.loop!==undefined)?b.music.loop:null},
       effects:{
-        stickers:(b.effects.stickers||[]).map(s=>({asset:nz(s.asset,''),at_word:nz(s.at_word,''),duration:+nz(s.duration,1.2),pos:nz(s.pos,'top-center')})),
+        stickers:(b.effects.stickers||[]).map(s=>({asset:nz(s.asset,''),text:nz(s.text,''),at_word:nz(s.at_word,''),duration:+nz(s.duration,1.2),pos:nz(s.pos,'top-center')})),
         sfx:(b.effects.sfx||[]).map(s=>({asset:nz(s.asset,''),at:+nz(s.at,0),duration:+nz(s.duration,0.4)}))},
       subtitle:(b.subtitle&&b.subtitle.style)?{style:b.subtitle.style}:{},
       transition_out:b.transition_out||null

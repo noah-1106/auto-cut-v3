@@ -339,7 +339,7 @@ Studio API（带校验+落盘一致），**禁止手编 JSON**：
 | `bgm.json` | `{file, name, desc, loop, segments:[{name,in,out,desc}]}` | BGM：整曲或段落（segments 供幕级选段） |
 | `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id） |
 | `transitions.json` | `{type: xfade\|flash, preset, duration, ...}` | 幕间转场（transition_out） |
-| `stickers.json` | `{file, pos, duration, desc}` | 贴纸（effects.stickers） |
+| `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容） |
 | `enums.json` | 五个枚举数组（video_types/cover_strategies/narration_modes/platforms/positions） | 全局词汇表（前端/后端同源；不开放编辑） |
 
 Studio 路由（http://127.0.0.1:8765）：

@@ -504,6 +504,49 @@ def word_time(words, at_word, seg):
             return wd["s"]
     return None
 
+
+def _ff_escape_path(p):
+    r"""drawtext 滤镜内路径：正斜杠化 + 冒号转义（Windows 盘符 C\:/），单引号包住。"""
+    return "'" + p.replace("\\", "/").replace(":", "\\:") + "'"
+
+
+def sticker_file(conf, stk):
+    """贴纸文件解析（2026-09-18 文字模板制，v1 规矩回归：贴纸文字跟内容走，≤6 字短语）。
+    - conf 带 text_style → drawtext 现画 PNG（缓存 materials/.sticker_cache/，文字+样式哈希键，
+      同短语不重画）；文字取 stk.text，缺省回退注册表 default_text（老故事线无 text 不断链）。
+    - 否则按 conf/stk 的 file 走静态 PNG（图标类兼容路径）。
+    返回 ""（调用方跳过）当：无样式无文件 / 文字模板无文字可用。"""
+    st = conf.get("text_style")
+    if not st:
+        return os.path.join(ROOT, conf.get("file") or stk.get("file", ""))
+    txt = str(stk.get("text") or conf.get("default_text") or "").strip()
+    if not txt:
+        return ""
+    import hashlib
+    key = hashlib.md5((json.dumps([conf.get("id", ""), txt, st], ensure_ascii=False,
+                                  sort_keys=True)).encode("utf-8")).hexdigest()[:16]
+    cache = os.path.join(ROOT, "materials", ".sticker_cache")
+    os.makedirs(cache, exist_ok=True)
+    out = os.path.join(cache, key + ".png")
+    if os.path.exists(out):
+        return out
+    tf = os.path.join(cache, key + ".txt")   # textfile 传参：绕开 drawtext 转义地狱
+    open(tf, "w", encoding="utf-8").write(txt)
+    font = os.path.join(ROOT, "assets", "fonts", "LXGWWenKai-Regular.ttf")
+    vf = ("drawtext=fontfile=%s:textfile=%s:fontcolor=%s:fontsize=%d:"
+          "borderw=%d:bordercolor=%s:box=1:boxcolor=%s@1.0:boxborderw=%d:"
+          "x=(w-text_w)/2:y=(h-text_h)/2"
+          % (_ff_escape_path(font), _ff_escape_path(tf),
+             st.get("fg", "0xFFFFFF"), int(st.get("font_size", 96)),
+             int(st.get("stroke_w", 5)), st.get("stroke", "0x000000"),
+             st.get("bg", "0xFFD400"), int(st.get("box_pad", 24))))
+    r = subprocess.run([FF, "-y", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "color=c=black@0.0:s=1200x300,format=rgba",
+                        "-frames:v", "1", "-vf", vf, out], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(out):
+        raise RuntimeError("贴纸现画失败 %r: %s" % (txt, (r.stderr or "")[-160:]))
+    return out
+
 def build_cmd(plan, ass_path, out_path):
     w, h, fps = plan["width"], plan["height"], plan["fps"]
     total = plan["duration"]
@@ -535,8 +578,8 @@ def build_cmd(plan, ass_path, out_path):
             cur = f"bo{bi}{k}"
         for k, stk in enumerate((seg.get("effects") or {}).get("stickers") or []):  # 贴纸：词点触发
             conf = reg_stk.get(stk.get("asset") or "") or {}
-            fpath = os.path.join(ROOT, conf.get("file") or stk.get("file", ""))
-            if not os.path.exists(fpath):
+            fpath = sticker_file(conf, stk)
+            if not fpath or not os.path.exists(fpath):
                 continue
             inputs += ["-i", fpath]; sidx = ni; ni += 1
             _wt = word_time(plan["words"], stk.get("at_word"), seg)
@@ -798,8 +841,8 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         fc.append(f"[{cur}][bp{k}]overlay={x}:{y}[bo{k}]"); cur = f"bo{k}"
     for k, stk in enumerate((seg.get("effects") or {}).get("stickers") or []):
         conf = reg_stk.get(stk.get("asset") or "") or {}
-        fpath = os.path.join(ROOT, conf.get("file") or stk.get("file", ""))
-        if not os.path.exists(fpath): continue
+        fpath = sticker_file(conf, stk)
+        if not fpath or not os.path.exists(fpath): continue
         inputs += ["-i", fpath]; sidx = ni; ni += 1
         t0 = word_time(plan["words"], stk.get("at_word"), seg)
         t0 = round(t0 - float(seg["tl_in"]), 2) if t0 is not None else 0.4
