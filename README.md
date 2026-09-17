@@ -137,7 +137,7 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
 Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。**改注册表即改下一次渲染，无需动代码。**
 BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环。
-音效=12 槽位社交媒体爆款语义（转场嗖/强调击打/提示叮/悬疑渐强/喜剧弹弓/倒计时/快门/成功短奏/错误蜂鸣/低频轰击/弹出泡泡/尴尬蟋蟀），Mixkit 免费商用，来源与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`。
+音效=注册表策展制（2026-09-18 审听后仅存提示叮/成功短奏两枚，其余实测不可用已下架；源文件与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，物色到更好的随时入册——故事线引用已删音效时渲染自动跳过不崩）。
 AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）；AI 视频素材走 video_gen.py。
 
 ---

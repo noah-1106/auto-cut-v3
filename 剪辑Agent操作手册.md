@@ -333,7 +333,7 @@ Studio API（带校验+落盘一致），**禁止手编 JSON**：
 
 | 注册表 | 条目字段 | 用途 |
 |---|---|---|
-| `sfx.json` | `{name, desc, file}`（12 槽位爆款语义） | 音效：draft 选→渲染混音 |
+| `sfx.json` | `{name, desc, file}` | 音效：draft 选→渲染混音（现存仅 ding/success；引用已删 id 渲染自动跳过，别选表外 id） |
 | `bgm.json` | `{file, name, desc, loop, segments:[{name,in,out,desc}]}` | BGM：整曲或段落（segments 供幕级选段） |
 | `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id） |
 | `transitions.json` | `{type: xfade\|flash, preset, duration, ...}` | 幕间转场（transition_out） |
