@@ -797,21 +797,30 @@ def t27_orchestrator():
             pd = os.path.join(tmp, "projects", "full")
             os.makedirs(os.path.join(pd, "materials"))
             os.makedirs(os.path.join(pd, "storylines"))
+            os.makedirs(os.path.join(pd, "cover"))
             json.dump({"packs": ["p1"]}, open(os.path.join(pd, "materials", "library.json"), "w"))
             json.dump({}, open(os.path.join(pd, "project.json"), "w"))
             json.dump({}, open(os.path.join(pd, "dossier.json"), "w"))
             json.dump({"materials": {}, "summary": {}}, open(os.path.join(pd, "disposition.json"), "w"))
-            json.dump({"beats": [{"no": 1, "narration": {"mode": "original", "words": words}}]},
+            json.dump({"meta": {"cover": {"strategy": "first-frame"}},
+                       "beats": [{"no": 1, "narration": {"mode": "original", "words": words}}]},
                       open(os.path.join(pd, "storylines", "s.json"), "w", encoding="utf-8"), ensure_ascii=False)
             json.dump({"verdict": "pass"}, open(os.path.join(pd, "qc-report.json"), "w"))
             open(os.path.join(pd, "out-s.mp4"), "wb").write(b"x")  # mtime 最新=out 新于故事线
+            # 封面夹具：竖版非空白帧（cover 环节体检判据——2026-09-18 封面前置收口）
+            rc = subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                                 "-i", "testsrc=size=1080x1920:rate=10:duration=1", "-frames:v", "1",
+                                 "-q:v", "2", os.path.join(pd, "cover", "cover-s.jpg")],
+                                capture_output=True, text=True)
+            assert rc.returncode == 0, "封面夹具合成失败"
             # 显式钉 mtime 而非依赖"先写后写"：同 tick 内两者 mtime 可相等（Windows CI
             # 2026-09-15 实锤 T27 偶发 done=False——render  freshness 判据是严格大于）
             t0 = time.time()
             os.utime(os.path.join(pd, "storylines", "s.json"), (t0, t0))
+            os.utime(os.path.join(pd, "cover", "cover-s.jpg"), (t0 + 1, t0 + 1))
             os.utime(os.path.join(pd, "out-s.mp4"), (t0 + 2, t0 + 2))
             st = ORCH.status(pd)
-            ok_struct = (st["project"] == "full" and len(st["steps"]) == 14
+            ok_struct = (st["project"] == "full" and len(st["steps"]) == 15
                          and all(s["status"] in ("done", "pending", "failed", "na") for s in st["steps"]))
             ok_done = all(s["status"] in ("done", "na") for s in st["steps"]) and st["next"] is None
         finally:
@@ -1244,12 +1253,29 @@ def t38_cover_sink():
         r_out = run("output-frame", at=0.4)
         r_first = run("first-frame")
         r_beat = run("beat-frame", beat_no=1, at=0.2)
-        r_ai = run("ai-generated")
         want = os.path.normpath(os.path.join(pd, "cover", "cover-demo.jpg"))
-        ai_ok = bool(r_ai) and os.path.normpath(r_ai) == want and \
-            open(r_ai, "rb").read() == open(os.path.join(pd, "cover", "generated.jpg"), "rb").read()
-        os.remove(os.path.join(pd, "cover", "generated.jpg"))
-        shutil.copyfile(jpg, os.path.join(pd, "cover", "upload.jpg"))
+        # ai-generated 新契约（2026-09-18 Noah 封面改版）：代表帧底图 + 提示词走 image-01
+        # 保主体生成。锚：①缺 prompt fail-fast（不再静默采纳外部图）；②有 prompt 真把
+        # 底图传给 gen_image（base_image=代表帧）且产物归一槽位。gen_image 桩掉（离线）。
+        try:
+            run("ai-generated")
+            ai_gate = False
+        except RuntimeError as e:
+            ai_gate = "prompt" in str(e)
+        import types
+        _calls = {}
+        def _gi(prompt, out, aspect_ratio="9:16", base_image=None, **kw):
+            _calls["base"], _calls["prompt"] = base_image, prompt
+            shutil.copyfile(jpg, out)
+            return out
+        sys.modules["image_gen"] = types.SimpleNamespace(gen_image=_gi)
+        try:
+            r_ai = run("ai-generated", prompt="保持参考图场景不变，暖色自然光")
+        finally:
+            sys.modules.pop("image_gen", None)
+        ai_ok = bool(r_ai) and os.path.normpath(r_ai) == want and _calls.get("base") \
+            and os.path.exists(_calls["base"]) and "参考图" in (_calls.get("prompt") or "")
+        shutil.copyfile(jpg, os.path.join(pd, "cover", "generated.jpg"))
         r_up = run("upload")
         up_ok = bool(r_up) and os.path.normpath(r_up) == want
         check("T38 封面收口五策略归一 cover{sid}.jpg（AI/上传不直返槽位路径）",
@@ -1975,7 +2001,8 @@ def t53_sticker_text_templates():
         mats = {"CL": {"id": "CL", "kind": "video", "usable": True, "duration": 10,
                        "visual": {"content_type": "narration", "desc": "干净"}}}
         def _st(text):
-            return {"asset": "zhuyi", "text": text, "at_word": "x", "duration": 1.0, "pos": "top-center"}
+            # at_word 置空：T53 只锚 text 门（at_word 词轨成员门是 T56 的锚，不在此混测）
+            return {"asset": "zhuyi", "text": text, "at_word": "", "duration": 1.0, "pos": "top-center"}
         _tr = [{"role": "A", "source_id": "CL", "src_in": 0, "duration": 4}]
         dr = {"beats": [
             {"story": "a", "tracks": _tr, "effects": {"stickers": [_st("超过六个字的长短语")]}},   # 8字 → 剔除
@@ -2043,6 +2070,220 @@ def t54_overlap_aware_fix():
               "r1=%s conflict=%s r2=%s drop=%s" % (ok_r1, ok_conflict, ok_r2, ok_drop))
     except Exception as e:
         check("T54 R1/R2 建议转场重叠避让 + 钳制丢词有声（ruxuan-02）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t55_cover_prerender_flow():
+    # 回归锚（2026-09-18 Noah 裁定封面改版）：封面生成+体检前置于渲染。锚四件：
+    # ①beat-frame=指定幕帧+title_text 本地合成（1080×1920 收口，上部两行标题真实落像素）；
+    # ②cover_check 缺失文件如实 False；③orchestrate cover 环节推导（封面在场且新于故事线=done，
+    #   output-frame 策略=na——唯一渲染后收口）；④pipeline.py cover 子命令 COVER OK 闭环。
+    import tempfile
+    pl_py = os.path.join(ROOT, "autocut3", "pipeline.py")
+    tmp = tempfile.mkdtemp(prefix="t55_")
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp)
+        os.makedirs("projects/t55/materials"); os.makedirs("projects/t55/storylines")
+        mp4 = "projects/t55/materials/M1.mp4"   # 走 library.sources（按项目目录解析）——pack 解析锚定仓库 ROOT，tmp 夹具进不去
+        r = subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                            "-i", "testsrc=size=1080x1920:rate=10:duration=5",
+                            "-f", "lavfi", "-i", "sine=frequency=440:duration=5",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", mp4],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, "夹具合成失败: %s" % (r.stderr or "")[-120:]
+        json.dump({"sources": [{"id": "M1", "file": "materials/M1.mp4"}],
+                   "files": []},
+                  open("projects/t55/materials/library.json", "w", encoding="utf-8"))
+        sl = {"title": "t55",
+              "meta": {"cover": {"strategy": "beat-frame", "beat_no": 1, "at": 2.0,
+                                 "title_text": "做装修销售我从不拿低价吸引客户"}},
+              "beats": [{"no": 1, "story": "甲乙", "narration": {"mode": "original"},
+                         "tracks": [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 4}]}]}
+        json.dump(sl, open("projects/t55/storylines/t55.json", "w", encoding="utf-8"))
+        r = subprocess.run([sys.executable, pl_py, "cover", os.path.abspath("projects/t55"), "t55"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cover = "projects/t55/cover/cover-t55.jpg"
+        ok_cli = r.returncode == 0 and "COVER OK" in (r.stdout or "") and os.path.exists(cover)
+        ffprobe = FFMPEG.replace("ffmpeg", "ffprobe")
+        q = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v:0",
+                            "-show_entries", "stream=width,height", "-of", "csv=p=0", cover],
+                           capture_output=True, text=True)
+        try:
+            w, h = (int(x) for x in (q.stdout or "").strip().split(","))
+            ok_portrait = w == 1080 and h == 1920
+        except Exception:
+            ok_portrait = False
+        # ①标题真实落像素：上部标题带必含高亮像素（纯 testsrc 顶部是暗色块）
+        s = subprocess.run([FFMPEG, "-loglevel", "error", "-i", cover,
+                            "-vf", "crop=1080:320:0:100,signalstats,metadata=print:key=lavfi.signalstats.YMAX:file=-",
+                            "-f", "null", "-"], capture_output=True, text=True)
+        ymax = max((int(m) for m in re.findall(r"YMAX=(\d+)", s.stdout or "")), default=0)
+        ok_title = ymax > 200
+        try:
+            import importlib
+            sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+            import orchestrate
+            importlib.reload(orchestrate)
+            st = orchestrate.status(os.path.abspath("projects/t55"))
+            cov = next(x for x in st["steps"] if x["step"] == "cover")
+            ok_step = cov["status"] == "done"
+            sl["meta"]["cover"]["strategy"] = "output-frame"
+            json.dump(sl, open("projects/t55/storylines/t55.json", "w", encoding="utf-8"))
+            st2 = orchestrate.status(os.path.abspath("projects/t55"))
+            cov2 = next(x for x in st2["steps"] if x["step"] == "cover")
+            ok_na = cov2["status"] == "na"
+            import pipeline as _PL
+            ok_chk = _PL.cover_check("projects/t55/cover/nope.jpg") == (False, "封面文件缺失")
+        finally:
+            sys.path = [p for p in sys.path if "autocut3" not in p]
+        check("T55 封面前置收口（beat-frame+标题合成+cover_check+环节推导）",
+              ok_cli and ok_portrait and ok_title and ok_step and ok_na and ok_chk,
+              "cli=%s portrait=%s title_YMAX=%d step=%s na=%s chk=%s"
+              % (ok_cli, ok_portrait, ymax, ok_step, ok_na, ok_chk))
+    except Exception as e:
+        check("T55 封面前置收口（beat-frame+标题合成+cover_check+环节推导）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        os.chdir(old_cwd)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def t56_at_word_gate():
+    # 回归锚（2026-09-18 agent P1 实锤）：LLM 产出多字 at_word（「低价」「评论区」），词轨
+    # 单字粒度 substring 永不匹配 → word_time 静默回退 0.4s 零告警。双锚：
+    # ①draft validate 门——at_word 不在本幕词轨文本（A 轨转写窗口+story）= 剔除贴纸；
+    # ②word_time 两级匹配——多字序列拼出命中首字起点，不命中 None。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline, draft as D
+        words = [{"t": c, "s": 1.0 + i * 0.4, "e": 1.4 + i * 0.4}
+                 for i, c in enumerate("我从不拿低价吸引客户")]
+        seg = {"tl_in": 0.0, "dur": 10.0, "no": 1}
+        ok_wt = (pipeline.word_time(words, "低", seg) == 2.6
+                 and pipeline.word_time(words, "低价", seg) == 2.6   # 多字序列命中（修复前 None）
+                 and pipeline.word_time(words, "评论区", seg) is None)
+        mats = {"M1": {"id": "M1", "kind": "video", "usable": True, "duration": 10,
+                       "visual": {"content_type": "narration", "desc": "干净"},
+                       "transcript": {"words": [{"text": c, "start": 0.1 * i, "end": 0.1 * i + 0.1}
+                                                for i, c in enumerate("我从不拿低价吸引客户")]}}}
+        def _st(aw):
+            return {"asset": "zhuyi", "text": "要点", "at_word": aw, "duration": 1.0, "pos": "top-center"}
+        _tr = [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 10}]
+        dr = {"beats": [
+            {"story": "s", "tracks": _tr, "effects": {"stickers": [_st("低价")]}},      # 在词轨文本 → 保留
+            {"story": "s", "tracks": _tr, "effects": {"stickers": [_st("评论区")]}},    # 不在 → 剔除
+            {"story": "s", "tracks": _tr, "effects": {"stickers": [_st("")] }},         # 空 at_word → 保留（老线兼容）
+        ]}
+        beats = D.validate(dr, mats, [])
+        sk = [b["effects"]["stickers"] for b in beats]
+        ok_gate = (len(beats) == 3 and len(sk[0]) == 1 and len(sk[1]) == 0 and len(sk[2]) == 1)
+        check("T56 at_word 触发词门（draft 词轨成员校验 + word_time 序列匹配）",
+              ok_wt and ok_gate, "wt=%s gate=%s" % (ok_wt, ok_gate))
+    except Exception as e:
+        check("T56 at_word 触发词门（draft 词轨成员校验 + word_time 序列匹配）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t57_vadwords_cross_span():
+    # 回归锚（2026-09-18 agent P2 实锤 b4「流」0.42s 静音全程高亮）：字符区间跨语音段界
+    # → 卡拉OK fill 窗盖住段间静音+下段头部。锚：①allocate 跨段字符截到起始段尾且登记 cross；
+    # ②dub 首幕不再 words/cross 未绑定（原：NameError 或静默沿用上一幕陈词）。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import vadwords
+        spans = [(0.0, 1.0), (3.0, 4.0)]
+        text = "零一二三四五六七八九"
+        ci = []
+        out = vadwords.allocate([(c, 0, 0) for c in text], spans, cross_out=ci)
+        crossing = [c for c, s, e in out if s < 1.0 < e]          # 修复前「五」[1.0,3.2] 盖满静音
+        ok_alloc = (not crossing) and [text[i] for i in ci] == ["五"]
+        tmp = tempfile.mkdtemp(prefix="t57_")
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp)
+            os.makedirs("projects/t57/storylines")
+            wav = "projects/t57/dub.wav"
+            r = subprocess.run([FFMPEG, "-y", "-loglevel", "error",
+                                "-f", "lavfi", "-i", "sine=frequency=440:duration=4", wav],
+                               capture_output=True, text=True)
+            assert r.returncode == 0, "夹具合成失败"
+            json.dump({"beats": [{"no": 1, "story": "甲乙丙丁",
+                                  "narration": {"mode": "dub", "audio": "dub.wav"},
+                                  "tracks": []}]},
+                      open("projects/t57/storylines/t57.json", "w", encoding="utf-8"))
+            old_argv = sys.argv
+            sys.argv = ["vadwords.py", "t57", "--story", "t57"]
+            vadwords.main()   # dub 首幕：修复前此处 NameError
+            sys.argv = old_argv
+            sl2 = json.load(open("projects/t57/storylines/t57.json"))
+            rep = json.load(open("projects/t57/vad-report.json"))
+            w1 = "".join(w["t"] for w in sl2["beats"][0]["narration"]["words"])
+            ok_dub = (w1 == "甲乙丙丁" and isinstance(rep[0].get("cross_span"), list))
+            check("T57 vadwords 跨段字符段尾截断 + dub 首幕词轨补齐",
+                  ok_alloc and ok_dub, "alloc=%s dub=%s words=%s" % (ok_alloc, ok_dub, w1))
+        finally:
+            os.chdir(old_cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T57 vadwords 跨段字符段尾截断 + dub 首幕词轨补齐",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
+def t58_proofread_degenerate_guard():
+    # 回归锚（2026-09-18 agent P3 实锤 3/3）：M3 偶把结论写进 think 块、正文只剩孤立「[」
+    # → 切片表达式 ValueError 报"substring not found"误导归因。锚：退化正文单独归因
+    # "引擎退化输出"（不炸、不改词轨）；空清单 [] 合法放行。
+    import tempfile, io, contextlib
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import proofread
+        tmp = tempfile.mkdtemp(prefix="t58_")
+        old_root = proofread.ROOT
+        try:
+            proofread.ROOT = tmp
+            os.makedirs(os.path.join(tmp, "materials", "packs", "tpid"))
+            os.makedirs(os.path.join(tmp, "config"))
+            os.makedirs(os.path.join(tmp, "projects", "tproj", "materials"))
+            json.dump({"terms": ["龙骨"]}, open(os.path.join(tmp, "config", "lexicon.json"), "w"),
+                      ensure_ascii=False)
+            ws = [{"text": c, "start": 0.2 * i, "end": 0.2 * i + 0.2}
+                  for i, c in enumerate("轮骨不牢")]
+            json.dump({"files": [{"id": "T58M", "duration": 1.0, "audit": {},
+                                  "transcript": {"words": ws}}]},
+                      open(os.path.join(tmp, "materials", "packs", "tpid", "pack.json"), "w"),
+                      ensure_ascii=False)
+            json.dump({"packs": ["tpid"]},
+                      open(os.path.join(tmp, "projects", "tproj", "materials", "library.json"), "w"),
+                      ensure_ascii=False)
+            old_llm = proofread.chat_llm
+            buf = io.StringIO()
+            proofread.chat_llm = lambda msgs: "["     # 退化正文（think 块吞了结论）
+            with contextlib.redirect_stdout(buf):
+                proofread.run("tproj", dry=True)      # 修复前：ValueError("substring not found")
+            pk = json.load(open(os.path.join(tmp, "materials", "packs", "tpid", "pack.json")))
+            ok_guard = ("".join(w["text"] for w in pk["files"][0]["transcript"]["words"]) == "轮骨不牢"
+                        and "引擎退化输出" in buf.getvalue())
+            proofread.chat_llm = lambda msgs: "[]"    # 合法空清单：零修正，不误报退化
+            buf2 = io.StringIO()
+            with contextlib.redirect_stdout(buf2):
+                proofread.run("tproj", dry=True)
+            ok_empty = "引擎退化输出" not in buf2.getvalue()
+            check("T58 proofread 引擎退化正文前置拦截（孤立「[」不再误导归因）",
+                  ok_guard and ok_empty, "guard=%s empty=%s" % (ok_guard, ok_empty))
+        finally:
+            proofread.ROOT = old_root
+            proofread.chat_llm = old_llm
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T58 proofread 引擎退化正文前置拦截（孤立「[」不再误导归因）",
               False, "异常: %s" % str(e)[:140])
     finally:
         sys.path = [p for p in sys.path if "autocut3" not in p]
@@ -2119,7 +2360,7 @@ def t36_draft_effect_registry():
     beats = draft.validate({"beats": [{"story": "s", "transition_out": None,
                                       "tracks": [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 3}],
                                       "subtitle": {"style": _k(subs)},
-                                      "effects": {"stickers": [{"asset": _k(stks), "at_word": "坑",
+                                      "effects": {"stickers": [{"asset": _k(stks), "at_word": "",
                                                                 "duration": 1.2, "pos": "top-center"},
                                                                {"asset": "编造贴纸", "at_word": "x"}],
                                                   "sfx": [{"asset": _k(sfxs), "at": 0.1, "duration": 0.4},
@@ -2338,6 +2579,10 @@ def main():
     t52_retry429_backoff()
     t53_sticker_text_templates()
     t54_overlap_aware_fix()
+    t55_cover_prerender_flow()
+    t56_at_word_gate()
+    t57_vadwords_cross_span()
+    t58_proofread_degenerate_guard()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

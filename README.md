@@ -18,7 +18,7 @@
 
 1. **Agent 可编辑**——LLM 起草和修改的是结构化的幕序列 JSON，不是时间轴工程文件；每一幕可独立渲染低清样张自检（秒级），"全片过 ≠ 单幕过"逐幕验证
 2. **人可终审**——创作台呈现的是"这条片讲了什么"的一列卡片，不是一坨波形；点任意一幕秒级预览，改动停顿 1 秒自动落盘
-3. **管线可自动**——九环节（转写→理解→缺陷台账→AI 起草→配音裁剪→VAD 词轨→渲染→三域门禁→交付）全自动，换一批新素材包冷启动零人工急救
+3. **管线可自动**——十环节（转写→理解→缺陷台账→AI 起草→配音裁剪→VAD 词轨→封面→渲染→三域门禁→交付）全自动，换一批新素材包冷启动零人工急救
 
 **设计哲学**：Agent 全自动从原始素材到成片；人是规则制定者（改 config 阈值/策略）+ 成片终审，不进流水线当卡点。
 
@@ -29,7 +29,7 @@
 **主页**：建项目、效果注册表管理入口，项目卡片直达创作台。
 ![主页](docs/screenshots/home.png)
 
-**创作台**：顶部管线进度条（九环节 ✓/○ 实时状态）｜成片监视器｜故事线大纲与全局设定（字幕风格/BGM/段落/封面）｜幕序列金线（横向即时间轴，＋插入新幕，点幕预览秒级低清样张）。
+**创作台**：顶部管线进度条（十五节点 ✓/○/✗/· 实时状态，与编排器同源）｜成片监视器｜故事线大纲与全局设定（字幕风格/BGM/段落/封面）｜幕序列金线（横向即时间轴，＋插入新幕，点幕预览秒级低清样张）。
 ![创作台](docs/screenshots/studio.png)
 
 **素材库**：项目切片与仓库级素材包，转写文本就地校对，素材卡带审核徽标（✓ 可用 / ◌ 待审 / ✕ 拍摄废片）与缺陷台账。
@@ -53,7 +53,7 @@ bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
 | `vision` | 画面识别（素材理解/缺陷） | **视频素材必需**（无 key 则视频永不过审、draft 剔除；人可在素材卡手动 toggle 强制过审） | minimax | 无 |
 | `llm` | AI 起草故事线 + proofread 校对 | **必需** | minimax | 无 |
 | `tts` | dub 配音合成 | dub 幕才需要 | local-audio8（本地，免 key，见 0.5） | 全 original 原声幕可不用 |
-| `image` | AI 生成封面 | 可选（封面也可抽帧/上传） | minimax | output-frame/first-frame/beat-frame/upload 四途径 |
+| `image` | AI 生成封面 | 可选（封面也可帧截图/成片抽帧/上传） | minimax | 五途径：first-frame/beat-frame/ai-generated（底图+提示词）/output-frame/upload |
 | `video` | AI 生成视频素材 | 可选（基本不用） | minimax | 全部实拍素材即可 |
 
 最小可用组合 = ffmpeg + asr/vision/llm 三个 key，跑 original 原声口播全链。
@@ -115,11 +115,12 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 4 | 起草 | draft.py | storylines/*.json | 渲染 |
 | 5 | 裁剪 | dubfit.py | dub 音频+验证报告 | 渲染 |
 | 6 | 词轨 | vadwords.py | VAD 词轨 | 字幕/卡拉OK |
-| 7 | 渲染 | pipeline.py | out-*.mp4 + subtitle.ass | 门禁/交付 |
-| 8 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
-| 9 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 |
+| 7 | 封面 | pipeline.py（build_cover/cover_check） | cover/cover-*.jpg | 渲染闸门/发布 |
+| 8 | 渲染 | pipeline.py | out-*.mp4 + subtitle.ass | 门禁/交付 |
+| 9 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
+| 10 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 |
 
-九个环节全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染。
+十个环节全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
 
 **管线编排器**：`autocut3/orchestrate.py` 从文件推导全部环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
 ```bash
@@ -222,6 +223,8 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 10. **proofread 复核门**：review-queue.json 有 pending 组=环节不推进（orchestrate 硬门）——"校对过"≠"复核完"，pending 挂着就放行=错词进成片（事故：「违科」当正确词交付，T43 锚）
 11. **content_type 选段门**：draft validate 硬剔除——voiceover/meta/ambient/broll 禁作 A 轨（读稿画面播原声=总结腔画外音穿帮），dialogue/说话画面禁作 B 轨（B 轨无音频通道=哑口型）；B 轨音频通道刻意不加，禁哑口型在选段时刻强制（T45 锚）
 12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
+13. **封面前置闸门**：渲染前 build_cover+cover_check，不过 exit 1 不耗渲染（output-frame 唯一后置）；封面归一成片画幅；**含真人脸封面唯一保真路线=帧截图策略+title_text 本地合成**——AI 底图带真脸必被平台审核拦 1026（2026-09-18 隔离矩阵实证），AI 画中文=假字一律禁（T55 锚）
+14. **at_word 触发词门 + 词点两级匹配**：draft 校验 at_word 必须在本幕词轨文本（A 轨转写窗口+story）内否则剔贴纸；word_time 两级匹配（词项 substring→字符序列），不命中必打渲染日志 warn——静默回退 0.4s 零告警是事故（agent 实锤「低价」「评论区」永不命中，T56 锚）
 
 ---
 
