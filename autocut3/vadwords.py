@@ -51,8 +51,12 @@ def vad_spans(src, ss=0.0, t=None, noise="-32dB", min_speech=0.30):
     return spans, dur
 
 
-def allocate(chars, spans):
-    """字符按序线性铺进语音段（比例分配），返回 [(ch, s, e)]。"""
+def allocate(chars, spans, cross_out=None):
+    """字符按序线性铺进语音段（比例分配），返回 [(ch, s, e)]。
+    跨段字符按段尾截断（2026-09-18 agent 实锤 b4「流」0.42s 静音全程高亮：卡拉OK fill
+    时长=e-s，字符跨段界时高亮窗盖住段间静音+下段头部）——截到起始段尾；被截字符的
+    索引经 cross_out（可选 set/list）登记，供调用方映射回窗口做 vad-report 台账
+    （事后按"e==段尾"猜会误报段尾自然对齐的字符，只能在截断现场记）。"""
     n = len(chars)
     total = sum(e - s for s, e in spans)
     def at(p):  # 语音进度 p∈[0,total] → 时间轴
@@ -62,7 +66,17 @@ def allocate(chars, spans):
             if acc + d >= p: return s + (p - acc)
             acc += d
         return spans[-1][1]
-    return [(c, at(i * total / n), at((i + 1) * total / n)) for i, (c, _a, _b) in enumerate(chars)]
+    out = []
+    for i, (c, _a, _b) in enumerate(chars):
+        s = at(i * total / n)
+        e = at((i + 1) * total / n)
+        sp_end = next((e0 for s0, e0 in spans if s0 - 1e-9 <= s <= e0 + 1e-9), None)
+        if sp_end is not None and e > sp_end:  # 跨段界：截到起始段尾
+            e = sp_end
+            if cross_out is not None:
+                cross_out.append(i)
+        out.append((c, s, e))
+    return out
 
 
 def main():
@@ -83,6 +97,13 @@ def main():
             src = nar["audio"]
             src = src if os.path.isabs(src) else os.path.join(pdir, src)
             spans, dur = vad_spans(src)
+            # 2026-09-18 补齐（既有隐患：此分支原不给 words 赋值——首幕 dub 直接 NameError，
+            # 非首幕静默沿用上一幕陈词；cross 上台账后两况都必炸，按 D 类纪律修根）：
+            # dub 台词=story（draft --dub 用它 TTS，天然同文本），照常铺 VAD 段。
+            # 注：dubfit 在 vadwords 之后跑会用 ASR 闭环词覆写得更准（环节顺序 vadwords→dubfit）。
+            _ci = []
+            words = allocate([(ch, 0, 0) for ch in story], spans, cross_out=_ci)
+            cross = [story[i] for i in _ci]
             audio_desc = os.path.basename(src)
         else:
             A = next((x for x in (b.get("tracks") or [])), None)
@@ -111,10 +132,14 @@ def main():
             text_all = "".join(w.get("text", "") for w in (ftrans.get("words") or [])).strip()
             win = []
             spans = []
+            cross = []
             if text_all:
                 spans_all, _dur_all = vad_spans(src)  # 全素材绝对时间轴
-                chars_all = allocate([(ch, 0, 0) for ch in text_all], spans_all)
-                win = [(ch, s, e) for ch, s, e in chars_all if e > ss and s < ss + t]
+                cross_all = []
+                chars_all = allocate([(ch, 0, 0) for ch in text_all], spans_all, cross_out=cross_all)
+                win_i = [(i, ch, s, e) for i, (ch, s, e) in enumerate(chars_all) if e > ss and s < ss + t]
+                win = [(ch, s, e) for _i, ch, s, e in win_i]
+                cross = [ch for i, ch, _s, _e in win_i if i in cross_all]  # 窗口内实际被截断的
             wtext = "".join(ch for ch, _s, _e in win).strip()
             if wtext:
                 story = wtext
@@ -125,13 +150,15 @@ def main():
                 # 窗口无词（空镜/未转写）→ 回退 story 字符按窗口 VAD 铺
                 spans, dur = vad_spans(src, ss=ss, t=t)
                 chars = [(ch, 0, 0) for ch in story]
-                words = allocate(chars, spans)
+                _ci = []
+                words = allocate(chars, spans, cross_out=_ci)
+                cross = [story[i] for i in _ci]
                 text_from = "story"
-            speech = sum(e - s for s, e in spans)
+        speech = sum(e - s for s, e in spans)  # 共位（dub/original 两路都算——原仅在 else 内，dub 路未绑定）
         nar["words"] = [{"t": ch, "s": round(s, 2), "e": round(e, 2)} for ch, s, e in words]
         report.append({"no": b.get("no"), "audio": audio_desc, "spans": [[round(s,2), round(e,2)] for s, e in spans],
                        "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0,
-                       "text_from": text_from})
+                       "text_from": text_from, "cross_span": cross})
         print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]))
     flock.write_json(sfile, sl)  # 原子落盘（与 draft 双跑同险：读者永不读半截故事线）
     flock.write_json(os.path.join(pdir, "vad-report.json"), report)

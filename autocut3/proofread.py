@@ -130,6 +130,14 @@ def _run_pack(pid, project, dry=False, material=None):
         try:
             raw = chat_llm([{"role": "system", "content": PROMPT_T.format(terms="、".join(terms))},
                             {"role": "user", "content": text}])
+            # 引擎退化正文前置拦截（2026-09-18 agent 实锤 3/3：M3 偶把结论写进 think 块、
+            # 正文只剩孤立「[」→ 下方切片表达式 rindex ValueError，报"substring not found"
+            # 误导归因。先验形态再切片：退化=建议重试该条，与真坏 JSON 分开归因）
+            _r = (raw or "").strip()
+            if len(_r) < 2 or "[" not in _r or "]" not in _r:
+                print(f"  {f['id']}: 引擎退化输出（正文仅 {len(_r)} 字符，非 JSON 修正清单）"
+                      f"——建议重试该条，不要当校对失败排查")
+                continue
             fixes = json.loads(raw[raw.index("["): raw.rindex("]") + 1])
         except Exception as e:
             print(f"  {f['id']}: LLM 校对失败 {str(e)[:80]}")

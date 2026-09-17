@@ -353,14 +353,29 @@ def validate(draft, mats, transitions):
         # 短语，≤6 字；>6 字=稀释成字幕，硬剔除；缺失允许（回退注册表 default_text，
         # 老故事线无 text 不断链）
         _stickers = []
+        # at_word 触发词门（2026-09-18 agent 实锤：LLM 产出多字 at_word「低价」「评论区」，
+        # 词轨单字粒度 substring 永不匹配 → word_time 静默回退 0.4s 零告警）。
+        # 校验集=词轨真实文本来源（vadwords 同口径）：original=A 轨素材转写窗口字 + story；
+        # dub/回退幕=story。多字允许——word_time 已补字符序列匹配，单字/多字都能命中。
+        _A = next((t for t in tracks if t["role"] == "A"), None)
+        _aw_src = str(b.get("story") or "")
+        if _A:
+            _m = mats.get(_A["source_id"]) or {}
+            _win = [w for w in ((_m.get("transcript") or {}).get("words") or [])
+                    if float(w.get("end") or 0) > _A["src_in"] and float(w.get("start") or 0) < _A["src_in"] + _A["duration"]]
+            _aw_src += "".join(str(w.get("text") or "") for w in _win)
         for s in (_eff.get("stickers") or [])[:2]:
             if s.get("asset") not in _stks:
                 continue
             t = str(s.get("text") or "").strip()
             if len(t) > 6:
                 continue
+            aw = str(s.get("at_word") or "").strip()[:12]
+            if aw and aw not in _aw_src:
+                print("  ⚠ 贴纸 at_word「%s」不在本幕词轨文本内，剔除该贴纸" % aw, flush=True)
+                continue
             _stickers.append({"asset": s.get("asset"), "text": t,
-                              "at_word": str(s.get("at_word") or "")[:12],
+                              "at_word": aw,
                               "duration": min(6.0, max(0.3, float(s.get("duration") or 1.2))),
                               "pos": s.get("pos") if s.get("pos") in
                               ("top-left", "top-center", "top-right", "center", "bottom-left", "bottom-right") else "top-center"})
