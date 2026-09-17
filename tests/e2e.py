@@ -31,6 +31,7 @@
   T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
   T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制，2026-09-16 Noah 实锤 [:4] 静默丢弃 bug）
   T49 proofread 队列落点=项目目录（包名≠项目名也不同步错位，2026-09-16 n004/n006/wangyalun 三连发修根）
+  T50 VLM 转码预设阶梯（ultrafast 首选，超限回退 veryfast 再抛错，2026-09-17 批量素材提速）
 
 用法：python3 tests/e2e.py [--fast]   # --fast 跳过 LLM 与长渲染
 """
@@ -1783,6 +1784,58 @@ def t49_proofread_queue_lands_in_project():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t50_transcode_preset_ladder():
+    # 回归锚（2026-09-17）：VLM 送片 720p 转码提速档——首选 ultrafast（crf 不变=质量
+    # 语义不变，只增体积）；超限回退 veryfast 重编一次，再超才抛错。锚：预设阶梯次序
+    # + 回退发生 + 产物可被 ffprobe 读出时长。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import vision
+        tmp = tempfile.mkdtemp(prefix="t50_")
+        src = os.path.join(tmp, "s.mp4")
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25:duration=2",
+                        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", src],
+                       check=True)
+        calls = []
+        orig_run = vision.subprocess.run
+        orig_max = vision.MAX_VIDEO_BYTES
+
+        def _spy(cmd, **kw):
+            calls.append(list(cmd))
+            return orig_run(cmd, **kw)
+
+        vision.subprocess.run = _spy
+        try:
+            out = vision._transcode_720(src, tmp)   # 正常路径：ultrafast 一轮即过
+            ok_normal = ("ultrafast" in calls[0]) and os.path.exists(out) \
+                        and os.path.getsize(out) <= orig_max
+            q = subprocess.run([FF, "-v", "error", "-show_entries", "format=duration",
+                                "-of", "csv=p=0", out], capture_output=True, text=True)
+            ok_probe = float((q.stdout or "0").strip() or 0) > 1.0
+            # 强制体积上限=1B：两轮预设都试过后必须抛错（证明 veryfast 回退真发生）
+            vision.MAX_VIDEO_BYTES = 1
+            calls.clear()
+            try:
+                vision._transcode_720(src, tmp)
+                ok_fallback = False
+            except RuntimeError:
+                presets = [c[c.index("-preset") + 1] for c in calls if "-preset" in c]
+                ok_fallback = presets == ["ultrafast", "veryfast"]
+        finally:
+            vision.subprocess.run = orig_run
+            vision.MAX_VIDEO_BYTES = orig_max
+        check("T50 VLM 转码预设阶梯（ultrafast 首选，超限回退 veryfast 再抛错）",
+              ok_normal and ok_probe and ok_fallback,
+              "normal=%s probe=%s fallback=%s" % (ok_normal, ok_probe, ok_fallback))
+    except Exception as e:
+        check("T50 VLM 转码预设阶梯（ultrafast 首选，超限回退 veryfast 再抛错）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2068,6 +2121,7 @@ def main():
     t47_proofread_pending_not_done()
     t48_validate_no_beat_truncation()
     t49_proofread_queue_lands_in_project()
+    t50_transcode_preset_ladder()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

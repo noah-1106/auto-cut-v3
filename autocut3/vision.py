@@ -53,14 +53,18 @@ def _datauri(path):
 
 
 def _transcode_720(src, td):
-    """原生视频前置：720p/crf23/-an/faststart（A/B：crf26 致深蓝误判黑，23 起步）。"""
+    """原生视频前置：720p/crf23/-an/faststart（A/B：crf26 致深蓝误判黑，23 起步）。
+    preset ultrafast（2026-09-17）：crf 是质量目标，同 crf 换快档只增体积不降质量
+    语义（VLM 判色结论不变），编码提速 2-3×。代价=体积约翻倍——超长素材可能顶破
+    100MB 上限，超限自动回退 veryfast 重编一次，再超才是真异常。"""
     out = os.path.join(td, "v720.mp4")
-    subprocess.run([_ff(), "-y", "-loglevel", "error", "-i", src,
-                    "-vf", "scale=-2:720", "-c:v", "libx264", "-preset", "veryfast",
-                    "-crf", "23", "-an", "-movflags", "+faststart", out], check=True)
-    if os.path.getsize(out) > MAX_VIDEO_BYTES:
-        raise RuntimeError("720p 转码后仍超 100MB（异常素材，需人工核查）")
-    return out
+    for preset in ("ultrafast", "veryfast"):
+        subprocess.run([_ff(), "-y", "-loglevel", "error", "-i", src,
+                        "-vf", "scale=-2:720", "-c:v", "libx264", "-preset", preset,
+                        "-crf", "23", "-an", "-movflags", "+faststart", out], check=True)
+        if os.path.getsize(out) <= MAX_VIDEO_BYTES:
+            return out
+    raise RuntimeError("720p 转码后仍超 100MB（异常素材，需人工核查）")
 
 
 def _speech_prior(words, dur):
