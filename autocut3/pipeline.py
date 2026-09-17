@@ -588,7 +588,10 @@ def build_cmd(plan, ass_path, out_path):
             t0 = round(_wt - float(seg["tl_in"]), 2) if _wt is not None else 0.4
             sd = float(stk.get("duration") or conf.get("duration") or 1.2)
             x, y = pos_xy(stk.get("pos") or conf.get("pos", "top-center"), w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
-            fc.append(f"[{cur}][{sidx}:v]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
+            # 贴纸统一缩放进 500x140 贴纸框（文字模板画布 1200x300 也归一到同框，
+            # 与静态 PNG 时代的几何语义一致——否则按原尺寸叠，文字块会溢出屏幕）
+            fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
+            fc.append(f"[{cur}][st{bi}{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
             cur = f"bs{bi}{k}"
         beat_v.append((cur, a_idx, seg))
         for sfx in (seg.get("effects") or {}).get("sfx") or []:  # 音效：时刻混入
@@ -848,7 +851,8 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         t0 = round(t0 - float(seg["tl_in"]), 2) if t0 is not None else 0.4
         sd = float(stk.get("duration") or conf.get("duration") or 1.2)
         x, y = pos_xy(stk.get("pos") or conf.get("pos", "top-center"), w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
-        fc.append(f"[{cur}][{sidx}:v]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
+        fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
+        fc.append(f"[{cur}][st{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
     fc.append(f"[{cur}]{_ass_spec(ass_path)}[vout]")
     fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
