@@ -668,7 +668,7 @@ async function renderRegMgr(){
       if((REGCUR==='bgm'||REGCUR==='sfx')&&e.file)
         prev='<audio controls preload="none" src="/files/'+esc(e.file)+'" style="height:32px;max-width:230px"></audio>';
       else if(REGCUR==='stickers'&&e.file)
-        prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=\\"font:10px var(--mono);color:var(--faint)\\">图缺失</span>\'">';
+        prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=&quot;font:10px var(--mono);color:var(--faint)&quot;>图缺失</span>\'">';
       else if(REGCUR==='subtitles')
         prev=regStyleCard(e)+'<img data-subpv="'+esc(id)+'" style="height:60px;border-radius:6px;border:1px solid var(--line);display:block;margin-top:6px" onerror="this.remove()">';
       else if(REGCUR==='transitions')
