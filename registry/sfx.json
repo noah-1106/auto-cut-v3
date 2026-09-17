@@ -1,63 +1,13 @@
 {
-  "_comment": "音效注册表（2026-09-14 M5 整换）：12 槽位=社交媒体爆款语义，全部来自 Mixkit 免费商用库（许可见 assets/sfx/viral/LICENSE-mixkit.txt，来源清单 sources-manifest.json）。已统一响度归一到 -16 LUFS / TP -1.5，ffmpeg 波形质检无削波。导入：PUT /api/registry-upload/sfx/<id>。",
-  "whoosh": {
-    "name": "转场·嗖",
-    "desc": "快节奏横移/切换转场垫音（cinematic fast whoosh，社交媒体通用转场音）",
-    "file": "assets/sfx/viral/whoosh.mp3"
-  },
-  "hit": {
-    "name": "强调·击打",
-    "desc": "词点强调/定格式落锤（strong punch impact，短促有力）",
-    "file": "assets/sfx/viral/hit.mp3"
-  },
-  "ding": {
-    "name": "提示·叮",
-    "desc": "信息点/正确答案提示音（correct answer tone，清脆不刺耳）",
-    "file": "assets/sfx/viral/ding.mp3"
-  },
-  "riser": {
-    "name": "悬疑·渐强",
-    "desc": "悬念拉起/揭晓前铺垫（cinematic trailer riser）",
-    "file": "assets/sfx/viral/riser.mp3"
-  },
-  "boing": {
-    "name": "喜剧·弹弓",
-    "desc": "出糗/反差喜剧时刻（boing hit，卡通弹跳）",
-    "file": "assets/sfx/viral/boing.mp3"
-  },
-  "countdown": {
-    "name": "倒计时",
-    "desc": "三步倒计时/开始发令（sport start bleeps）",
-    "file": "assets/sfx/viral/countdown.mp3"
-  },
-  "camera": {
-    "name": "相机·快门",
-    "desc": "拍照/定格/截图时刻（camera shutter click）",
-    "file": "assets/sfx/viral/camera.mp3"
-  },
-  "success": {
-    "name": "成功·短奏",
-    "desc": "成果展示/步骤完成（game success alert，上扬短奏）",
-    "file": "assets/sfx/viral/success.mp3"
-  },
-  "error": {
-    "name": "错误·蜂鸣",
-    "desc": "反例/禁止/纠错时刻（game show wrong answer buzz）",
-    "file": "assets/sfx/viral/error.mp3"
-  },
-  "boom": {
-    "name": "重锤·低频",
-    "desc": "重磅结论/视觉冲击（movie impact intro，Vine 式低频轰击）",
-    "file": "assets/sfx/viral/boom.mp3"
-  },
-  "pop": {
-    "name": "弹出·泡泡",
-    "desc": "弹窗/条目弹出/轻快切换（bubble pop up alert）",
-    "file": "assets/sfx/viral/pop.mp3"
-  },
-  "cricket": {
-    "name": "尴尬·蟋蟀",
-    "desc": "冷场/静默尴尬时刻（single cricket screech）",
-    "file": "assets/sfx/viral/cricket.mp3"
-  }
+ "_comment": "音效注册表（2026-09-14 M5 整换）：12 槽位=社交媒体爆款语义，全部来自 Mixkit 免费商用库（许可见 assets/sfx/viral/LICENSE-mixkit.txt，来源清单 sources-manifest.json）。已统一响度归一到 -16 LUFS / TP -1.5，ffmpeg 波形质检无削波。导入：PUT /api/registry-upload/sfx/<id>。",
+ "ding": {
+  "name": "提示·叮",
+  "desc": "信息点/正确答案提示音（correct answer tone，清脆不刺耳）",
+  "file": "assets/sfx/viral/ding.mp3"
+ },
+ "success": {
+  "name": "成功·短奏",
+  "desc": "成果展示/步骤完成（game success alert，上扬短奏）",
+  "file": "assets/sfx/viral/success.mp3"
+ }
 }
