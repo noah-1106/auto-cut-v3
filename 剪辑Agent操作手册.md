@@ -22,6 +22,12 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
   （转写/视觉/digest）  disposition.json 缺陷台账    plan → ASS 字幕 → 成片 out-<sid>.mp4
 ```
 
+**包与项目的归属关系**：包物理上全部在仓库级 `materials/packs/`（不存在项目级存储），
+项目经 `library.json` 挂载，多对多。**命名约定 = 唯一归属信息**：给某项目导素材 →
+包名 = `<项目名>`（或 `<项目名>-raw`），只挂这一个项目；通用素材（空镜/AI 生成/
+共享 B-roll）才用通用名、可挂多项目。包列表是全库平铺的，起 `pack1`/`素材`/`test`
+这类 generic 名 = 制造归属不明的垃圾。
+
 **五个必须刻进脑子的认知：**
 
 1. **幕（beat）是全轨一刀竖切的最小单元**。一条故事线 = 一串幕，每幕有：口播词（`story`）、
