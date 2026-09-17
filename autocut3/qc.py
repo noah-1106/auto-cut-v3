@@ -52,9 +52,52 @@ def _V(rule, sev, action, ev, fix=None, note=None):
 
 
 # ---------- R1/R2/R3/R8/R9：storyline 窗口 × 词轨（纯 Python，零探针）----------
-def check_windows(sl, files, rules):
+
+def _eff_trans_map(sl, pdir):
+    """转场有效时长表：注册表模板 × params.json 全局覆写（镜像 pipeline 加载口的同一覆写规则）。
+    flash 型不占时间轴（pipeline 推进 t 时不减）→ 记 0。R1/R2 建议公式消费（ruxuan-02 实锤：
+    钳制右沿=幕尾-dt，建议值只做死尾算术会给出钳没尾词的次生缺陷值）。"""
+    p = os.path.join(ROOT, "registry", "transitions.json")
+    trans = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    ovf = os.path.join(pdir, "params.json")
+    ov = json.load(open(ovf, encoding="utf-8")) if os.path.exists(ovf) else {}
+    out = {}
+    for tid in {b.get("transition_out") for b in sl.get("beats", [])}:
+        if tid and tid in trans:
+            d = float(ov["duration"]) if "duration" in ov else float(trans[tid].get("duration") or 0)
+            out[tid] = 0.0 if trans[tid].get("type") == "flash" else d
+    return out
+
+
+def _survive_floor(b, f, t, dt, we, r2=False):
+    """出点安全下限（绝对素材坐标）：末词存活条件 dur ≥ 末词start + dt + 0.08。
+    R1（收缩）：末词=现窗口最后一个词——优先 owords（渲染实际钳制的轨，VAD 物理时间），无则素材 ASR 词轨。
+    R2（延展）：末词=将被包进来的第一个越界词（owords 不含窗口外词，必看素材词轨）。
+    返回 (floor, 词文本) 或 None。"""
+    si = float(t.get("src_in") or 0)
+    words = (f.get("transcript") or {}).get("words") or []
+    if not r2:
+        ow = (b.get("narration") or {}).get("words") or []
+        if ow:
+            w = ow[-1]
+            return si + float(w["s"]) + dt + 0.08, str(w.get("t") or "")
+        cand = [w for w in words if float(w.get("end") or 0) <= we + 0.05]
+        w = max(cand, key=lambda x: float(x.get("end") or 0), default=None)
+    else:
+        cand = [w for w in words if float(w.get("end") or 0) > we + 0.05]
+        w = min(cand, key=lambda x: float(x.get("end") or 0), default=None)
+    if not w:
+        return None
+    return si + float(w.get("start") or 0) + dt + 0.08, str(w.get("text") or "")
+
+
+def check_windows(sl, files, rules, tmap=None):
+    tmap = tmap or {}
+    beats = sl.get("beats", [])
     out = []
-    for b in sl.get("beats", []):
+    for bi, b in enumerate(beats):
+        # 末幕无下一幕转场 → 时间窗不收缩，钳制右沿=幕尾本身
+        dt = tmap.get(b.get("transition_out"), 0) if bi < len(beats) - 1 else 0
         for t in b.get("tracks", []):
             mid = t.get("source_id")
             f = files.get(mid)
@@ -83,10 +126,23 @@ def check_windows(sl, files, rules):
                 tail = max(w["end"] for w in inwin)  # 兜底（理论不达）
             # R1 死尾巴
             if we > tail + rules["R1_dead_tail_max"] + 1e-6:
+                fixv = round(tail + rules.get("R1_fix_target", 0.35), 1)
+                # 转场重叠避让（ruxuan-02 实锤：建议 7.2 钳没尾词「。」→页合并，7.4 才存活）
+                _sf = _survive_floor(b, f, t, dt, we)
+                if dt and _sf and _sf[0] > fixv:
+                    if _sf[0] <= tail + rules["R1_dead_tail_max"] + 1e-6:
+                        fixv = round(_sf[0], 1)
+                        fix = ("出点收缩至 %.1fs（词尾+死尾余量，已含转场重叠 %.1fs 避让——"
+                               "再小会钳没尾词「%s」引发丢词/字幕页合并）" % (fixv, dt, _sf[1]))
+                    else:
+                        fix = ("死尾上限与尾词存活窗冲突（尾词「%s」起点+转场 %.1fs+词长余量 > 词尾+%.1fs）——"
+                               "改短转场或砍尾词，勿机械收缩" % (_sf[1], dt, rules["R1_dead_tail_max"]))
+                else:
+                    fix = "出点收缩至 %.1fs（词尾+%.1fs）" % (fixv, rules.get("R1_fix_target", 0.35))
                 out.append(_V("R1", "blocker", "auto_fix",
                               {"material": mid, "beat": b.get("no"), "cut_out": round(we, 2),
                                "speech_tail": round(tail, 2), "tail_len": round(we - tail, 2)},
-                              fix="出点收缩至 %.1fs（词尾+%.1fs）" % (tail + rules.get("R1_fix_target", 0.35), rules.get("R1_fix_target", 0.35))))
+                              fix=fix))
             # R2 咬字（含素材物理极限豁免）
             elif we < tail + rules["R2_min_tail"] - 1e-6:
                 # 句中豁免：出点后紧贴下一词开头（<0.15s）=句子中间抽段，延展反而会包进下一个词——非咬字问题
@@ -106,11 +162,21 @@ def check_windows(sl, files, rules):
                                    "speech_tail": round(tail, 2), "material_end": dur_m},
                                   note="素材物理极限（出点已顶素材尾），非剪辑错误"))
                 else:
+                    fixv = min(tail + rules.get("R2_fix_target", 0.35), dur_m)
+                    fix = "出点延展至 %.1fs（词尾+%.1fs，受素材边界 %.1fs 限制）" % (
+                        fixv, rules.get("R2_fix_target", 0.35), dur_m)
+                    # R2 同族：延展后的尾词同样要过转场重叠存活窗（延至词尾+0.35 但重叠更大 = 换个方式咬字）
+                    _sf = _survive_floor(b, f, t, dt, we, r2=True)
+                    if dt and _sf and _sf[0] > fixv:
+                        if _sf[0] <= dur_m:
+                            fix = "出点延展至 %.1fs（含转场重叠 %.1fs 避让——延至词尾+%.1fs 会钳没尾词「%s」）" % (
+                                round(_sf[0], 1), dt, rules.get("R2_fix_target", 0.35), _sf[1])
+                        else:
+                            fix = "素材边界内无安全出点（尾词「%s」+ 转场重叠 %.1fs 超 %.1fs）——改短转场或换出点" % (
+                                _sf[1], dt, dur_m)
                     out.append(_V("R2", "blocker", "auto_fix",
                                   {"material": mid, "beat": b.get("no"), "cut_out": round(we, 2),
-                                   "speech_tail": round(tail, 2)},
-                                  fix="出点延展至 %.1fs（词尾+%.1fs，受素材边界 %.1fs 限制）"
-                                      % (min(tail + rules.get("R2_fix_target", 0.35), dur_m), rules.get("R2_fix_target", 0.35), dur_m)))
+                                   "speech_tail": round(tail, 2)}, fix=fix))
             # R3 静音洞
             for k in range(1, len(inwin)):
                 gap = inwin[k]["start"] - inwin[k - 1]["end"]
@@ -387,7 +453,7 @@ def run(pid, story=None, deep=True, write=True):
 
     violations = []
     try:
-        violations += check_windows(sl, files, rules)
+        violations += check_windows(sl, files, rules, _eff_trans_map(sl, pdir))
     except Exception as e:
         violations.append(_V("R1-R9", "warn", "human", {}, note="词轨检查异常: %s" % str(e)[:80]))
     try:

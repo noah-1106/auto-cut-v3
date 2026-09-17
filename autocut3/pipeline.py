@@ -90,7 +90,7 @@ def remap_words(cuts, acts, segs, total, packpool=None):
     """词级时间戳 → 成片时间轴（0.1s 量化规范）。源: cuts.json（n001）或素材包转写词轨（source_id 优先）。
     dub 幕：字幕词轨 = 配音文案按配音音频实测时长均分（画面字幕必须跟配音走，不跟原声）。"""
     packpool = packpool or {}
-    out = []
+    out, drops = [], []  # drops=转场重叠钳没的词（ruxuan-02 实锤：静默丢词→字幕页合并零告警）
     for i, act in enumerate(acts):
         if act is None:
             continue  # narration=none 的幕：占位对齐用，无词
@@ -107,6 +107,8 @@ def remap_words(cuts, acts, segs, total, packpool=None):
                 # 幕内钳制与 dub 通道同源（真实项目实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）
                 _ws, _we = max(_ws, tl0), min(_we, tl1)
                 if _we - _ws < 0.08:
+                    drops.append({"beat": s.get("no"), "word": str(w.get("t") or ""),
+                                  "at": round(float(w["s"]), 1), "reason": "overlap-clamp"})
                     continue
                 seg_words.append({"t": w["t"], "s": _ws, "e": _we})
             out.extend(seg_words)
@@ -158,11 +160,13 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         for w in seg_words:
             ws2, we2 = max(w["s"], tl0), min(w["e"], tl1)
             if we2 - ws2 < 0.08:
+                drops.append({"beat": s.get("no"), "word": str(w.get("t") or ""),
+                              "at": round(w["s"], 1), "reason": "overlap-clamp"})
                 continue  # 整词落在重叠区被钳没 → 丢弃（画面在转场，字幕留白）
             out.append({"t": w["t"], "s": round(ws2, 1), "e": round(we2, 1)})
     # 注意：不做全局时间排序——词按幕归属输出（字幕跟幕走），
     # 转场重叠区按时间排序会把两幕词轨洗成交错（历史病灶：'对着查。接'）
-    return out
+    return out, drops
 
 # ---------------------------------------------------------------- 字幕轨
 def char_level(words):
@@ -439,7 +443,10 @@ def build_plan(project_dir, sid=None):
             srcs.append(None)  # 占位保持与 segs 下标对齐（否则词轨整体错幕）
             continue
         srcs.append({"cut_index": m.get("cut_index"), "src_in": m.get("src_in"), "duration": m.get("duration"), "source_id": m.get("source_id")})
-    words = remap_words(cuts, srcs, segs, total, packpool)
+    words, word_drops = remap_words(cuts, srcs, segs, total, packpool)
+    for _d in word_drops:  # 决策点有声化：钳制丢词不再静默（对照 QC 建议避让，比 QC 兜底早一整轮）
+        print("警告: 幕%s 词「%s」(%.1fs 起) 落入转场重叠区被钳没（残余<0.08s）——词数减少，字幕页结构可能变化" % (
+            _d["beat"], _d["word"], _d["at"]), flush=True)
 
     audio = story.get("meta", {}).get("audio", {})
     # 画幅：项目级属性（project.json.format 打底，故事线 meta.format 可覆盖单线实验）
@@ -458,7 +465,7 @@ def build_plan(project_dir, sid=None):
         "duration": total, "title": story["title"],
         "outline": story.get("outline", ""),
         "media": f"{project_dir}/materials/src.mp4",
-        "segments": segs, "words": words,
+        "segments": segs, "words": words, "word_drops": word_drops,
         "subtitle_style": story.get("meta", {}).get("style", {}).get("subtitle",
                                 story.get("subtitle_style", "karaoke-gold")),
         "transitions": {s["id"]: s.get("transition") for s in segs if s.get("transition")},

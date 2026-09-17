@@ -1999,6 +1999,55 @@ def t53_sticker_text_templates():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t54_overlap_aware_fix():
+    # 回归锚（2026-09-18 ruxuan-02 实锤）：R1 建议曾是纯死尾算术（词尾+0.35），不知转场重叠——
+    # 建议值 7.2 令尾词「。」(6.70 起) 被幕内钳制整词静默丢弃（残余<0.08s）→ 字幕页跨幕合并照样过 QC。
+    # 两修对锚：①QC R1/R2 建议感知 dt（存活下限=末词start+dt+0.08；floor 超死尾上限→拒给数字指路改转场）
+    # ②remap_words 钳制丢词落 plan.word_drops 有声（决策点不再静默降级）。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import qc, pipeline
+        rules = qc.load_rules()
+        words = [{"text": t, "start": s, "end": e} for t, s, e in
+                 [("做", 0.0, 0.2), ("好", 6.0, 6.4), ("年", 6.4, 6.72), ("。", 7.0, 7.2)]]
+        f = {"id": "M", "duration": 10, "transcript": {"words": words}}
+        ow = [{"t": w["text"], "s": w["start"], "e": w["end"]} for w in words]
+        tr = {"role": "A", "source_id": "M", "src_in": 0, "duration": 8.5}
+        sl = {"beats": [
+            {"no": 1, "tracks": [tr], "transition_out": "crossDissolve",
+             "narration": {"mode": "original", "words": ow}},
+            {"no": 2, "tracks": [dict(tr, duration=3)], "transition_out": None}]}
+        tmap = qc._eff_trans_map(sl, os.path.join(ROOT, "projects"))  # 真注册表 crossDissolve=0.5
+        # ① R1：词尾 7.2，owords 末词「。」7.0 起 → floor 7.0+0.5+0.08=7.58 → 建议 7.6 含避让说明
+        r1 = next(v for v in qc.check_windows(sl, {"M": f}, rules, tmap) if v["rule"] == "R1")
+        ok_r1 = "7.6" in (r1["suggested_fix"] or "") and "重叠" in r1["suggested_fix"]
+        # 冲突档：末词起点 7.8 → floor 8.38 > 词尾 7.2+死尾上限 0.8 → 拒给数字，指路改短转场/砍尾词
+        sl2 = json.loads(json.dumps(sl))
+        sl2["beats"][0]["narration"]["words"][-1] = {"t": "。", "s": 7.8, "e": 8.0}
+        r1c = next(v for v in qc.check_windows(sl2, {"M": f}, rules, tmap) if v["rule"] == "R1")
+        ok_conflict = "改短转场" in (r1c["suggested_fix"] or "") and "7.6" not in r1c["suggested_fix"]
+        # R2 同族：出点 6.5 咬「年」(6.4-6.72)，基础延展 6.75 但 floor=6.4+0.5+0.08=6.98 → 建议 7.0
+        sl3 = json.loads(json.dumps(sl))
+        sl3["beats"][0]["tracks"][0]["duration"] = 6.5
+        r2 = next(v for v in qc.check_windows(sl3, {"M": f}, rules, tmap) if v["rule"] == "R2")
+        ok_r2 = "7.0" in (r2["suggested_fix"] or "") and "避让" in r2["suggested_fix"]
+        # ② pipeline：owords 末词「。」7.0 起，幕 dur 7.2 → tl1=7.2-0.5=6.7 → 残余<0 → 必丢且有声
+        segs = [{"no": 1, "tl_in": 0, "dur": 7.2, "owords": ow}, {"no": 2, "tl_in": 6.7, "dur": 3.0}]
+        ws, drops = pipeline.remap_words([], [{"source_id": "M", "src_in": 0, "duration": 7.2}],
+                                         segs, 9.7, {"M": f})
+        ok_drop = (len(drops) == 1 and drops[0]["word"] == "。" and drops[0]["beat"] == 1
+                   and abs(drops[0]["at"] - 7.0) < 0.01
+                   and all(w["t"] != "。" for w in ws))
+        check("T54 R1/R2 建议转场重叠避让 + 钳制丢词有声（ruxuan-02）",
+              ok_r1 and ok_conflict and ok_r2 and ok_drop,
+              "r1=%s conflict=%s r2=%s drop=%s" % (ok_r1, ok_conflict, ok_r2, ok_drop))
+    except Exception as e:
+        check("T54 R1/R2 建议转场重叠避让 + 钳制丢词有声（ruxuan-02）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2288,6 +2337,7 @@ def main():
     t51_transcribe_concurrency()
     t52_retry429_backoff()
     t53_sticker_text_templates()
+    t54_overlap_aware_fix()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
