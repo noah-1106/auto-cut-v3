@@ -629,8 +629,8 @@ class H(BaseHTTPRequestHandler):
             if not os.path.isdir(pk_dir):
                 os.makedirs(pk_dir, exist_ok=True)  # 目录兜底：忘先 pack-create 时自动建包（2026-09-14 彭程林实战踩坑）
             n = int(self.headers.get("Content-Length", 0))
-            if n <= 0 or n > 500 << 20:
-                return self._json({"err": "bad size %d（上限 500MB）" % n}, 400)
+            if n <= 0 or n > 1024 << 20:
+                return self._json({"err": "bad size %d（上限 1GB）" % n}, 400)
             ext = fname.rsplit(".", 1)[-1].lower()
             kind = {"mp4": "video", "mov": "video", "m4v": "video", "webm": "video",
                     "jpg": "image", "jpeg": "image", "png": "image", "webp": "image", "gif": "image",
@@ -643,7 +643,7 @@ class H(BaseHTTPRequestHandler):
                 dest = f"{pk_dir}/{stem}_{time.strftime('%H%M%S')}.{e2}"
                 fname = os.path.basename(dest)
             # R2-2（Claude 复核）：upload 全程无锁=9-11 事故同族——读-改-写窗口以分钟计
-            # （流式收文件最长达 500MB），必须与 transcribe/understand/proofread/usable 同锁
+            # （流式收文件最长达 1GB），必须与 transcribe/understand/proofread/usable 同锁
             import flock as fcntl
             _lf = open(f"{pk_dir}/.lock", "w")
             fcntl.flock(_lf, fcntl.LOCK_EX)

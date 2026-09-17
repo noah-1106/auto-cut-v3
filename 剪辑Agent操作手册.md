@@ -26,12 +26,15 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 
 1. **幕（beat）是全轨一刀竖切的最小单元**。一条故事线 = 一串幕，每幕有：口播词（`story`）、
    A 轨画面（主画面）、可选 B 轨（画中画）、转场、贴纸/音效。
-2. **`story` 字段≠字幕（original 幕）！** 这是最容易错的一点：
-   - **dub 幕**（AI 配音）：story 被 TTS 逐字念出 → vadwords 把 story 字符铺进配音音频的
-     VAD 语音段 → **story 文本=字幕文本**。
-   - **original 幕**（素材原声）：字幕文本来自**素材转写稿**（pack.json 的
-     `transcript.words`，已校对），vadwords 只取它的时间；story 只是分镜摘要，
-     **不进字幕**。想改字幕=改素材转写（proofread 等长替换），不是改 story。
+2. **`story` = 字幕文本（vadwords 铺轨）！** story 的契约是**可直接朗读的口播台词**
+   （draft 契约原话），vadwords 把它按 VAD 语音段逐字铺成字幕词轨，成片字幕与 story
+   一字不差（2026-09-16 对照代码与 pcln 产物实锤）：
+   - **dub 幕**：story 被 TTS 逐字念出 → vadwords `text_from="story"` 直铺；
+   - **original 幕**：铺**素材转写稿窗口切片**（pack.json `transcript.words`，已校对，
+     内容与 story 同源一致）；窗口无词（空镜/未转写）才回退直铺 story。
+   - **写成"总结腔分镜摘要"是事故**——它会被念出来/铺进字幕（vadwords 注释警告的
+     正是这种失效模式，不是"story 与字幕无关"）。改 original 字幕 = 改素材转写
+     （proofread 等长替换，保字符-时间对齐）；改 story/转写/窗口后必须重跑 vadwords。
 3. **时间唯一来源是物理测量（VAD）**，不是 ASR 词时间戳。ASR 词级时间漂移 0.5–3s，
    全链禁用作锚点/字幕时间。
 4. **A/B 轨铁律**：A 轨=有口播叙事的主画面（禁 meta 说戏/ambient/broll/voiceover 画面）；
@@ -406,9 +409,9 @@ Studio 路由（http://127.0.0.1:8765）：
 
 | 路由 | body / query | 说明 |
 |---|---|---|
-| `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 只允许字母数字下划线中划线 |
+| `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 只允许字母数字下划线中划线；**`projects/<name>/` 目录已存在（含手工残件）=409「项目已存在」**——确认是残件后删目录再走本 API 重建，不要手工 mkdir 冒充创建 |
 | `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
-| `POST /api/pack-upload/<pid>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；>500MB 易断 |
+| `POST /api/pack-upload/<pid>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
 | `POST /api/pack-mount/<proj>/<pid>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
 | `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
 | `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。改 beats 后记得重跑 vadwords |
@@ -422,3 +425,6 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
 | `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers |
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
+
+**pack.json 字段口径**：`files[].size_mb` 是十进制显示值（字节数 ÷ 1e6，只用于人看）——
+**逐字节比对/完整性校验不要用 size_mb**，用 `os.path.getsize(文件)` 对字节数。
