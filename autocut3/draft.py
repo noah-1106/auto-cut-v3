@@ -192,9 +192,10 @@ def build_prompt(dossier, intent, transitions):
 6b. B 轨铁律（validate 硬剔除，2026-09-16 agent-037 实锤 M0275/M0243 哑口型）：画面里有人在
    说话/对话/朗读的素材（dialogue/voiceover 类，或描述含对话/沟通/讲解等）禁作 B 轨——
    B 轨无音频通道，嘴动无声必然穿帮。B 轨只用纯空镜/工艺画面
-6c. ⛔ meta 说戏 / voiceover 读稿画面永远禁作 A 轨（validate 硬剔除）；ambient/broll
-   空镜只在 narration.mode="none" 的纯空镜幕可作 A 轨整幅，口播幕（original）禁——
-   无声画面撑不起口播；voiceover 素材的词轨价值=旁白音，画面不配
+6c. ⛔ meta 说戏 / voiceover 读稿画面永远禁作 A 轨（validate 硬剔除）。ambient/broll 空镜两级：
+   自带有效语音的（档案标 has_speech，实拍画外音）可作口播幕 A 轨（original 原声）；
+   无语音的只在 narration.mode="none" 纯空镜幕可作 A 轨整幅，口播幕（original）禁。
+   voiceover 素材的词轨价值=旁白音，画面不配
 7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
 8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
    禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
@@ -296,15 +297,17 @@ def validate(draft, mats, transitions):
             # content_type 强制门（2026-09-16 agent-037 实锤：提示词 advisory 拦不住，
             # M0269 voiceover 读稿画面照样 A 轨 original 裸奔成片）——标记→消费断链收口：
             # meta 说戏 / voiceover 读稿画面永远禁 A（穿帮类）；
-            # ambient/broll 空镜分层（2026-09-18 Noah 决策：别默认画中画）：口播幕
-            # （mode=original）禁 A——无声画面撑不起口播；纯空镜幕（mode=none）放行作
-            # A 轨整幅=环境描述幕，靠 BGM/环境音撑。
+            # ambient/broll 分层（2026-09-18 两级细化，agent"旁白空镜"缺口）：
+            #   · 素材自带有效语音（transcript.words 非空，104030 型实拍画外音）→ 可作
+            #     口播幕 A 轨（original 原声撑得起）；也可 mode=none 静音用画面（人定）
+            #   · 无语音 → 仅纯空镜幕（mode=none）放行，口播幕禁——无声画面撑不起口播
             # B 轨哑口型铁律：管线 B 轨无音频通道，画面含说话人却无声 = 必然穿帮——
             # dialogue/voiceover 类或画面描述含说话类关键词的素材禁入 B。
             vis = m.get("visual") or {}
             ct = vis.get("content_type")
+            _has_sp = bool((m.get("transcript") or {}).get("words"))
             if role == "A" and (ct in ("meta", "voiceover")
-                                or (ct in ("ambient", "broll") and nmode != "none")):
+                                or (ct in ("ambient", "broll") and nmode != "none" and not _has_sp)):
                 continue
             if role == "B" and (ct in ("dialogue", "voiceover") or
                                 any(k in (vis.get("desc") or "")

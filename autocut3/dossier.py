@@ -227,12 +227,16 @@ def build(pid):
                 "summary": v.get("summary") or (v.get("desc") or "")[:60],
                 "content_type": v.get("content_type") or "unknown",
                 # P2#11+R3-3：unknown（v2 降级/图片音频）≠ 禁用——v1 时代全部素材即"unknown"级理解，
-                # 默认可入口播；显式禁口播=deny 清单 {meta, ambient, broll}，与 draft 闸门同一集合
-                "narration_eligible": (v.get("content_type") or "unknown") not in ("meta", "ambient", "broll"),
+                # 默认可入口播；deny=meta 恒禁 + ambient/broll 无语音禁（2026-09-18 两级细化：
+                # "旁白空镜"缺口——broll 画面+自带有效画外音=可口播，判据 has_speech，与 draft 闸门同集）
+                "has_speech": bool((f.get("transcript") or {}).get("words")),
+                "narration_eligible": (v.get("content_type") or "unknown") not in ("meta",)
+                                      and not ((v.get("content_type") in ("ambient", "broll"))
+                                               and not (f.get("transcript") or {}).get("words")),
                 "content_type_note": {
                     "meta": "拍摄说戏——禁入叙事线（A 轨禁用，B 轨画面可用）",
-                    "ambient": "纯环境画面——口播幕不可作 A 轨；可作 B 轨叠画，或纯空镜幕（mode=none）的 A 轨整幅",
-                    "broll": "纯画面无语音——口播幕不可作 A 轨（无声幕）；可作 B 轨叠画，或纯空镜幕（mode=none）的 A 轨整幅",
+                    "ambient": "环境画面——无语音则仅 B 轨叠画或纯空镜幕（mode=none）；自带语音（画外音）可口播 A 轨",
+                    "broll": "纯画面——无语音则仅 B 轨叠画或纯空镜幕（mode=none）；自带语音（画外音）可口播 A 轨",
                 }.get(v.get("content_type"), ""),
                 "usable": usable,
                 "usable_why": why,

@@ -26,7 +26,7 @@
   T42 编排器故事线门（audit+review+digest 齐后 --advance 仍停在故事线门）
   T43 proofread 人工复核门（review-queue 有 pending=环节 pending，复核后放行）
   T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段，2026-09-15 agent-037 实锤）
-  T45 content_type 强制门（voiceover/meta 禁A、说话画面禁B、空镜分层：口播幕禁/纯空镜幕 mode=none 放行）
+  T45 content_type 强制门（meta/voiceover 禁A、说话画面禁B、空镜两级：无语音分层禁/纯空镜幕 mode=none 放行/旁白空镜【broll+语音】放行）
   T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
   T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
   T48 validate 不截断幕数（6 幕全留，第 5 幕起同样吃钳制，2026-09-16 Noah 实锤 [:4] 静默丢弃 bug）
@@ -1567,6 +1567,9 @@ def t45_content_type_gates():
                    "transcript": {"words": []}},
             "AM": {"id": "AM", "kind": "video", "usable": True, "duration": 10,
                    "visual": {"content_type": "ambient", "desc": "小区园林环境"}},
+            "BV": {"id": "BV", "kind": "video", "usable": True, "duration": 10,
+                   "visual": {"content_type": "broll", "desc": "住宅实拍画面"},
+                   "transcript": {"words": [{"text": "整体", "start": 0.0, "end": 0.6}]}},  # 旁白空镜（104030 型）
         }
         draft = {"beats": [
             {"story": "s", "tracks": [{"role": "A", "source_id": "V", "src_in": 0, "duration": 4}]},
@@ -1575,25 +1578,29 @@ def t45_content_type_gates():
                                       {"role": "B", "source_id": "DG", "src_in": 0, "duration": 3}]},
             {"story": "s", "tracks": [{"role": "A", "source_id": "CL", "src_in": 0, "duration": 4},
                                       {"role": "B", "source_id": "CL", "src_in": 0, "duration": 3}]},
-            # 空镜分层（2026-09-18）：口播幕（默认 original）ambient 禁 A→整幕剔除；
+            # 空镜分层（2026-09-18）：口播幕（默认 original）ambient 无语音禁 A→整幕剔除；
             # 纯空镜幕（mode=none）ambient 作 A 轨整幅→保留且 mode 透传
             {"story": "", "tracks": [{"role": "A", "source_id": "AM", "src_in": 0, "duration": 4}]},
             {"story": "", "narration": {"mode": "none"},
              "tracks": [{"role": "A", "source_id": "AM", "src_in": 0, "duration": 4}]},
+            # 旁白空镜（2026-09-18 二级细化）：broll+自带语音 original 口播→放行（104030 实拍画外音）
+            {"story": "整体逛下来", "tracks": [{"role": "A", "source_id": "BV", "src_in": 0, "duration": 4}]},
         ]}
         beats = D.validate(draft, mats, [])
-        ok_struct = len(beats) == 3  # voiceover/meta/ambient口播幕 三幕被剔除，剩 DG-A、CL 双轨、AM 纯空镜幕
+        ok_struct = len(beats) == 4  # voiceover/meta/无语音ambient口播幕 三幕被剔除，剩 DG-A、CL 双轨、AM 纯空镜幕、BV 旁白空镜幕
         ok_dg = ([t["role"] for t in beats[0]["tracks"]] == ["A"]
                  and beats[0]["tracks"][0]["source_id"] == "DG")          # B 哑口型被剔
         ok_cl = [t["role"] for t in beats[1]["tracks"]] == ["A", "B"]    # 干净素材双轨保留
         ok_am = (len(beats[2]["tracks"]) == 1 and beats[2]["tracks"][0]["source_id"] == "AM"
                  and beats[2]["narration"]["mode"] == "none"
                  and all(b["narration"]["mode"] == "original" for b in beats[:2]))  # mode 透传不串
-        check("T45 content_type 强制门（voiceover/meta 禁A、说话画面禁B、空镜分层：口播幕禁/纯空镜幕放行）",
-              ok_struct and ok_dg and ok_cl and ok_am,
-              "beats=%d dg=%s cl=%s am=%s" % (len(beats), ok_dg, ok_cl, ok_am))
+        ok_bv = (beats[3]["tracks"][0]["source_id"] == "BV"
+                 and beats[3]["narration"]["mode"] == "original")         # 旁白空镜口播放行
+        check("T45 content_type 强制门（meta/voiceover 禁A、说话画面禁B、空镜两级：无语音分层/旁白空镜放行）",
+              ok_struct and ok_dg and ok_cl and ok_am and ok_bv,
+              "beats=%d dg=%s cl=%s am=%s bv=%s" % (len(beats), ok_dg, ok_cl, ok_am, ok_bv))
     except Exception as e:
-        check("T45 content_type 强制门（voiceover/meta 禁A、说话画面禁B、空镜分层：口播幕禁/纯空镜幕放行）",
+        check("T45 content_type 强制门（meta/voiceover 禁A、说话画面禁B、空镜两级：无语音分层/旁白空镜放行）",
               False, "异常: %s" % str(e)[:140])
     finally:
         sys.path = [p for p in sys.path if "autocut3" not in p]

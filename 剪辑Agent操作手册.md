@@ -43,11 +43,12 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
      （proofread 等长替换，保字符-时间对齐）；改 story/转写/窗口后必须重跑 vadwords。
 3. **时间唯一来源是物理测量（VAD）**，不是 ASR 词时间戳。ASR 词级时间漂移 0.5–3s，
    全链禁用作锚点/字幕时间。
-4. **A/B 轨铁律**：A 轨=主画面——口播幕（mode=original）须有口播叙事（禁 meta 说戏/
-   voiceover 读稿画面）；**空镜（ambient/broll）可作纯空镜幕的 A 轨整幅**（narration.mode=
-   `none` 的环境描述幕，靠 BGM/环境音撑）——别默认只做画中画。B 轨=无叙事的画中画
-   （**禁 dialogue/说话/口播/采访画面——B 轨没有音频通道，人物张嘴没声=哑口型穿帮**）。
-   选段时强制（draft validate 硬分层剔除），渲染链不管内容对错。
+4. **A/B 轨铁律**：A 轨=主画面，分三级——①正常口播素材随时可 A；②**空镜（ambient/broll）
+   两级**：自带有效语音的（档案 `has_speech`，104030 型实拍画外音）可口播幕 A 轨用原声；
+   无语音的只能进纯空镜幕（narration.mode=`none`，靠 BGM/环境音撑）或 B 轨叠画——
+   **别默认只做画中画**；③meta 说戏/voiceover 读稿画面永远禁 A（穿帮）。B 轨=无叙事的
+   画中画（**禁 dialogue/说话/口播/采访画面——B 轨没有音频通道，人物张嘴没声=哑口型
+   穿帮**）。选段时强制（draft validate 硬分层剔除），渲染链不管内容对错。
 5. **narration.mode 只有三种**：`original`（素材原声，默认）/ `dub`（AI 配音，audio 指向
    materials/dub/ 下的 mp3）/ `none`（无旁白）。**没有 "tts" 这个值**——TTS 只是 dub 的
    音频来源。
