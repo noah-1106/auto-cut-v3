@@ -110,9 +110,17 @@ def build_dossier(packs):
             if v:
                 line += " 画面：%s" % (v.get("desc") or "")[:64]
                 ct = v.get("content_type")
-                # R3-3：deny 清单与 dossier.narration_eligible 同集合（broll 曾横幅判非而档案判可入=口径分裂）
-                if ct in ("meta", "ambient", "broll"):
-                    line += " ⛔%s类素材：禁作口播A轨" % ct
+                # R3-3：deny 清单与 dossier.narration_eligible 同集合（broll 曾横幅判非而档案判可入=口径分裂）。
+                # 2026-09-18 空镜两级细化（agent 抓的口径分裂复发）：broll/ambient 带 has_speech
+                # （104030 型实拍画外音）→ 可口播 A 轨，横幅如实标"旁白空镜"；无语音才 ⛔。
+                # 规则区 6c 与 validate 同判据——三处必须同步改，横幅是喂 LLM 的逐条明细，
+                # 与规则区矛盾时 LLM 大概率服从 ⛔，新规则会被起草层架空。
+                _sp = bool(tr.get("words"))
+                if ct == "meta":
+                    line += " ⛔meta类素材：禁作口播A轨"
+                elif ct in ("ambient", "broll"):
+                    line += (" ✅旁白空镜（%s类自带语音）：可口播幕A轨原声" % ct if _sp
+                             else " ⛔%s类素材无语音：仅纯空镜幕（mode=none）或B轨" % ct)
                 if ct == "voiceover":
                     line += " 🎙voiceover：念稿/配音录制——词轨=旁白音轨源；画面禁作A轨主体（validate 硬剔除，维护者 2026-09-14/16：M0269 错判修复）也禁作B轨（读稿画面哑口型）"
                 if v.get("usage"):
