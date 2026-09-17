@@ -181,17 +181,20 @@ def build_prompt(dossier, intent, transitions):
 [硬约束]
 1. 只能使用上面列出的素材 id；使用禁用素材即违规
 2. 每幕恰好一条 A 轨主画（role="A"）；可选 0-1 条 B 轨（role="B"，空镜叠画，pos 从 top-right/top-left/bottom-right/bottom-left 选）
-3. narration.mode 一律 "original"（用素材原声，台词来自素材自身）
+3. narration.mode："original"（口播幕，用素材原声）或 "none"（纯空镜幕——无旁白，
+   靠 BGM/环境音撑）；不要用其他值（dub 是配音流程专属，起草阶段不用）
 4. 幕数不设上限（2026-09-17 Noah 决策：取消 2-4 幕引导，质量优先）——以"完整讲完故事"为
    唯一标准：每幕必须有独立叙事功能，凑数幕/重复信息幕宁可砍；讲不完就加幕，常见 2-8 幕。
    单幕时长 3-20 秒；总时长 20-90 秒（这两条仍是硬约束）
 5. transition_out 只能取：%s，或 null
-6. 第一幕优先用带开场钩子台词的素材；空镜/环境素材适合做 B 轨叠画或转场幕
+6. 第一幕优先用带开场钩子台词的素材；空镜/环境素材两种用法：B 轨叠画，**或整幅 A 轨
+   纯空镜幕（narration.mode="none" 的环境描述幕）**——别默认只做画中画
 6b. B 轨铁律（validate 硬剔除，2026-09-16 agent-037 实锤 M0275/M0243 哑口型）：画面里有人在
    说话/对话/朗读的素材（dialogue/voiceover 类，或描述含对话/沟通/讲解等）禁作 B 轨——
    B 轨无音频通道，嘴动无声必然穿帮。B 轨只用纯空镜/工艺画面
-6c. ⛔类（meta/ambient/broll）与 voiceover 画面禁作 A 轨（validate 硬剔除）；voiceover 素材的
-   词轨价值=旁白音，画面不配
+6c. ⛔ meta 说戏 / voiceover 读稿画面永远禁作 A 轨（validate 硬剔除）；ambient/broll
+   空镜只在 narration.mode="none" 的纯空镜幕可作 A 轨整幅，口播幕（original）禁——
+   无声画面撑不起口播；voiceover 素材的词轨价值=旁白音，画面不配
 7. audio.bgm_id 只能取：%s，或 null（全片不配乐才 null；按内容情绪选）
 8. story 必须是可直接朗读的口播台词（第一人称口语，1-2 句）——同字段会被 TTS 逐字念出/作配音幕字幕；
    禁止画面调度描述（"右下角叠""长镜""logo入镜"这类词念出来就是总结腔，违规）
@@ -269,6 +272,11 @@ def validate(draft, mats, transitions):
     # 2-4 幕引导），LLM 给几幕就校几幕，多幕原样保留（下游渲染/QC 均不限幕数）。
     for b in (draft.get("beats") or []):
         tracks = []
+        # 旁白模式透传（2026-09-18）：validate 原把每幕硬编码 original——LLM 选 none（纯
+        # 空镜幕）被静默改写，空镜只能挤 B 轨画中画。现在 original/none 照传；dub 仍是
+        # CLI --dub 专属（需要 TTS 产物路径，起草阶段给不出）——非法值回退 original。
+        nmode = (b.get("narration") or {}).get("mode")
+        nmode = nmode if nmode in ("original", "none") else "original"
         for t in (b.get("tracks") or []):
             m = mats.get(t.get("source_id"))
             if not m or not m.get("usable", True) or not _reviewed(m):  # R2-4：mats=f 后外部手造 pack 可能缺 usable 键；未过审素材同废片剔除
@@ -286,13 +294,16 @@ def validate(draft, mats, transitions):
             role = "B" if t.get("role") == "B" else "A"
             # content_type 强制门（2026-09-16 agent-037 实锤：提示词 advisory 拦不住，
             # M0269 voiceover 读稿画面照样 A 轨 original 裸奔成片）——标记→消费断链收口：
-            # A 轨禁 {meta 说戏, ambient/broll 无声幕, voiceover 读稿画面}（dossier 同集合；
-            # voiceover 词轨的正确取用=旁白/dub 音轨源，画面不配）；
+            # meta 说戏 / voiceover 读稿画面永远禁 A（穿帮类）；
+            # ambient/broll 空镜分层（2026-09-18 Noah 决策：别默认画中画）：口播幕
+            # （mode=original）禁 A——无声画面撑不起口播；纯空镜幕（mode=none）放行作
+            # A 轨整幅=环境描述幕，靠 BGM/环境音撑。
             # B 轨哑口型铁律：管线 B 轨无音频通道，画面含说话人却无声 = 必然穿帮——
             # dialogue/voiceover 类或画面描述含说话类关键词的素材禁入 B。
             vis = m.get("visual") or {}
             ct = vis.get("content_type")
-            if role == "A" and ct in ("meta", "ambient", "broll", "voiceover"):
+            if role == "A" and (ct in ("meta", "voiceover")
+                                or (ct in ("ambient", "broll") and nmode != "none")):
                 continue
             if role == "B" and (ct in ("dialogue", "voiceover") or
                                 any(k in (vis.get("desc") or "")
@@ -336,7 +347,7 @@ def validate(draft, mats, transitions):
         _sub = b.get("subtitle") or {}
         _substyle = _sub.get("style") if _sub.get("style") in _subs else None
         beats.append({"story": str(b.get("story") or "")[:120], "tracks": tracks,
-                      "narration": {"mode": "original"}, "music": {"inherit": True},
+                      "narration": {"mode": nmode}, "music": {"inherit": True},
                       "effects": {"stickers": _stickers, "sfx": _sfxl},
                       "subtitle": ({"style": _substyle} if _substyle else {}),
                       "transition_out": to if to in transitions else None})

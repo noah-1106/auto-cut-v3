@@ -231,8 +231,8 @@ def build(pid):
                 "narration_eligible": (v.get("content_type") or "unknown") not in ("meta", "ambient", "broll"),
                 "content_type_note": {
                     "meta": "拍摄说戏——禁入叙事线（A 轨禁用，B 轨画面可用）",
-                    "ambient": "纯环境画面——不可作口播 A 轨，仅 B-roll/转场",
-                    "broll": "纯画面无语音——不可作口播 A 轨（无声幕），仅 B-roll/转场",
+                    "ambient": "纯环境画面——口播幕不可作 A 轨；可作 B 轨叠画，或纯空镜幕（mode=none）的 A 轨整幅",
+                    "broll": "纯画面无语音——口播幕不可作 A 轨（无声幕）；可作 B 轨叠画，或纯空镜幕（mode=none）的 A 轨整幅",
                 }.get(v.get("content_type"), ""),
                 "usable": usable,
                 "usable_why": why,
