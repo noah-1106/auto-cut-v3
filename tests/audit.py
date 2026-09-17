@@ -192,7 +192,8 @@ for proj in sorted(os.listdir(os.path.join(ROOT, "projects"))):
                 add("P1", "D4 转场断链", "%s/%s 幕%s transition_out=%s 不在注册表" % (proj, slf, b.get("no"), tr))
 print("  ✓ D4 效果引用核查完成")
 
-# D5. assets 孤儿（有文件但注册表没引用）
+# D5. assets 孤儿（有文件但注册表没引用）——递归查文件（2026-09-18 修：原 listdir 不递归，
+# assets/sfx/viral/ 这层目录名本身被当孤儿=恒误报）；许可/来源清单是合规存档，不算孤儿
 for sub in ["music", "sfx", "stickers"]:
     adir = os.path.join(ROOT, "assets", sub)
     if not os.path.isdir(adir): continue
@@ -201,9 +202,13 @@ for sub in ["music", "sfx", "stickers"]:
     if os.path.exists(rj):
         for v in json.load(open(rj, encoding="utf-8")).values():
             if isinstance(v, dict) and v.get("file"): refd.add(os.path.basename(v["file"]))
-    for fn in os.listdir(adir):
-        if fn not in refd:
-            add("P3", "D5 assets孤儿", "assets/%s/%s 未被注册表引用" % (sub, fn))
+    for dirpath, _, fns in os.walk(adir):
+        for fn in fns:
+            if fn.startswith("LICENSE") or "manifest" in fn.lower():
+                continue
+            if fn not in refd:
+                add("P3", "D5 assets孤儿", "%s 未被注册表引用"
+                    % os.path.relpath(os.path.join(dirpath, fn), ROOT))
 print("  ✓ D5 孤儿核查完成")
 
 # ═══════════ E. Python 卫生 ═══════════
