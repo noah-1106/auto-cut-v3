@@ -225,6 +225,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
 13. **封面前置闸门**：渲染前 build_cover+cover_check，不过 exit 1 不耗渲染（output-frame 唯一后置）；封面归一成片画幅；**含真人脸封面唯一保真路线=帧截图策略+title_text 本地合成**——AI 底图带真脸必被平台审核拦 1026（2026-09-18 隔离矩阵实证），AI 画中文=假字一律禁（T55 锚）
 14. **at_word 触发词门 + 词点两级匹配**：draft 校验 at_word 必须在本幕词轨文本（A 轨转写窗口+story）内否则剔贴纸；word_time 两级匹配（词项 substring→字符序列），不命中必打渲染日志 warn——静默回退 0.4s 零告警是事故（agent 实锤「低价」「评论区」永不命中，T56 锚）
+15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，90s 帽下素材预算≈86-87s（T59 锚）
 
 ---
 

@@ -207,6 +207,14 @@ python3 autocut3/pipeline.py make  <pid> [sid]      # 只产 plan+ASS 不渲（�
   例：`POST /api/render-start/<proj>?story=<sid>&duration=0.6&grain=40`。只对**本故事线
   实际用到**的转场 id 生效；params.json 长期存在，想恢复模板默认就删掉该文件或重发空参数。
 
+- **转场预留区（2026-09-18 起，build_plan 自动做，Agent 不用手工留边）**：非 flash 转场的
+  时长按边界两侧可用静音自动伸缩（`dt_eff = min(注册 dt, 尾侧静音, 头侧静音)`），出点/入点
+  自动延到词尾/首词外；两侧静音不足 0.2s 的边界自动降级直切（渲染日志可见 `降级直切`/`伸缩`/
+  `头预留`/`尾预留` 行）。推论：①`word_drops` 应恒空——再出现"落入转场重叠区被钳没"警告=
+  窗口数据有 bleed（owords 超窗），修故事线窗口而不是调转场；②params.json 的 `duration` 只是
+  上限，实际转场时长仍受边缘静音钳制；③时长预算：渲染总长 ≈ 素材合计 + Σ转场时长（每边界
+  +0.2~0.6s），90s 帽下素材窗口合计控制在 ~86s 内。
+
 ### 阶段 6 · 质检与交付（qc）
 ```bash
 python3 autocut3/qc.py <pid> --story <sid>

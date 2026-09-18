@@ -54,7 +54,7 @@ def _tool(name):
 
 FF = _tool("ffprobe")     # 历史变量名=ffprobe（T12/T16 探时长用）
 FFMPEG = _tool("ffmpeg")
-BASE = "http://localhost:8765"
+BASE = os.environ.get("E2E_BASE", "http://localhost:8765")  # 独立 studio 回归：E2E_BASE=http://localhost:8799（2026-09-18 并行互踩实锤，studio 支持端口参数）
 PROJ = "e2e-fixture"  # E2E 夹具专属名（tests/fixtures.py 合成+跑完即删，与用户素材零命名空间交集）
 PASS, FAIL = [], []
 
@@ -511,7 +511,9 @@ def t17_mixed_transitions():
         r = subprocess.run([FF, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", outp],
                            capture_output=True, text=True)
         dur = float(r.stdout.strip() or 0)
-        ok = 8.0 < dur < 8.6  # 9s 素材 - 1×0.5 软叠
+        # 转场预留（T59 语义）：dt_eff 随边缘静音伸缩（0.2~注册值），本夹具实测钳到 0.2 → 8.8s。
+        # 上界 9.0 严格排除：降级直切=9.0 必须红（那是夹具漂移/预留逻辑失效的信号）
+        ok = 8.0 < dur < 9.0  # 9s 素材 − 1×dt_eff（软叠仍在，时基归一目的不变）
     check("T17 混合转场链（直切→xfade 时基归一）", ok, "%.1fs" % dur)
     api("/api/storyline-delete/" + PROJ + "?story=e2emix", method="POST")
 
@@ -2340,6 +2342,83 @@ def t58_proofread_degenerate_guard():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t59_transition_reserve():
+    # 回归锚（2026-09-18 Noah 裁定·转场预留区）：幕边界只落静音——dt_eff=min(注册dt,尾侧静音,头侧静音)
+    # 随素材伸缩，两侧不足 0.2s 降级直切；出点延至词尾+dt_eff、入点回退 dt_eff（owords/sfx at 平移）。
+    # 另锚短词不再误杀：全窗内 0.04s 单字照常上屏（zhanglingxiang-02 实锤 8 条"转场钳词"实为短词漏字）。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline
+        tmp = tempfile.mkdtemp(prefix="t59_")
+        old_root = pipeline.ROOT
+        try:
+            pipeline.ROOT = tmp
+            os.makedirs(os.path.join(tmp, "materials", "packs", "t59pack"))
+            os.makedirs(os.path.join(tmp, "projects", "t59", "storylines"))
+            os.makedirs(os.path.join(tmp, "projects", "t59", "materials"))
+            os.makedirs(os.path.join(tmp, "registry"))
+            W = lambda *tse: [{"text": t, "start": s, "end": e} for t, s, e in tse]
+            json.dump({"files": [
+                {"id": "M-A", "file": "a.mp4", "kind": "video", "duration": 10.0,
+                 "transcript": {"words": W(("今", 1.0, 1.4), ("的", 2.0, 2.04), ("查", 3.0, 3.4), ("好", 5.0, 5.4))}},
+                {"id": "M-B", "file": "b.mp4", "kind": "video", "duration": 10.0,
+                 "transcript": {"words": W(("吗", 1.0, 1.4), ("呢", 1.6, 1.9), ("吧", 2.1, 2.4))}},
+                {"id": "M-C", "file": "c.mp4", "kind": "video", "duration": 10.0,
+                 "transcript": {"words": W(("啊", 0.1, 0.4), ("好", 0.6, 1.0))}}]},
+                open(os.path.join(tmp, "materials", "packs", "t59pack", "pack.json"), "w"),
+                ensure_ascii=False)
+            json.dump({"packs": ["t59pack"]},
+                      open(os.path.join(tmp, "projects", "t59", "materials", "library.json"), "w"))
+            json.dump({"crossDissolve": {"type": "xfade", "preset": "fade", "duration": 0.5}},
+                      open(os.path.join(tmp, "registry", "transitions.json"), "w"))
+            json.dump({"vertical": {"width": 1080, "height": 1920}},
+                      open(os.path.join(tmp, "registry", "formats.json"), "w"))
+            # 三幕：幕1(M-A 尾词查@3.4，窗出 3.6→预留延至 3.9)；幕2(M-B 头词吗@1.0，窗入 0.6
+            # →回退至 0.5；其转场边界因 M-B 尾侧 0.2s + M-C 头侧 0.1s 不足 → 降级直切)；幕3 不动
+            sl = {"title": "t59", "meta": {"audio": {}}, "beats": [
+                {"no": 1, "transition_out": "crossDissolve",
+                 "tracks": [{"role": "A", "source_id": "M-A", "src_in": 1.0, "duration": 2.6}],
+                 "narration": {"mode": "original", "words": [
+                     {"t": "今", "s": 0.0, "e": 0.4}, {"t": "的", "s": 1.0, "e": 1.04},
+                     {"t": "查", "s": 2.0, "e": 2.4}]}},
+                {"no": 2, "transition_out": "crossDissolve",
+                 "tracks": [{"role": "A", "source_id": "M-B", "src_in": 0.6, "duration": 1.4}],
+                 "narration": {"mode": "original", "words": [
+                     {"t": "吗", "s": 0.4, "e": 0.8}, {"t": "呢", "s": 1.0, "e": 1.3}]},
+                 "effects": {"sfx": [{"asset": "success", "at": 0.4}]}},
+                {"no": 3, "transition_out": None,
+                 "tracks": [{"role": "A", "source_id": "M-C", "src_in": 0.2, "duration": 1.5}],
+                 "narration": {"mode": "original", "words": [
+                     {"t": "啊", "s": -0.1, "e": 0.2}, {"t": "好", "s": 0.4, "e": 0.8}]}}]}
+            json.dump(sl, open(os.path.join(tmp, "projects", "t59", "storylines", "t59.json"), "w"),
+                      ensure_ascii=False)
+            plan, _ = pipeline.build_plan(os.path.join(tmp, "projects", "t59"), "t59")
+            s1, s2, s3 = plan["segments"]
+            ok_tail = (s1["trans_d"] == 0.5 and abs(s1["dur"] - 2.9) < 0.01)      # 出点 3.6→词尾3.4+0.5
+            ok_head = (abs(s2["src_in"] - 0.5) < 0.01 and abs(s2["dur"] - 1.5) < 0.01
+                       and abs(s2["owords"][0]["s"] - 0.5) < 0.01                 # owords 平移 0.4→0.5
+                       and abs(s2["effects"]["sfx"][0]["at"] - 0.5) < 0.01)       # sfx at 平移
+            ok_degrade = ("transition" not in s2 and "trans_d" not in s2
+                          and "b2" not in (plan.get("transitions") or {}))        # 0.1s<0.2 → 直切
+            ok_no_shift = abs(s3["src_in"] - 0.2) < 0.01                          # 降级后头预留不传播
+            ok_words = (not (plan.get("word_drops") or [])
+                        and any(w["t"] == "的" for w in plan["words"])            # 0.04s 短词上屏
+                        and abs(s2["tl_in"] - 2.4) < 0.01)                        # tl1=0+2.9-0.5
+            check("T59 转场预留区（dt_eff 伸缩/降级直切/短词上屏/零钳词）",
+                  ok_tail and ok_head and ok_degrade and ok_no_shift and ok_words,
+                  "tail=%s head=%s degrade=%s noshift=%s words=%s" % (
+                      ok_tail, ok_head, ok_degrade, ok_no_shift, ok_words))
+        finally:
+            pipeline.ROOT = old_root
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T59 转场预留区（dt_eff 伸缩/降级直切/短词上屏/零钳词）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2634,6 +2713,7 @@ def main():
     t56_at_word_gate()
     t57_vadwords_cross_span()
     t58_proofread_degenerate_guard()
+    t59_transition_reserve()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

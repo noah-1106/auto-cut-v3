@@ -11,6 +11,9 @@ autocut3 管线核心 v0.1 —— 最小闭环
 """
 import json, os, re, shutil, subprocess, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import asr  # noqa: E402  speech_tail（转场预留的词尾判定，D1 单一事实源）
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def _resolve_ff():
@@ -104,13 +107,17 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         if ow:
             for w in ow:
                 _ws, _we = round(tl0 + float(w["s"]), 1), round(tl0 + float(w["e"]), 1)
-                # 幕内钳制与 dub 通道同源（真实项目实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）
-                _ws, _we = max(_ws, tl0), min(_we, tl1)
-                if _we - _ws < 0.08:
+                # 幕内钳制与 dub 通道同源（真实项目实锤：owords 直通无钳制 → 词越界 bleed → R5 页倒置）。
+                # 全窗内天然短词不截不丢（同下方通用钳制块 2026-09-18 修正）
+                if _ws >= tl0 and _we <= tl1:
+                    seg_words.append({"t": w["t"], "s": _ws, "e": _we})
+                    continue
+                _ws2, _we2 = max(_ws, tl0), min(_we, tl1)
+                if _we2 - _ws2 < 0.08:
                     drops.append({"beat": s.get("no"), "word": str(w.get("t") or ""),
                                   "at": round(float(w["s"]), 1), "reason": "overlap-clamp"})
                     continue
-                seg_words.append({"t": w["t"], "s": _ws, "e": _we})
+                seg_words.append({"t": w["t"], "s": _ws2, "e": _we2})
             out.extend(seg_words)
             continue
         dubp = s.get("dub")  # {path,text,dur,words|words_from}
@@ -156,13 +163,18 @@ def remap_words(cuts, acts, segs, total, packpool=None):
                     if 0 <= ws and we <= total + 0.3:
                         seg_words.append({"t": w["text"], "s": ws, "e": min(we, total)})
         # 幕内钳制：词不越出本幕时间窗——转场重叠区本幕尾词不侵占下一幕开头，
-        # 下一幕头词不从上一幕中间冒出来（"一个字断在前一句后面"的根因）
+        # 下一幕头词不从上一幕中间冒出来（"一个字断在前一句后面"的根因）。
+        # 全窗内的天然短词（0.04s 单字，vadwords 切片产物）照常上屏——0.08 下限只作用于
+        # 被边界截断的残余（2026-09-18 实锤：8 条"转场钳词"实为短词误杀=字幕漏字）
         for w in seg_words:
+            if w["s"] >= tl0 and w["e"] <= tl1:  # 全在窗内：不截不丢
+                out.append({"t": w["t"], "s": w["s"], "e": w["e"]})
+                continue
             ws2, we2 = max(w["s"], tl0), min(w["e"], tl1)
             if we2 - ws2 < 0.08:
                 drops.append({"beat": s.get("no"), "word": str(w.get("t") or ""),
                               "at": round(w["s"], 1), "reason": "overlap-clamp"})
-                continue  # 整词落在重叠区被钳没 → 丢弃（画面在转场，字幕留白）
+                continue  # 残余<0.08s 的跨界词丢弃（画面在转场，字幕留白）
             out.append({"t": w["t"], "s": round(ws2, 1), "e": round(we2, 1)})
     # 注意：不做全局时间排序——词按幕归属输出（字幕跟幕走），
     # 转场重叠区按时间排序会把两幕词轨洗成交错（历史病灶：'对着查。接'）
@@ -303,6 +315,82 @@ def art_suffix(project_dir, sid):
     _f, real_sid = story_file(project_dir, sid)
     return (f"-{real_sid}" if real_sid else ""), real_sid
 
+
+# ------------------------------------------------ 转场预留（2026-09-18 Noah 裁定）
+# 不变式：幕边界落在静音里，转场整体吃预留区不吃词——词头词尾在结构上不可能被转场压。
+# dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)，随边缘静音伸缩；
+# 两侧静音不足 0.2s → 降级直切（素材够长就留预留，不够就直切）。
+def _first_word_start(words, lo, hi):
+    """窗口 [lo,hi] 内首个词起点（素材绝对坐标，start/end 词格式）。无词 None。"""
+    c = [float(w.get("start") or 0) for w in words or []
+         if float(w.get("end") or 0) > lo + 0.05 and float(w.get("start") or 0) < hi]
+    return min(c) if c else None
+
+
+def _prev_word_end(words, pos):
+    """pos 前最后一个词的终点（无则 0）——头预留的回退上限（不许吃到上一词）。"""
+    c = [float(w.get("end") or 0) for w in words or [] if float(w.get("end") or 0) <= pos + 0.05]
+    return max(c) if c else 0.0
+
+
+def _next_word_start(words, pos):
+    """pos 后第一个词的起点（无则 None）——尾预留的推进上限（不许吃到下一词）。"""
+    c = [float(w.get("start") or 0) for w in words or [] if float(w.get("start") or 0) > pos + 0.05]
+    return min(c) if c else None
+
+
+def _peek_src(nb):
+    """下一幕（预留 peek 用）A 轨 (source_id, cut_index, 入点)。"""
+    trks = (nb or {}).get("tracks")
+    if trks:
+        A = next((x for x in trks if x.get("role", "A") == "A"), trks[0])
+        return A.get("source_id"), A.get("cut_index"), float(A.get("src_in") or 0)
+    mm = (nb.get("materials") or [{}])[0]
+    return mm.get("source_id"), mm.get("cut_index"), float(mm.get("src_in") or 0)
+
+
+def _track_words(sid, ci, packpool, cuts):
+    """素材词轨（绝对坐标）：包转写词轨优先，无则 cuts 词轨（n001 老项目）。"""
+    w = (packpool.get(sid) or {}).get("words")
+    if w:
+        return w
+    try:
+        return (cuts[ci].get("words") if ci is not None and cuts else []) or []
+    except (TypeError, IndexError):
+        return []
+
+
+def _edge_silences(b, m, sid, dub_f, nb, packpool, cuts, mat_end):
+    """转场边界两侧可用静音秒数（尾=本幕，头=下一幕）。返回 (tail, head, 下一幕 mode)。
+    original 用素材词轨（绝对坐标，speech_tail 单一事实源）；dub 用配音词轨（幕相对）；
+    下一幕 none=音轨静音无约束。flash/none 本幕不走本函数（音轨无重叠/静音，天然安全）。
+    dub 音频缺失回退原声的幕按 original 算（实际播音轨是素材）。"""
+    mode = (b.get("narration") or {}).get("mode") or "original"
+    if mode == "dub" and not dub_f:
+        mode = "original"
+    if mode == "dub":
+        sp_end = float((dub_f or {}).get("dur") or 0)
+        tail_avail = max(0.0, mat_end - sp_end)
+    else:
+        words = _track_words(sid, m.get("cut_index"), packpool, cuts)
+        out = float(m.get("src_in") or 0) + float(m.get("duration") or 0)
+        tail = asr.speech_tail(words, out)
+        anchor = tail if tail > 0 else out  # 窗内无语音：预留区只需窗后静音
+        nxt = _next_word_start(words, anchor)
+        tail_avail = (min(nxt, mat_end) if nxt is not None else mat_end) - anchor
+    nmode = ((nb or {}).get("narration") or {}).get("mode") or "original"
+    if nmode == "none":
+        head_avail = 99.0  # 静音幕：头侧无语音约束
+    elif nmode == "dub":
+        nw = ((nb.get("narration") or {}).get("words") or [])
+        head_avail = float(nw[0]["s"]) if nw else 0.0  # 配音从幕首播：首个配音词前即头侧静音
+    else:
+        nsid, nci, nin = _peek_src(nb)
+        nwords = _track_words(nsid, nci, packpool, cuts)
+        first = _first_word_start(nwords, nin, nin + 99)
+        head_avail = (first - _prev_word_end(nwords, nin)) if first is not None else 99.0
+    return max(0.0, tail_avail), max(0.0, head_avail), nmode
+
 def build_plan(project_dir, sid=None):
     spath, real_sid = story_file(project_dir, sid)
     story = load(spath)
@@ -350,12 +438,15 @@ def build_plan(project_dir, sid=None):
     beats = story.get("beats") or story.get("acts") or []  # v4 编号幕（v3/v2/v1 兼容）
     segs = []
     t = 0.0
+    pending_head = 0.0  # 上一边界 dt_eff：本幕入点需向静音回退的预留量（仅 original 幕）
+    _mdur_cache = {}
     for i, b in enumerate(beats):
         trks = b.get("tracks")
         if trks:  # v4 多轨：A 轨定时长
             A = next((x for x in trks if x.get("role", "A") == "A"), trks[0])
             m = {"src_in": A.get("src_in"), "duration": A.get("duration"),
                  "cut_index": A.get("cut_index", 0), "requirement": A.get("requirement", "")}
+            sid = A.get("source_id")
             seg_tracks = [{"role": x.get("role", "A"), "src_in": x.get("src_in"),
                            "dur": x.get("duration"), "pos": x.get("pos"), "scale": x.get("scale"),
                            "op": x.get("op", "overlay-pip"), "requirement": x.get("requirement", ""),
@@ -364,6 +455,7 @@ def build_plan(project_dir, sid=None):
                           for x in trks]
         else:      # v3/v1 单素材
             m = (b.get("materials") or [{}])[0]
+            sid = m.get("source_id")
             seg_tracks = [{"role": "A", "src_in": m.get("src_in"), "dur": m.get("duration"),
                            "requirement": m.get("requirement", ""),
                            "media": os.path.join(project_dir, "materials", "src.mp4")}]
@@ -406,8 +498,34 @@ def build_plan(project_dir, sid=None):
                                          % (b.get("no", 0), _wt[:20], dub_f["text"][:20]))
             else:
                 print(f"警告: 幕{i+1} 配音文件缺失（{df}），本幕回退原声", flush=True)
+        # 转场预留·头侧：上一边界已定 dt_eff，本幕入点向素材静音回退，让淡入区落在首词之前。
+        # 仅 original 幕需要平移（dub 音轨从幕首播不受入点影响；none 无语音）。dub/none 的头侧
+        # 静音约束已在 _edge_silences 算 dt_eff 时吃掉，这里只做窗口回退 + 幕相对数据同步。
+        if pending_head > 0 and (b.get("narration") or {}).get("mode", "original") == "original":
+            _win = _track_words(sid, m.get("cut_index"), packpool, cuts)
+            _nin = float(m.get("src_in") or 0)
+            _first = _first_word_start(_win, _nin, _nin + float(m.get("duration") or 0))
+            if _first is not None and _first - _nin < pending_head:
+                _ext = round(_nin - (_first - pending_head), 1)
+                if _ext > 0:
+                    m["src_in"] = round(_nin - _ext, 1)
+                    m["duration"] = round(float(m.get("duration") or 0) + _ext, 1)
+                    seg_tracks[0]["src_in"] = m["src_in"]
+                    seg_tracks[0]["dur"] = m["duration"]
+                    # 幕相对数据同步平移：owords 词轨 + 音效 at（贴纸 at_word 走 plan words 自动跟）
+                    ow = (b.get("narration") or {}).get("words") or []
+                    if ow:
+                        b.setdefault("narration", {})["words"] = [
+                            {"t": w.get("t"), "s": round(float(w["s"]) + _ext, 2),
+                             "e": round(float(w["e"]) + _ext, 2)} for w in ow]
+                    for _sx in (b.get("effects") or {}).get("sfx") or []:
+                        if _sx.get("at") is not None:
+                            _sx["at"] = round(float(_sx["at"]) + _ext, 2)
+                    print("  · 幕%s 头预留 %.1fs（入点回退至 %.1fs，淡入区不压首词）"
+                          % (b.get("no", i + 1), pending_head, m["src_in"]), flush=True)
         seg = {"id": b.get("id", f"b{i+1}"), "no": b.get("no", i + 1),
                "src_in": m.get("src_in"), "dur": m.get("duration"), "tl_in": round(t, 1),
+               "source_id": sid, "cut_index": m.get("cut_index"),
                "src_file": (seg_tracks[0].get("media") if seg_tracks else None),
                "dub": dub_f,
                "owords": (b.get("narration") or {}).get("words"),  # VAD/显式词轨（original 幕通道，2026-09-15）
@@ -419,30 +537,67 @@ def build_plan(project_dir, sid=None):
                          "loop": (b.get("music") or {}).get("loop")},  # 幕级 BGM 声明（2026-09-14 接通前端音乐轨开关；segment/loop 2026-09-15）
                "narration": (b.get("narration") or {}).get("mode") or "original"}
         tr_id = b.get("transition_out")
+        pending_head = 0.0  # 本幕边界算出后传给下一幕的头预留
         if tr_id and i < len(beats) - 1 and m.get("duration"):
             tr = trans.get(tr_id)  # P2#15：手编故事线引用了不存在的转场 → 明确报错而非 KeyError
             if not tr:
                 raise SystemExit("TRANSITION ?? %s（registry 无此转场）——故事线 transition_out 拼写错误" % tr_id)
-            seg["transition"] = tr_id
-            dt = tr["duration"]
-            t += m["duration"] - (dt if tr["type"] != "flash" else 0)
+            if tr["type"] == "flash":
+                # flash：插帧自占时长、音轨 concat 不重叠——词头尾天然安全，注册表 dt 原样
+                seg["transition"] = tr_id
+                t += m["duration"]
+            else:
+                # 转场预留（2026-09-18 Noah 裁定）：dt 随边缘静音伸缩，不足 0.2s 降级直切
+                _mend = float((packpool.get(sid) or {}).get("end") or 0)
+                if not _mend:
+                    _mp = seg_tracks[0].get("media")
+                    if _mp not in _mdur_cache:
+                        _mdur_cache[_mp] = _media_duration(_mp) or 0.0
+                    _mend = _mdur_cache[_mp]
+                tail_avail, head_avail, nmode = _edge_silences(b, m, sid, dub_f, beats[i + 1],
+                                                               packpool, cuts, _mend)
+                dt_eff = int(min(float(tr["duration"]), tail_avail, head_avail) * 10) / 10.0
+                if dt_eff < 0.2:
+                    print("  · 幕%s 转场 %s 降级直切（边缘静音 尾%.2fs/头%.2fs 不足 0.2s）"
+                          % (b.get("no", i + 1), tr_id, tail_avail, head_avail), flush=True)
+                    t += m["duration"]
+                else:
+                    seg["transition"] = tr_id
+                    seg["trans_d"] = dt_eff
+                    if dt_eff < float(tr["duration"]):
+                        print("  · 幕%s 转场 %s %.1f→%.1fs（边缘静音伸缩）"
+                              % (b.get("no", i + 1), tr_id, float(tr["duration"]), dt_eff), flush=True)
+                    # 尾预留：出点延到语音尾+dt_eff（窗内已含尾后下一词则不动——语义窗，QC 域）
+                    _out0 = float(m.get("src_in") or 0) + float(m.get("duration") or 0)
+                    if (b.get("narration") or {}).get("mode") == "dub" and dub_f:
+                        _need = max(_out0, float((dub_f or {}).get("dur") or 0) + dt_eff)
+                    else:
+                        _wtr = _track_words(sid, m.get("cut_index"), packpool, cuts)
+                        _tl = asr.speech_tail(_wtr, _out0)
+                        if _tl <= 0:
+                            _need = _out0  # 窗内无语音：现有窗尾即静音，无需延
+                        else:
+                            _nxt = _next_word_start(_wtr, _tl)
+                            _need = _out0 if (_nxt is not None and _out0 > _nxt + 0.05) else _tl + dt_eff
+                    if _need > _out0 + 0.05:
+                        m["duration"] = round(_need - float(m.get("src_in") or 0), 1)
+                        seg["dur"] = m["duration"]
+                        seg_tracks[0]["dur"] = m["duration"]
+                        print("  · 幕%s 尾预留 %.1fs（出点延至 %.1fs，淡出区不压尾词）"
+                              % (b.get("no", i + 1), dt_eff, _need), flush=True)
+                    pending_head = dt_eff if nmode == "original" else 0.0
+                    t += m["duration"] - dt_eff
         else:
             t += m.get("duration", 0)
         segs.append(seg)
     total = round(t, 1)
 
-    # 词重映射（narration=none 的幕不产词；v4 从 A 轨取）
-    srcs = []
-    for b in beats:
-        trks = b.get("tracks"); 
-        m = (b.get("materials") or [{}])[0] if not trks else None
-        if trks:
-            A = next((x for x in trks if x.get("role", "A") == "A"), trks[0])
-            m = {"cut_index": A.get("cut_index", 0), "src_in": A.get("src_in"), "duration": A.get("duration"), "source_id": A.get("source_id")}
-        if (b.get("narration", {}) or {}).get("mode", "original") == "none":
-            srcs.append(None)  # 占位保持与 segs 下标对齐（否则词轨整体错幕）
-            continue
-        srcs.append({"cut_index": m.get("cut_index"), "src_in": m.get("src_in"), "duration": m.get("duration"), "source_id": m.get("source_id")})
+    # 词重映射（narration=none 的幕不产词）——窗口以 segs 为准：转场预留的头尾调整
+    # 已并入 seg（原实现从故事线重取窗口，预留调整会被绕过）
+    srcs = [None if s.get("narration") == "none" else
+            {"cut_index": s.get("cut_index"), "src_in": s["src_in"],
+             "duration": s["dur"], "source_id": s.get("source_id")}
+            for s in segs]
     words, word_drops = remap_words(cuts, srcs, segs, total, packpool)
     for _d in word_drops:  # 决策点有声化：钳制丢词不再静默（对照 QC 建议避让，比 QC 兜底早一整轮）
         print("警告: 幕%s 词「%s」(%.1fs 起) 落入转场重叠区被钳没（残余<0.08s）——词数减少，字幕页结构可能变化" % (
@@ -641,7 +796,8 @@ def build_cmd(plan, ass_path, out_path):
                 cur = "cc"
             concat_v = None
         tr = trans[s["transition"]]
-        dt, off = tr["duration"], s["tl_in"] + s["dur"] - tr["duration"]
+        dt = float(s.get("trans_d") or tr["duration"])  # 转场预留伸缩后的实际时长（无预留=注册表值）
+        off = s["tl_in"] + s["dur"] - dt
         nxt = beat_v[bi + 1][0]
         if tr["type"] == "flash":
             fname = f"fl{bi}"
@@ -1012,10 +1168,13 @@ def render_beat(plan, project_dir, beat_no, sid=None):
 
 def _overlap_d(plan, prev_seg):
     """音频链相邻两幕的重叠秒数——唯一实现（R2-5）：
-    dissolve 类重叠 dt；flash/直切 0（flash 插 hold 帧视频轴不缩 → 音频也不重叠）。"""
+    dissolve 类重叠 dt；flash/直切 0（flash 插 hold 帧视频轴不缩 → 音频也不重叠）。
+    trans_d 优先（2026-09-18 转场预留：dt 已随边缘静音伸缩，音频重叠必须同值）。"""
     tr = prev_seg.get("transition")
     if not tr:
         return 0.0
+    if prev_seg.get("trans_d") is not None:
+        return float(prev_seg["trans_d"])
     tcfg = (plan.get("tconf") or {}).get(tr) or load(f"{ROOT}/registry/transitions.json").get(tr) or {}
     return 0.0 if tcfg.get("type") == "flash" else float(tcfg.get("duration") or 0.4)
 
