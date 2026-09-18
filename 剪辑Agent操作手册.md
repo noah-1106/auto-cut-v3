@@ -134,6 +134,10 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
   云端 minimax 同理走 `tts` 段 provider 切换。
 - 产物：`storylines/aidraft.json`（beats[]）。**LLM 可能截断**（finish_reason=length）——
   落盘后必须逐幕核对结构完整（每幕有 no/story/tracks/narration），缺=重跑，不许带伤前进。
+- **后台跑（nohup/超时后台执行）判完成看文件，不看进程、不看日志空满**：
+  判据=`storylines/aidraft.json` 存在且逐幕结构完整（2026-09-18 起日志已行级 flush，
+  起草开始/`DRAFT DONE` 会实时落日志；但完成信号以文件为准——进程残留≠还在干活，
+  日志 0 字节=缓冲未刷≠死进程）。**不许 sleep 轮询进程存活**，文件到了就进阶段 4。
 - draft 提示词已内置硬规则（content_type 选段门、效果注册表白名单、旁白词汇表），但
   **LLM 输出必须人工/Agent 全面检查**（阶段 4）。
 - **放行判据**：故事线落盘 + 结构完整 + 你已完成阶段 4 的逐幕审核。

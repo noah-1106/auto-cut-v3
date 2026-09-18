@@ -440,6 +440,8 @@ def run(project, intent, packs=None, save=True):
     tr = os.path.join(ROOT, "registry", "transitions.json")
     transitions = list(json.load(open(tr, encoding="utf-8")).keys()) if os.path.exists(tr) else []
     messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions)}]
+    # nohup 重定向=全缓冲：不刷这句，后台跑全程日志 0 字节，Agent 只能瞎轮询（2026-09-18 张亮翔快线实锤）
+    print("  档案 %d 字 → LLM 起草中（1-3 分钟无输出属正常）…" % len(dossier), flush=True)
     text = None
     draft = None
     for attempt in (1, 2):  # M3 偶发 JSON 截断（实测不稳）——重试一次，末次失败如实抛
@@ -500,9 +502,9 @@ def main():
         print("DUB: %d/%d 幕配音完成" % (ok_n, len(beats)), flush=True)
     for i, b in enumerate(beats, 1):
         ts = ", ".join("%s:%s@%ss+%ss" % (t["role"], t["source_id"], t["src_in"], t["duration"]) for t in b["tracks"])
-        print("  幕%d [%s] %s" % (i, b["transition_out"] or "无转场", ts))
-        print("      %s" % b["story"])
-    print("DRAFT DONE: %d 幕%s" % (len(beats), ("，已落盘 → " + sid) if sid else "（未落盘，加 --save）"))
+        print("  幕%d [%s] %s" % (i, b["transition_out"] or "无转场", ts), flush=True)
+        print("      %s" % b["story"], flush=True)
+    print("DRAFT DONE: %d 幕%s" % (len(beats), ("，已落盘 → " + sid) if sid else "（未落盘，加 --save）"), flush=True)
 
 
 if __name__ == "__main__":
