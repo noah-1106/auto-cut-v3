@@ -25,7 +25,7 @@
   T41 注册表读写闭环（save 回读 / enums 拒写 / delete 幂等 / upload 入库+落盘）
   T42 编排器故事线门（audit+review+digest 齐后 --advance 仍停在故事线门）
   T43 proofread 人工复核门（review-queue 有 pending=环节 pending，复核后放行）
-  T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段，2026-09-15 agent-037 实锤）
+  T44 vadwords 时间源双锚（合成词时间禁作锚→VAD 铺轨；T44b tier=word 实测词时间直取，2026-09-18 勘误）
   T45 content_type 强制门（meta/voiceover 禁A、说话画面禁B、空镜两级：无语音分层禁/纯空镜幕 mode=none 放行/旁白空镜【broll+语音】放行）
   T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS，2026-09-15）
   T47 proofread 严格判定（audit=pending≠done，只有 done/auto-done 算过，2026-09-16 n006 复发实锤）
@@ -974,13 +974,27 @@ def t29_qc_av_sync():
             good = qc.check_page_sync(pp, "t", rules)
             ok_r10 = (bad[0]["severity"] == "warn" and abs(bad[0]["evidence"].get("median_offset", 0) - 0.8) < 0.05
                       and good[0]["severity"] == "info")
-            check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向）",
-                  ok_hole and ok_jump and ok_freeze and ok_r10,
-                  "hole=%s jump=%s freeze=%s r10=%s" % (ok_hole, ok_jump, ok_freeze, ok_r10))
+            # R10 多字单元锚（2026-09-18 word-tier 勘误配套）：tier=word 词轨含多字单元
+            #（「售，」「年。」标点合并）——R10 重放曾裸用 plan words 而 build_ass 走
+            # char_level 预处理，两侧断页分叉→假 warn（ruxuan-02 aidraft 实锤中位 -2.5s）。
+            # 锚：多字词轨经真 build_ass 出 ASS，R10 复检必须 info。
+            mc_words = [{"t": "做装修", "s": 0.18, "e": 0.86}, {"t": "销售，", "s": 0.86, "e": 1.30},
+                        {"t": "我从不拿低价吸引客户", "s": 1.30, "e": 4.00},
+                        {"t": "，", "s": 4.00, "e": 4.10}, {"t": "我只拿结果说话。", "s": 4.10, "e": 6.90},
+                        {"t": "我是如轩，", "s": 7.00, "e": 8.60}, {"t": "做装修六年。", "s": 8.60, "e": 10.40}]
+            mc_plan = {"subtitle_style": "karaoke-gold", "meta": {"style": {}}, "words": mc_words,
+                       "width": 1080, "height": 1920, "duration": 11.0}
+            json.dump(mc_plan, open(os.path.join(pp, "plan-m.json"), "w"), ensure_ascii=False)
+            _ass, _np = pipeline.build_ass(mc_plan, pp, "subtitle-m.ass")
+            mc = qc.check_page_sync(pp, "m", rules)
+            ok_mc = (mc[0]["severity"] == "info" and _np >= 2)
+            check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向+多字单元重放对齐）",
+                  ok_hole and ok_jump and ok_freeze and ok_r10 and ok_mc,
+                  "hole=%s jump=%s freeze=%s r10=%s mc=%s(%s页)" % (ok_hole, ok_jump, ok_freeze, ok_r10, ok_mc, _np))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     except Exception as e:
-        check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向）", False, "异常: %s" % str(e)[:140])
+        check("T29 QC 听觉/冻结/页同步（洞/骤变/EOF冻结/页偏移双向+多字单元重放对齐）", False, "异常: %s" % str(e)[:140])
 
 
 # ---------------------------------------------------------------- T30 声纹管理双通道（Studio API 回归锚）
@@ -1519,9 +1533,11 @@ def t43_proofread_review_gate():
 
 
 def t44_vadwords_no_asr_time():
-    # 回归锚（2026-09-16 agent-037 实锤）：vadwords 曾用 ASR 词时间过滤窗口内词——
-    # minimax 词时间漂移 0.5-3s（M0269「我」标 7.2 实际 11.4），按它过滤=字幕漏字/半句。
-    # 锚：词时间全部离谱（1000s 外）时，选词仍按文本顺序铺满 VAD 段（时间唯一来源=物理测量）。
+    # 回归锚（2026-09-16 agent-037 实锤，2026-09-18 勘误）：vadwords 曾用 ASR 词时间过滤
+    # 窗口内词——当时词时间是句内均分合成值（asr.py 未传 timestamp_level），偏 0.5-3s
+    # （M0269「我」标 7.2 实际 11.4），按合成时间过滤=字幕漏字/半句。
+    # 锚①：tier 缺失（合成时间）词时间全部离谱时，选词仍按文本顺序铺满 VAD 段。
+    # 锚②（T44b）：tier=word 实测词时间直取（timestamp_level=word，与 VAD 互证 ±0.05s）。
     import tempfile
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
@@ -1560,8 +1576,43 @@ def t44_vadwords_no_asr_time():
             rep = json.load(open("projects/t44/vad-report.json"))
             w1 = "".join(w["t"] for w in sl2["beats"][0]["narration"]["words"])
             ok = (w1 == "甲乙丙丁" and rep[0].get("text_from") == "transcript")
-            check("T44 vadwords 选词弃 ASR 时间（词时间离谱仍按文本顺序铺满 VAD 段）",
+            check("T44 vadwords 合成时间禁作锚（tier 缺失词时间离谱仍按文本顺序铺满 VAD 段）",
                   ok, "text=%s from=%s" % (w1, rep[0].get("text_from")))
+            # 勘误锚（2026-09-18 Noah 指路）：asr.py 从未传 timestamp_level，历史"ASR 词时间
+            # 漂移 0.5-3s"实为句内均分合成值。tier=word（MiniMax 实测，与 VAD 互证 ±0.05s）
+            # 时词轨直取实测时间，不进均分机器——夹具：词时间只盖前半窗，均分机器会把
+            # 4 字铺满全窗（末字 e=4.0），直通道末字 e 必须原样 2.5。
+            mp4b = os.path.join("materials/packs/p1", "M2.mp4")
+            r2 = subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "lavfi",
+                                 "-i", "sine=frequency=440:duration=4", "-c:a", "aac", mp4b],
+                                capture_output=True, text=True)
+            assert r2.returncode == 0, "夹具M2合成失败"
+            pk = json.load(open("materials/packs/p1/pack.json", encoding="utf-8"))
+            pk["files"].append({"id": "M2", "file": "M2.mp4", "kind": "video",
+                                "transcript": {"tier": "word", "text": "甲乙丙丁",
+                                               "words": [{"text": "甲", "start": 0.5, "end": 1.0},
+                                                         {"text": "乙", "start": 1.0, "end": 1.5},
+                                                         {"text": "丙", "start": 1.5, "end": 2.0},
+                                                         {"text": "丁", "start": 2.0, "end": 2.5}]}})
+            json.dump(pk, open("materials/packs/p1/pack.json", "w", encoding="utf-8"))
+            json.dump({"beats": [{"no": 1, "story": "不进字幕",
+                                  "narration": {"mode": "original"},
+                                  "tracks": [{"role": "A", "source_id": "M2", "src_in": 0, "duration": 4}]}]},
+                      open("projects/t44/storylines/t44b.json", "w", encoding="utf-8"))
+            sys.argv = ["vadwords.py", "t44", "--story", "t44b"]
+            try:
+                vadwords.main()
+            finally:
+                sys.argv = old_argv
+            sl3 = json.load(open("projects/t44/storylines/t44b.json"))
+            rep3 = json.load(open("projects/t44/vad-report.json"))
+            w3 = sl3["beats"][0]["narration"]["words"]
+            ok3 = ("".join(w["t"] for w in w3) == "甲乙丙丁"
+                   and rep3[0].get("text_from") == "word-ts"
+                   and w3[0]["s"] == 0.5 and abs(w3[-1]["e"] - 2.5) < 0.01
+                   and not rep3[0].get("cross_span"))
+            check("T44b vadwords 实测词级时间戳直取（tier=word 直通道不均分，2026-09-18 勘误）",
+                  ok3, "w0.s=%s wN.e=%s from=%s" % (w3[0]["s"], w3[-1]["e"], rep3[0].get("text_from")))
         finally:
             os.chdir(old_cwd)
             shutil.rmtree(tmp, ignore_errors=True)

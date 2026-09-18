@@ -41,8 +41,9 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
    - **写成"总结腔分镜摘要"是事故**——它会被念出来/铺进字幕（vadwords 注释警告的
      正是这种失效模式，不是"story 与字幕无关"）。改 original 字幕 = 改素材转写
      （proofread 等长替换，保字符-时间对齐）；改 story/转写/窗口后必须重跑 vadwords。
-3. **时间唯一来源是物理测量（VAD）**，不是 ASR 词时间戳。ASR 词级时间漂移 0.5–3s，
-   全链禁用作锚点/字幕时间。
+3. **时间源=实测**（2026-09-18 勘误）：转写 tier=word（MiniMax timestamp_level=word 实测，
+   与 VAD 物理测量互证 ±0.05s）时 vadwords 直取词时间；tier=vad/sent 是合成时间禁作锚，
+   时间源只有 vadwords 的 VAD。**重转写新素材后自动走 word 直通道，别再手工修时间。**
 4. **A/B 轨铁律**：A 轨=主画面，分三级——①正常口播素材随时可 A；②**空镜（ambient/broll）
    两级**：自带有效语音的（档案 `has_speech`，104030 型实拍画外音）可口播幕 A 轨用原声；
    无语音的只能进纯空镜幕（narration.mode=`none`，靠 BGM/环境音撑）或 B 轨叠画——
@@ -424,7 +425,8 @@ Studio 路由（http://127.0.0.1:8765）：
 6. **故事线写完必须全面检查+逐幕审核再渲染**（阶段 4）。LLM 可能截断
    （finish_reason=length）产出缺字段的幕。
 7. **渲染失败/任务崩溃必须留痕**（时间点+最后产物+最后动作），续作从记录接着走。
-8. **ASR 词时间禁用**：任何"按词时间过滤/对齐"的念头都停手，时间源只有 vadwords 的 VAD。
+8. **合成词时间禁作锚**：tier=vad/sent 的词时间是均分合成值，"按词时间过滤/对齐"停手；
+   tier=word 实测词时间是 vadwords 直通道输入（重转写自动获得），人工别碰时间轴。
 9. **concat 跳过必占位**：改渲染链时跳过区间必须补等长静音段，否则后段前移。
 10. **改代码/配置后**：跑 `python3 tests/e2e.py --fast` + `python3 tests/audit.py`
     （P1 必须 0）；改 studio.py 后重启进程再用行为探针验证。

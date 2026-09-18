@@ -397,7 +397,7 @@ def check_page_sync(pdir, sid, rules):
         regs = json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8"))
         st = regs.get(plan.get("subtitle_style", ""), {})
         pages = pipeline.build_pages(
-            [(w["t"], w["s"], w["e"]) for w in plan.get("words") or []],
+            pipeline.char_level(plan.get("words") or []),
             int(st.get("max_chars", 12)))
         expected = [pg[0][1] for pg in pages]
         actual = []

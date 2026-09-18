@@ -114,7 +114,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 3 | 缺陷台账 | disposition.py | disposition.json（四类缺陷+建议窗口） | 起草提示词/素材卡⚠ |
 | 4 | 起草 | draft.py | storylines/*.json | 渲染 |
 | 5 | 裁剪 | dubfit.py | dub 音频+验证报告 | 渲染 |
-| 6 | 词轨 | vadwords.py | VAD 词轨 | 字幕/卡拉OK |
+| 6 | 词轨 | vadwords.py | 幕词轨（tier=word 实测直取，否则 VAD 铺轨） | 字幕/卡拉OK |
 | 7 | 封面 | pipeline.py（build_cover/cover_check） | cover/cover-*.jpg | 渲染闸门/发布 |
 | 8 | 渲染 | pipeline.py | out-*.mp4 + subtitle.ass | 门禁/交付 |
 | 9 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
@@ -191,7 +191,7 @@ python3 tests/audit.py                                     # 代码审计器
 | 转写 401/超时 | config/services.json 的 key；minimax 云端限制 ≤50MB/≤500s |
 | 渲染卡在 ffmpeg | projects/<proj>/render.status 的 tail 字段有最后 8 行 stderr |
 | 字幕不换页/叠字 | subtitle-*.ass 是否生成；words 词轨是否为空（转写失败会让字幕静默消失） |
-| 字幕与语音错位 | 词轨来源是否 VAD（narration.words）；素材词轨平移方案已废弃（时间戳漂移） |
+| 字幕与语音错位 | 词轨来源 narration.words：转写 tier=word（实测）走直通道；tier=vad/sent 看 vad-report 的 spans；窗口错位可设 narration.window_local（手选窗口铺 story） |
 | 配音开头有残留杂音 | dubgate 是否跑过；音频是否掐头（按能量包络 0.1s 级定位，不信 ASR 词轨） |
 | 改了代码不生效 | **studio.py 是常驻进程，改完必须重启**（两次"改了没生效"都是模块缓存） |
 
@@ -211,7 +211,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 工程铁律（踩坑提炼，贡献者/Agent 动手前必读——违反=事故重演）
 
-1. **ASR 词级时间戳是推测值**（素材间漂移 0~3s、同一音频内不均匀）——禁止直接作裁剪锚/字幕时间源；时间源=vadwords.py 的 VAD 物理测量（silencedetect 语音段）。**选词也不例外**：vadwords 全文本按字符序铺进全素材 VAD 语音段再按窗口切片，不按 ASR 词时间过滤窗口（事故：按 ASR 时间过滤吃掉句首句尾字=字幕漏字/半句，T44 锚）
+1. **时间源=实测，合成时间禁作锚**（2026-09-18 勘误改写）：tier=word 实测词级时间戳是字幕词轨首选时间源——MiniMax 传 `timestamp_level=word`（asr.py 已默认；实测 ruxuan-02 31 词起点 30/31 落 VAD 语音段 ±0.05s，ASR 实测与 VAD 物理测量互证），vadwords 直取不均分。tier=sent/vad 的字符时间是句内/段内均分**合成值**——历史"ASR 漂移 0~3s"的真相即此（asr.py 曾从未传 timestamp_level，锅是我们自己的合成，不是 ASR 测量）。合成时间禁止作裁剪锚/窗口过滤锚：tier=vad/sent 老包时间源=vadwords.py 的 VAD 物理测量（silencedetect 语音段），全文本铺满 VAD 段再窗口切片，不按词时间过滤窗口（事故：按合成时间过滤吃掉句首句尾字=字幕漏字/半句，T44 锚）
 2. **词轨黑区**：拍摄口令/嘟囔 ASR 会漏转写——按"能量有语音、词轨无文本"检测并掐除（事故：口令"三二一走"进成片）
 3. **concat 拼接必占位**：跳过的区间（静音洞等）必须补等长静音段，否则后段整体前移（事故：片尾提前 4s 无 BGM）
 4. **序列化保真**：前端落盘必须透传未知字段——白名单重建=静默丢数据（事故：手工词轨全丢，字幕退化均分）

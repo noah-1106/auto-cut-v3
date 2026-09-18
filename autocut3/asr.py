@@ -4,9 +4,12 @@
   words: [{"text": str, "start": float, "end": float}]   # 源素材时间轴，0.1s 量化
 
 时间戳三级降级（供应商给什么都能用）：
-  tier=word  后端直接给字/词级（本地 faster-whisper）
-  tier=sent  后端给句级（segments>=2）→ 句内按字数比例分配
-  tier=vad   只有全文 → ffmpeg 静音检测出语音段 + 文本按段时长比例插值
+  tier=word  后端直接给字/词级实测时间戳——MiniMax 传 timestamp_level=word（2026-09-18
+             实测与 VAD 互证 ±0.05s）/ 本地 faster-whisper word_timestamps=True；
+             段文本粒度判据 max(len)<=4，后端忽略参数退句级则自动落 sent/vad
+  tier=sent  后端只给句级 → 句内按字数比例分配（合成值：历史 0.5-3s "漂移"的真凶，
+             仅兜底，勿当实测用）
+  tier=vad   只有全文 → ffmpeg 静音检测出语音段 + 文本按段时长比例插值（合成值）
 
 跨平台：ffmpeg 解析顺序 = $FFMPEG env → 仓内 bin/（mac）→ PATH；纯标准库。
 """
@@ -149,6 +152,10 @@ def transcribe_minimax(wav, becfg):
     parts = [
         ('--%s\r\nContent-Disposition: form-data; name="model"\r\n\r\n%s\r\n' % (b, becfg.get("model", "asr-1.0"))).encode(),
         ('--%s\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json\r\n' % b).encode(),
+        # 2026-09-18 实测词级时间戳（Noah 指路）：word=中文按字/英文按词，每单元带实测起止。
+        # 实测对齐：ruxuan-02 素材 31 词起点 30/31 落 VAD 语音段 ±0.05s（唯一段外偏 0.08s，
+        # 小于 silencedetect 0.25s 粒度）——ASR 实测与 VAD 物理测量互证。
+        ('--%s\r\nContent-Disposition: form-data; name="timestamp_level"\r\n\r\nword\r\n' % b).encode(),
         ('--%s\r\nContent-Disposition: form-data; name="file"; filename="%s"\r\nContent-Type: audio/wav\r\n\r\n' % (b, os.path.basename(audio_path))).encode() + audio + ("\r\n--%s--\r\n" % b).encode(),
     ]
     req = urllib.request.Request(
@@ -206,19 +213,33 @@ def transcribe(src, provider=None, cache_dir=None):
         resp = transcribe_minimax(wav, becfg)
         text = (resp.get("text") or "").strip()
         segments = resp.get("segments") or []
-        words, tier = None, ("sent" if len(segments) >= 2 else "vad")
-        chars = [c for c in text if not c.isspace()]
-        if not chars:
-            words = []
-        elif tier == "sent":
-            spans = [(float(s.get("start", 0)), float(s.get("end", 0))) for s in segments
-                     if float(s.get("end", 0)) > float(s.get("start", 0))]
-            words = [quant(p) for p in distribute(chars, spans)]
+        # 字级粒度判定：timestamp_level=word 的段文本是单字/词（中文含标点合并 ≤2-3 字）。
+        # 后端若忽略参数退回句级（存在长段）→ 走老 sent/vad 合成路，行为不劣于改前。
+        _units = [str(s.get("text") or "").strip() for s in segments]
+        _units = [t for t in _units if t]
+        if _units and max(len(t) for t in _units) <= 4:
+            # 实测词级：直接消费，禁再合成（句内均分才是历史上 0.5-3s "漂移"的真凶）。
+            # 与本地后端同契约：不 quant，保留全精度实测值。
+            words = [w for w in ({"text": str(s.get("text") or "").strip(),
+                                  "start": float(s.get("start", 0)),
+                                  "end": float(s.get("end", 0))} for s in segments
+                                 if str(s.get("text") or "").strip()
+                                 and float(s.get("end", 0)) > float(s.get("start", 0)))]
+            tier = "word"
         else:
-            spans = vad_speech_spans(wav, ff)
-            if not spans and chars:
-                spans = [(0.0, min(dur or len(chars) * 0.28, len(chars) * 0.28))]
-            words = [quant(p) for p in distribute(chars, spans)] if spans else []
+            words, tier = None, ("sent" if len(segments) >= 2 else "vad")
+            chars = [c for c in text if not c.isspace()]
+            if not chars:
+                words = []
+            elif tier == "sent":
+                spans = [(float(s.get("start", 0)), float(s.get("end", 0))) for s in segments
+                         if float(s.get("end", 0)) > float(s.get("start", 0))]
+                words = [quant(p) for p in distribute(chars, spans)]
+            else:
+                spans = vad_speech_spans(wav, ff)
+                if not spans and chars:
+                    spans = [(0.0, min(dur or len(chars) * 0.28, len(chars) * 0.28))]
+                words = [quant(p) for p in distribute(chars, spans)] if spans else []
 
     words = [w for w in (words or []) if w.get("text")]
     words.sort(key=lambda w: w["start"])
