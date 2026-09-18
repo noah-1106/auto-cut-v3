@@ -120,6 +120,11 @@ def _run_pack(pid, project, dry=False, material=None):
     terms = _load_terms()
     total_fix, total_review = 0, 0
     pending_queue = []
+    todo = [f for f in pk.get("files", [])
+            if (not material or f.get("id") == material)
+            and ((f.get("transcript") or {}).get("words") or [])]
+    if todo:
+        print("  · 校对 %d 条（每条一次 LLM 调用，1-2 分钟静默属正常）…" % len(todo), flush=True)
     for f in pk.get("files", []):
         if material and f.get("id") != material:
             continue
@@ -136,27 +141,27 @@ def _run_pack(pid, project, dry=False, material=None):
             _r = (raw or "").strip()
             if len(_r) < 2 or "[" not in _r or "]" not in _r:
                 print(f"  {f['id']}: 引擎退化输出（正文仅 {len(_r)} 字符，非 JSON 修正清单）"
-                      f"——建议重试该条，不要当校对失败排查")
+                      f"——建议重试该条，不要当校对失败排查", flush=True)
                 continue
             fixes = json.loads(raw[raw.index("["): raw.rindex("]") + 1])
         except Exception as e:
-            print(f"  {f['id']}: LLM 校对失败 {str(e)[:80]}")
+            print(f"  {f['id']}: LLM 校对失败 {str(e)[:80]}", flush=True)
             continue
         applied, queued = [], []
         for c in fixes:
             if not isinstance(c, dict) or not c.get("find") or not c.get("replace"):
                 continue
             if len(c["find"]) != len(c["replace"]):
-                print(f"  {f['id']}: 拒绝非等长替换 {c['find']}→{c['replace']}（会破坏词轨对齐）")
+                print(f"  {f['id']}: 拒绝非等长替换 {c['find']}→{c['replace']}（会破坏词轨对齐）", flush=True)
                 continue
             if len(c["find"]) > 6:
                 queued.append(c)
-                print(f"  {f['id']}: 超长修正转人工复核 {c['find']}→{c['replace']}")
+                print(f"  {f['id']}: 超长修正转人工复核 {c['find']}→{c['replace']}", flush=True)
                 continue
             conf = _confidence(c["replace"], terms)
             if conf == "needs-human":
                 queued.append(c)
-                print(f"  {f['id']}: 非词表修正转人工复核 {c['find']}→{c['replace']}")
+                print(f"  {f['id']}: 非词表修正转人工复核 {c['find']}→{c['replace']}", flush=True)
                 continue
             hit = apply_eqsub(words, c["find"], c["replace"])
             if hit:
@@ -173,17 +178,17 @@ def _run_pack(pid, project, dry=False, material=None):
                     "reason": "非词表/超长修正——语义存疑，人审后定",
                     "created_at": __import__("datetime").datetime.now().isoformat(timespec="seconds")}
             if dry:
-                print(f"  {f['id']}: [dry] 拟入复核队列 {c['find']}→{c['replace']}")
+                print(f"  {f['id']}: [dry] 拟入复核队列 {c['find']}→{c['replace']}", flush=True)
             else:
                 pending_queue.append(item)
-        print(f"  {f['id']}: auto {len(applied)} 组 {[a['find']+'→'+a['replace'] for a in applied] or '无'} | 转人工 {len(queued)} 组")
+        print(f"  {f['id']}: auto {len(applied)} 组 {[a['find']+'→'+a['replace'] for a in applied] or '无'} | 转人工 {len(queued)} 组", flush=True)
     if not dry:
         for item in pending_queue:
             _queue_add(project, item)
         json.dump(pk, open(pk_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-        print(f"PROOFREAD DONE[{pid}]: auto {total_fix} 处已写回（等长，时间戳未动）；needs-human {total_review} 组进 review-queue.json")
+        print(f"PROOFREAD DONE[{pid}]: auto {total_fix} 处已写回（等长，时间戳未动）；needs-human {total_review} 组进 review-queue.json", flush=True)
     else:
-        print(f"PROOFREAD DRY[{pid}]: auto {total_fix} 处 / 转人工 {total_review} 组（未写回）")
+        print(f"PROOFREAD DRY[{pid}]: auto {total_fix} 处 / 转人工 {total_review} 组（未写回）", flush=True)
 
 
 def run(project, dry=False, material=None, pack=None):

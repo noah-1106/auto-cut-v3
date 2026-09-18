@@ -83,10 +83,12 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
             _auto_review(f)
             changed = True  # P1#2：audit 变更也要落盘（原只在理解成功分支置位，n/a 改动被吞）
             out[f["id"]] = {"ok": False, "err": "音频无视觉轨（理解走 ASR）"}
+            print("  ✗ %s 音频无视觉轨（理解走 ASR）" % f["id"], flush=True)
             continue
         src = os.path.join(pdir, f["file"])
         if not os.path.exists(src):
             out[f["id"]] = {"ok": False, "err": "文件缺失"}
+            print("  ✗ %s 文件缺失" % f["id"], flush=True)
             continue
         todo.append((f, src, kind))
     if todo:
@@ -100,6 +102,7 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
             res = fu.result()
             if not res["ok"]:
                 out[mid] = {"ok": False, "err": res["err"]}
+                print("  ✗ %s %s" % (mid, res["err"]), flush=True)
                 continue
             r = res["r"]
             f["visual"] = r
@@ -108,6 +111,9 @@ def understand_pack(pack_id, material=None, provider=None, force=False):
             changed = True
             out[mid] = {"ok": True, "desc": (r.get("desc") or "")[:44], "ocr_n": len(r.get("ocr") or []),
                         "content_type": r.get("content_type") or "", "schema": r.get("schema", 1)}
+            # 完成即报（flush）：后台跑日志实时可见——结果行从 main() 移到此处（2026-09-18 nohup 盲区整改）
+            print("  ✓ %s | %s | OCR %d 条 | %s" % (mid, r.get("content_type") or "—",
+                  len(r.get("ocr") or []), (r.get("desc") or "")[:44]), flush=True)
     if changed:
         with open(pp, "w", encoding="utf-8") as fh:
             json.dump(pk, fh, ensure_ascii=False, indent=1)
@@ -133,27 +139,26 @@ def main():
         for mid, r in res.items():
             if r.get("ok"):
                 total["done"] += 1
-                print("  ✓ %s | %s | OCR %d 条 | %s" % (mid, r.get("content_type") or "—", r["ocr_n"], r["desc"]))
             else:
                 total["fail"] += 1
-                print("  ✗ %s %s" % (mid, r.get("err", "")))
         if not res:
             total["skip"] += len(json.load(open(os.path.join(ROOT, "materials", "packs", pid, "pack.json"), encoding="utf-8")).get("files", []))
-    print("UNDERSTAND DONE: +%d (跳过 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]))
+    print("UNDERSTAND DONE: +%d (跳过 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]), flush=True)
     # 编排闭环（维护者 2026-09-14）：单素材识别全部完成后 → 包级统一理解 digest。
     # 没有这层，起草 LLM 面对的是扁平列表，悟不出"M0269 是旁白音轨源"这类整体定位——
     # 这是编排缺口，不是识别提示词的错。单素材模式（--material）不触发（盘点需要全量视图）。
     if not a.material and total["done"] > 0:
         for pid in packs:
             try:
+                print("  📋 DIGEST %s LLM 盘点中（1-3 分钟静默属正常）…" % pid, flush=True)
                 d = build_digest(pid)
                 print("  📋 DIGEST %s：%s（A轨候选%d/B-roll池%d/配音源%d）"
                       % (pid, d.get("theme", "")[:40],
                          len(d.get("inventory", {}).get("a_roll_candidates", [])),
                          len(d.get("inventory", {}).get("broll_pool", [])),
-                         len(d.get("inventory", {}).get("voiceover_sources", []))))
+                         len(d.get("inventory", {}).get("voiceover_sources", []))), flush=True)
             except Exception as e:
-                print("  ⚠ DIGEST %s 失败（不影响素材识别结果）：%s" % (pid, str(e)[:100]))
+                print("  ⚠ DIGEST %s 失败（不影响素材识别结果）：%s" % (pid, str(e)[:100]), flush=True)
 
 
 def build_digest(pid):

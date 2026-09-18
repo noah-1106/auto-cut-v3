@@ -201,7 +201,7 @@ def main():
     if a.cmd == "gen":
         rec = submit(pdir, a.prompt, image=a.image, duration=a.duration, res=a.res, model=a.model)
         print("GEN SUBMITTED: task=%s model=%s → poll: python3 autocut3/video_gen.py poll %s --latest --wait"
-              % (rec["task_id"], rec["model"], os.path.basename(pdir)))
+              % (rec["task_id"], rec["model"], os.path.basename(pdir)), flush=True)
     else:
         gdir = os.path.join(pdir, "gen")
         tid = a.task_id
@@ -213,20 +213,20 @@ def main():
         t0 = time.time()
         while True:
             r = poll_once(pdir, tid)
-            print("  [%s] status=%s" % (int(time.time() - t0), r.get("status")))
+            print("  [%s] status=%s" % (int(time.time() - t0), r.get("status")), flush=True)
             if r.get("status") == "Success":
                 e = retrieve(pdir, tid, r["file_id"])
                 print("VIDEO GEN OK: %s (%ss, %sx%s) → 素材包 ai-generated/%s" %
-                      (e["file"], e["duration"], e.get("width", "?"), e.get("height", "?"), e["id"]))
+                      (e["file"], e["duration"], e.get("width", "?"), e.get("height", "?"), e["id"]), flush=True)
                 break
             if r.get("status") == "Fail":
-                print("VIDEO GEN FAIL:", r.get("err") or "平台返回失败")
+                print("VIDEO GEN FAIL:", r.get("err") or "平台返回失败", flush=True)
                 sys.exit(1)
             if not a.wait:
-                print("  仍在生成中——稍后重跑同命令继续轮询")
+                print("  仍在生成中——稍后重跑同命令继续轮询", flush=True)
                 return
             if time.time() - t0 > 900:
-                print("超时（15 分钟）——任务可能仍在队列，稍后重跑 poll")
+                print("超时（15 分钟）——任务可能仍在队列，稍后重跑 poll", flush=True)
                 sys.exit(2)
             time.sleep(10)
 

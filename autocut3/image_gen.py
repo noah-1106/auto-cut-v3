@@ -81,4 +81,4 @@ if __name__ == "__main__":
     ap.add_argument("--ar", default="9:16")
     ap.add_argument("--base", help="底图路径（subject_reference 保主体；含真人脸会被平台审核拦）")
     a = ap.parse_args()
-    print(gen_image(a.prompt, a.out, aspect_ratio=a.ar, base_image=a.base))
+    print(gen_image(a.prompt, a.out, aspect_ratio=a.ar, base_image=a.base), flush=True)

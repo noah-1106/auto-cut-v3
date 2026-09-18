@@ -170,10 +170,10 @@ def main():
     a = ap.parse_args()
     if a.cmd == "synth":
         out = synth(a.text, model=a.model, voice_id=a.voice, speed=a.speed, out=a.out)
-        print("TTS OK:", out, "(%dB)" % os.path.getsize(out))
+        print("TTS OK:", out, "(%dB)" % os.path.getsize(out), flush=True)
     else:
         vid = voice_clone(a.audio, a.voice_id, transcript=a.transcript)
-        print("VOICE CLONE OK:", vid, "→ 可直接用于 synth --voice", vid)
+        print("VOICE CLONE OK:", vid, "→ 可直接用于 synth --voice", vid, flush=True)
 
 
 if __name__ == "__main__":

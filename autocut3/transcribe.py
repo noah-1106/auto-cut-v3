@@ -101,6 +101,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
         src = os.path.join(pdir, f["file"])
         if not os.path.exists(src):
             out[f["id"]] = {"ok": False, "err": "文件缺失"}
+            print("  ✗ %s 文件缺失" % f["id"], flush=True)
             continue
         todo.append((f, src))
     if todo:
@@ -115,6 +116,7 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
             if not res["ok"]:
                 aud["transcript"] = "error:" + res["err"][:80]  # 失败标记（Claude P3-①）：跳过≠无声吞掉
                 out[mid] = {"ok": False, "err": res["err"]}
+                print("  ✗ %s %s" % (mid, res["err"]), flush=True)
                 continue
             r = res["r"]
             has_speech = bool(r["words"])
@@ -129,6 +131,10 @@ def transcribe_pack(pack_id, material=None, provider=None, force=False):
             changed = True
             out[mid] = {"ok": True, "tier": r["tier"], "words": len(r["words"]),
                         "text": (r["text"] or "")[:40], "has_speech": has_speech}
+            # 完成即报（flush）：后台跑日志实时可见——结果行从 main() 移到此处（2026-09-18 nohup 盲区整改）
+            print("  ✓ %s [%s/%s] %s | %s" % (mid, r["tier"],
+                  "有声" if has_speech else "无语音（纯画面）",
+                  len(r["words"]), (r["text"] or "")[:40]), flush=True)
     if changed:
         with open(pp, "w", encoding="utf-8") as fh:
             json.dump(pk, fh, ensure_ascii=False, indent=1)
@@ -155,14 +161,11 @@ def main():
         for mid, r in res.items():
             if r.get("ok"):
                 total["done"] += 1
-                speech = "有声" if r.get("has_speech") else "无语音（纯画面）"
-                print("  ✓ %s [%s/%s] %s | %s" % (mid, r["tier"], speech, r["words"], r["text"]))
             else:
                 total["fail"] += 1
-                print("  ✗ %s %s" % (mid, r.get("err", "")))
         if not res:
             total["skip"] += len(json.load(open(os.path.join(ROOT, "materials", "packs", pid, "pack.json"), encoding="utf-8")).get("files", []))
-    print("TRANSCRIBE DONE: +%d (跳过已转写 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]))
+    print("TRANSCRIBE DONE: +%d (跳过已转写 %d, 失败 %d)" % (total["done"], total["skip"], total["fail"]), flush=True)
 
 
 if __name__ == "__main__":

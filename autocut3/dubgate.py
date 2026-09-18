@@ -38,7 +38,7 @@ def main():
         f0 = "%s@%.2f" % (ws[0]["text"], ws[0]["start"]) if ws else "—"
         print("幕%s %s | D1句首[%s]%s D2句尾%s D3相似%.2f | %s" % (
             b.get("no"), "✓" if ok else "✗ FAIL", f0, "✓" if d1 else "✗",
-            "✓" if d2 else "✗", d3, (r.get("text") or "")[:30]))
+            "✓" if d2 else "✗", d3, (r.get("text") or "")[:30]), flush=True)
         if not ok:
             fails.append(b.get("no"))
         report.append({"no": b.get("no"), "ok": ok, "d1": d1, "d2": d2, "d3": round(d3, 3)})
@@ -48,8 +48,8 @@ def main():
               open(os.path.join(pdir, "dubgate-report.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
     if fails:
-        print("门禁不过：幕 %s 配音残留/吞字——重裁后复检" % fails); sys.exit(1)
-    print("dubgate ✓ 全部配音干净")
+        print("门禁不过：幕 %s 配音残留/吞字——重裁后复检" % fails, flush=True); sys.exit(1)
+    print("dubgate ✓ 全部配音干净", flush=True)
 
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):  # Windows GBK 控制台/重定向兜底：emoji 输出 UnicodeEncodeError 不炸（2026-09-15 审计 P2-5）

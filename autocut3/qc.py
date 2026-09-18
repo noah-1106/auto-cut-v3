@@ -519,9 +519,9 @@ if __name__ == "__main__":
     ap.add_argument("--no-deep", action="store_true", help="跳过响度探针")
     a = ap.parse_args()
     r = run(a.project, story=a.story, deep=not a.no_deep)
-    print("QC 结论：%s" % r["one_line"])
+    print("QC 结论：%s" % r["one_line"], flush=True)
     for v in r["violations"]:
         if v["severity"] in ("blocker", "warn"):
             print("  [%s/%s] %s %s %s" % (v["severity"], v["action"], v["rule"],
                                           json.dumps(v["evidence"], ensure_ascii=False)[:100],
-                                          ("→ " + v["suggested_fix"]) if v.get("suggested_fix") else (v.get("note") or "")))
+                                          ("→ " + v["suggested_fix"]) if v.get("suggested_fix") else (v.get("note") or "")), flush=True)

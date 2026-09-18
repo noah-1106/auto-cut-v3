@@ -124,7 +124,7 @@ def main():
                         src = os.path.join("materials", "packs", pk, f["file"])
                         ftrans = f.get("transcript") or {}
             if not src:
-                print("幕%s: 素材未找到，跳过" % b.get("no")); continue
+                print("幕%s: 素材未找到，跳过" % b.get("no"), flush=True); continue
             ss, t = float(A.get("src_in") or 0), float(A.get("duration") or 0)
             audio_desc = "%s[%s+%s]" % (os.path.basename(src), ss, t)
             # 字幕文本=素材实拍台词（proofread 校对后 ASR），story 摘要不进字幕——
@@ -198,10 +198,10 @@ def main():
         report.append({"no": b.get("no"), "audio": audio_desc, "spans": [[round(s,2), round(e,2)] for s, e in spans],
                        "speech": round(speech, 2), "chars": len(story), "density": round(len(story)/speech, 1) if speech else 0,
                        "text_from": text_from, "cross_span": cross})
-        print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]))
+        print("幕%s %s 语音段=%s 字密=%.1f字/s" % (b.get("no"), audio_desc, report[-1]["spans"], report[-1]["density"]), flush=True)
     flock.write_json(sfile, sl)  # 原子落盘（与 draft 双跑同险：读者永不读半截故事线）
     flock.write_json(os.path.join(pdir, "vad-report.json"), report)
-    print("VAD 词轨已写入 %s ✓" % sfile)
+    print("VAD 词轨已写入 %s ✓" % sfile, flush=True)
 
 
 if __name__ == "__main__":

@@ -134,12 +134,12 @@ def main():
         raw_rel = meta.get("raw") or nar.get("audio")
         if not raw_rel:
             fails.append(no); report.append({"no": no, "ok": False, "reason": "无 audio"})
-            print("幕%s ✗ FAIL 无 audio" % no)
+            print("幕%s ✗ FAIL 无 audio" % no, flush=True)
             continue
         raw = raw_rel if os.path.isabs(raw_rel) else os.path.join(pdir, raw_rel)
         if not os.path.exists(raw):
             fails.append(no); report.append({"no": no, "ok": False, "reason": "raw 缺失 " + raw_rel})
-            print("幕%s ✗ FAIL raw 缺失 %s" % (no, raw_rel))
+            print("幕%s ✗ FAIL raw 缺失 %s" % (no, raw_rel), flush=True)
             continue
         story = b.get("story") or ""
         wd = os.path.join(workroot, "b%s" % no)
@@ -158,7 +158,7 @@ def main():
             changed = True
             print("幕%s ✓ %s | %s | D1%s D2%s D3%.2f | %s" % (
                 no, "→" + fit_rel, "+".join(r["rounds"]),
-                "✓" if r["d1"] else "✗", "✓" if r["d2"] else "✗", r["d3"], r["asr_text"][:24]))
+                "✓" if r["d1"] else "✗", "✓" if r["d2"] else "✗", r["d3"], r["asr_text"][:24]), flush=True)
         else:
             fails.append(no)
             nar["dubfit"] = {"raw": raw_rel, "start": r["start"], "end": r["end"],
@@ -167,7 +167,7 @@ def main():
             changed = True
             print("幕%s ✗ FAIL | %s | D1%s D2%s D3%.2f | %s" % (
                 no, "+".join(r["rounds"]),
-                "✓" if r["d1"] else "✗", "✓" if r["d2"] else "✗", r["d3"], r["asr_text"][:24]))
+                "✓" if r["d1"] else "✗", "✓" if r["d2"] else "✗", r["d3"], r["asr_text"][:24]), flush=True)
         report.append(dict({"no": no}, **{k: r[k] for k in
                                           ("ok", "start", "end", "rounds", "d1", "d2", "d3")}))
 
@@ -183,9 +183,9 @@ def main():
               open(os.path.join(pdir, "dubgate-report.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
     if fails:
-        print("dubfit ✗ 门禁不过：幕 %s 配音残留/吞字——重裁后复检" % fails)
+        print("dubfit ✗ 门禁不过：幕 %s 配音残留/吞字——重裁后复检" % fails, flush=True)
         sys.exit(1)
-    print("dubfit ✓ 全部配音干净（报告 dubfit-report.json）")
+    print("dubfit ✓ 全部配音干净（报告 dubfit-report.json）", flush=True)
 
 
 if __name__ == "__main__":
