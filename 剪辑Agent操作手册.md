@@ -280,17 +280,19 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 > Windows 上 `python3` 一律换 `python`（本文按 macOS/Linux 书写）；ffmpeg 同理用 `bin\ffmpeg.exe`。
 
 ### 4.1 素材段
-> transcribe / understand 内部都是**素材级 3 并发**（2026-09-18 实测 MiniMax 双端点 3+3
-> 并发无 429 后落地）——19 条素材包约比串行快 3 倍；限流自动退避，被 429 拦会等 2/4s 重试，
-> 不是卡死。**同一包两步别同时开跑**：两步共持 `packs/<pid>/.lock` 整程独占，同起=understand
-> 阻塞在锁上等 transcribe 跑完，零提速白挂进程；且 understand 要吃词轨（念稿指纹入视觉），
-> 顺序固定 transcribe → understand。**"同时开跑"只对不同包有意义**（不同包不同锁）。
-> advance 内部两步本就按此顺序串行调用，直接 `--advance` 即是最快路径。
+> **首选 `process.py`（素材级流水线）**：每条素材 ASR 一完成立即链发该素材的画面识别（词轨随行），
+> ASR 池 3 线程 + 视觉池 3 线程双端点并发（2026-09-18 实测 MiniMax 3+3 无 429）——墙钟
+> ≈max(转写总量,视觉总量) 而非两段求和。`orchestrate --advance` 的转写步内部就走它。
+> **同一包两步别各起进程同时跑**：两步共持 `packs/<pid>/.lock` 整程独占，同起=后起方
+> 阻塞在锁上干等，零提速白挂进程。**"同时开跑"只对不同包有意义**（不同包不同锁）。
+> transcribe.py / understand.py 保留作分步重试（--force / --material 单条），限流自动退避
+> （429 等 2/4s 重试，不是卡死）。
 
 | 命令 | 参数 | 产出 | 何时用 |
 |---|---|---|---|
-| `transcribe.py <pid>` | `--pack --material --asr --force` | pack.json transcript + audit.transcript | 新素材入库后必跑；--force 重跑已转写的 |
-| `understand.py <pid>` | `--pack --material --vision --force` | pack.json visual + digest | 转写后必跑；批处理自动 build_digest |
+| `process.py <pid>` | `--pack --material --asr --vision --force` | transcript + visual 一次落（**流水线：ASR 完一条立即链发视觉**） | **新素材入库首选**；advance 转写步内部走它 |
+| `transcribe.py <pid>` | `--pack --material --asr --force` | pack.json transcript + audit.transcript | 只重跑转写段；--force 重跑已转写的 |
+| `understand.py <pid>` | `--pack --material --vision --force` | pack.json visual + digest | 只重跑视觉段/补 digest；批处理自动 build_digest |
 | `proofread.py <项目> [--pack X]` | `--dry --material --pack` | 词轨修正写回 pack.json + 复核队列（**固定落 `projects/<项目>/review-queue.json`**，与门禁同目录） | 转写后必跑；--dry 预演不落盘；--pack 限定项目内某包 |
 | `dossier.py <pid>` | 无 | `projects/<pid>/dossier.json` 素材档案 | 理解后；draft 的提示词原料 |
 | `disposition.py <pid>` | 无 | `projects/<pid>/disposition.json` 缺陷台账 | dossier 后；draft 档案行会带⚠ |

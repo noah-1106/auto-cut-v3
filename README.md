@@ -91,9 +91,9 @@ curl -X POST "localhost:8765/api/pack-upload/mypack?filename=20260827_M0211.MP4"
 curl -X POST localhost:8765/api/project-create/ -d '{"name":"myproj","title":"我的项目","format":"vertical"}' -H 'Content-Type: application/json'
 curl -X POST localhost:8765/api/pack-mount/myproj/mypack/mount
 
-# ③ 转写 + 画面识别（单素材走 HTTP ?material=M0211；全量走 CLI）
-python3 autocut3/transcribe.py myproj
-python3 autocut3/understand.py myproj
+# ③ 素材级流水线：转写+画面识别一步做（每条素材 ASR 完立即链发视觉，双端点 3+3 并发；
+#    分步跑/单条重试用 transcribe.py / understand.py）
+python3 autocut3/process.py myproj
 
 # ④ AI 起草故事线（读 dossier，产出 storylines/aidraft.json）
 curl -X POST localhost:8765/api/draft/myproj -d '{"intent":"数码开箱口播"}' -H 'Content-Type: application/json'
@@ -109,8 +109,8 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 
 | # | 环节 | 模块 | 产物 | 下游消费 |
 |---|---|---|---|---|
-| 1 | 转写 | transcribe.py | pack.json（词轨+文本） | 理解/起草/词轨 |
-| 2 | 理解 | understand.py | digest（场景/资产/定位） | 起草 |
+| 1 | 转写 | process.py（流水线：每素材 ASR 完即链发视觉，双端点 3+3） | pack.json（词轨+文本+视觉） | 起草/词轨 |
+| 2 | 理解 | process.py 流水线一并完成（understand.py 兜底重试） | digest（场景/资产/定位） | 起草 |
 | 3 | 缺陷台账 | disposition.py | disposition.json（四类缺陷+建议窗口） | 起草提示词/素材卡⚠ |
 | 4 | 起草 | draft.py | storylines/*.json | 渲染 |
 | 5 | 裁剪 | dubfit.py | dub 音频+验证报告 | 渲染 |

@@ -369,9 +369,16 @@ def _advance(project, intent=None, story=None, only=None):
             print("   挂载只由人/Agent 显式决定（挂什么包是创作决策，不进全自动）——Studio 素材库或 pack-mount 完成")
             break
         if key == "transcribe":
-            _run([py, os.path.join(ac, "transcribe.py"), name], "转写")
+            # 2026-09-19 素材级流水线：每条素材 ASR 完立即链发视觉（双端点 3+3），
+            # 墙钟≈max(两段) 而非求和；两步共持包锁盲并发=零提速，故在此一步做完。
+            _run([py, os.path.join(ac, "process.py"), name], "转写+画面识别（流水线）")
         elif key == "understand":
-            _run([py, os.path.join(ac, "understand.py"), name], "画面识别")
+            # 流水线步通常已把视觉做完——盘上新鲜态复检，已齐跳过（个别失败留 pending 走本步重试）
+            _u = next((s for s in status(project)["steps"] if s["step"] == "understand"), None)
+            if _u and _u["status"] != "pending":
+                print("   · 画面识别已在流水线步完成（%s），跳过" % _u.get("detail", "")[:60])
+            else:
+                _run([py, os.path.join(ac, "understand.py"), name], "画面识别")
         elif key == "digest":
             for pid in _packs(pdir):
                 import understand as U

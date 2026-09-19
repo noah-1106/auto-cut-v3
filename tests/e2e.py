@@ -2432,6 +2432,87 @@ def t59_transition_reserve():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t60_material_pipeline():
+    # 回归锚（2026-09-19 素材级流水线 process.py）：每条素材 ASR 完立即链发视觉（词轨随行），
+    # 双端点双池、单写者末尾一次写。全离线零计费（asr.transcribe/vision.understand 打桩）。
+    # 锚四义：①链路=视觉拿到该素材 ASR 词轨 ②ASR 失败视觉仍发（words=None，与顺序跑一致）
+    # ③图片跳 ASR 直接视觉、音频 visual=n/a ④幂等重跑全跳 + 锁释放（防死锁残留）。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import asr, vision, process
+        tmp = tempfile.mkdtemp(prefix="t60_")
+        old_root = process.ROOT
+        old_tr, old_vi = asr.transcribe, vision.understand
+        W = [{"text": "你", "start": 0.1, "end": 0.4}, {"text": "好", "start": 0.5, "end": 0.8}]
+        calls = {"asr": [], "vi": []}
+        try:
+            process.ROOT = tmp
+            pdir = os.path.join(tmp, "materials", "packs", "t60pack")
+            os.makedirs(pdir)
+            for n in ("v1.mp4", "v2.mp4", "a1.mp3", "i1.jpg"):
+                open(os.path.join(pdir, n), "wb").write(b"x")
+            json.dump({"files": [
+                {"id": "M-V1", "file": "v1.mp4", "kind": "video", "review": "pending-review"},
+                {"id": "M-V2", "file": "v2.mp4", "kind": "video", "review": "pending-review"},
+                {"id": "M-A1", "file": "a1.mp3", "kind": "audio", "review": "pending-review"},
+                {"id": "M-I1", "file": "i1.jpg", "kind": "image", "review": "pending-review"}]},
+                open(os.path.join(pdir, "pack.json"), "w"), ensure_ascii=False)
+
+            def fake_asr(src, provider=None, cache_dir=None):
+                calls["asr"].append(os.path.basename(src))
+                if src.endswith("v2.mp4"):
+                    raise RuntimeError("ASR 桩失败")
+                return {"provider": "stub", "tier": "word", "text": "你好", "words": W,
+                        "duration": 1.0, "at": "2026-09-19T00:00:00"}
+
+            def fake_vi(src, kind, provider=None, words=None, dup=0):
+                calls["vi"].append({"src": os.path.basename(src), "kind": kind,
+                                    "words": words, "dup": dup})
+                return {"desc": "桩描述", "ocr": [], "usage": "broll", "frames": 3,
+                        "content_type": "broll", "provider": "stub", "at": "2026-09-19T00:00:00"}
+
+            asr.transcribe = fake_asr
+            vision.understand = fake_vi
+            res = process.process_pack("t60pack")
+
+            v1_vi = next(c for c in calls["vi"] if c["src"] == "v1.mp4")
+            v2_vi = next(c for c in calls["vi"] if c["src"] == "v2.mp4")
+            ok_chain = v1_vi["words"] == W                       # ①视觉吃到本素材词轨
+            ok_fail_dispatch = (v2_vi["words"] is None           # ②ASR 失败视觉仍发
+                                and not res["asr"]["M-V2"]["ok"])
+            ok_kinds = (calls["asr"].count("i1.jpg") == 0         # ③图片不进 ASR
+                        and next(c for c in calls["vi"] if c["src"] == "i1.jpg")["kind"] == "image"
+                        and "M-A1" not in [c["src"] for c in calls["vi"]])
+            pk = json.load(open(os.path.join(pdir, "pack.json"), encoding="utf-8"))
+            f = {x["id"]: x for x in pk["files"]}
+            ok_pack = (f["M-V1"]["audit"]["transcript"] == "done" and f["M-V1"]["audit"]["visual"] == "done"
+                       and f["M-V1"]["review"] == "reviewed"     # 双审计齐=自动过审
+                       and f["M-V2"]["audit"]["transcript"].startswith("error:")
+                       and f["M-V2"]["audit"]["visual"] == "done"  # 失败视觉照发照落
+                       and f["M-A1"]["audit"]["visual"] == "n/a" and f["M-A1"]["audit"]["transcript"] == "done"
+                       and f["M-I1"]["audit"]["visual"] == "done" and "transcript" not in f["M-I1"]["audit"])
+            # ④幂等=done 项不重跑（error 项理应重试——恢复语义）；锁没放第二次调用会死锁挂死
+            res2 = process.process_pack("t60pack")
+            ok_idem = (calls["asr"].count("v1.mp4") == 1 and calls["asr"].count("a1.mp3") == 1
+                       and len([c for c in calls["vi"] if c["src"] == "v1.mp4"]) == 1
+                       and len([c for c in calls["vi"] if c["src"] == "i1.jpg"]) == 1
+                       and set(res2["asr"]) == {"M-V2"} and not res2["visual"])
+            check("T60 素材级流水线（词轨链发/失败仍发/分派/幂等+锁）",
+                  ok_chain and ok_fail_dispatch and ok_kinds and ok_pack and ok_idem,
+                  "chain=%s faildisp=%s kinds=%s pack=%s idem=%s" % (
+                      ok_chain, ok_fail_dispatch, ok_kinds, ok_pack, ok_idem))
+        finally:
+            process.ROOT = old_root
+            asr.transcribe, vision.understand = old_tr, old_vi
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T60 素材级流水线（词轨链发/失败仍发/分派/幂等+锁）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2727,6 +2808,7 @@ def main():
     t57_vadwords_cross_span()
     t58_proofread_degenerate_guard()
     t59_transition_reserve()
+    t60_material_pipeline()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
