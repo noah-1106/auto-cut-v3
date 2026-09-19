@@ -212,6 +212,12 @@ def t6_sfx():
 
 # ---------------------------------------------------------------- T7 贴纸渲染
 def t7_sticker():
+    # 2026-09-19 策展解耦：不再硬编码贴纸 id（Noah 删 zhuyi/tuijian 后 CI 双端红）——
+    # 动态取首个「顶区 + 带默认短语」的在册文字模板贴纸，注册表怎么删测都不空转
+    _reg = json.load(open(os.path.join(ROOT, "registry", "stickers.json"), encoding="utf-8"))
+    sid = next(k for k, v in _reg.items() if not k.startswith("_")
+               and v.get("text_style") and v.get("default_text")
+               and "top" in (v.get("pos") or ""))
     sl = {"title": "E2E贴纸", "outline": "t", "meta": {"format": "vertical"},
           "beats": [
             {"no": 1, "id": "b1", "story": "t", "narration": {"mode": "original"},
@@ -230,7 +236,7 @@ def t7_sticker():
     api("/api/storyline/" + PROJ + "?story=e2estk0", method="POST", body=base)
     stick = json.loads(json.dumps(base))
     stick["title"] = "E2E贴纸验证"
-    stick["beats"][0]["effects"]["stickers"] = [{"asset": "tuijian", "duration": 1.2}]
+    stick["beats"][0]["effects"]["stickers"] = [{"asset": sid, "duration": 1.2}]
     api("/api/storyline/" + PROJ + "?story=e2estk1", method="POST", body=stick)
     outs = []
     for sid in ("e2estk0", "e2estk1"):
@@ -257,7 +263,7 @@ def t7_sticker():
                                                    "[x][y]blend=all_mode=difference,signalstats,metadata=print:file=-",
                                 "-f", "null", "-"], capture_output=True, text=True)
             return float((re.search(r"YAVG=([\d.]+)", r.stdout or r.stderr) or [None, 0])[1])
-        on = cross(0.8)   # tuijian ON（fallback 0.4s 起 1.2s 窗）
+        on = cross(0.8)   # 贴纸 ON（fallback 0.4s 起 1.2s 窗）
         off = cross(3.0)  # 双方均无贴纸
         ok = on > 0.5 and on >= off * 2  # 语义断言：ON 显著异于 OFF（阈值画幅无关，0.5 下限防假阳）
         check("T7 贴纸渲染（同刻跨渲染 A/B）", ok, "ON窗 %.1f / 编码噪声 %.1f" % (on, off))
@@ -2042,7 +2048,10 @@ def t53_sticker_text_templates():
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import pipeline, draft as D
         reg = json.load(open(os.path.join(ROOT, "registry", "stickers.json"), encoding="utf-8"))
-        conf = dict(reg["zhuyi"]); conf["id"] = "zhuyi"
+        # 2026-09-19 策展解耦：动态取首个「文字模板+默认短语」在册条目（硬编码 zhuyi 随注册表删减变 KeyError）
+        _sid = next(k for k, v in reg.items() if not k.startswith("_")
+                    and v.get("text_style") and v.get("default_text"))
+        conf = dict(reg[_sid]); conf["id"] = _sid
         p1 = pipeline.sticker_file(conf, {"text": "横厅布局"})
         p1b = pipeline.sticker_file(conf, {"text": "横厅布局"})          # 缓存命中（同路径）
         p2 = pipeline.sticker_file(conf, {})                              # 无 text → default_text
@@ -2056,7 +2065,7 @@ def t53_sticker_text_templates():
                        "visual": {"content_type": "narration", "desc": "干净"}}}
         def _st(text):
             # at_word 置空：T53 只锚 text 门（at_word 词轨成员门是 T56 的锚，不在此混测）
-            return {"asset": "zhuyi", "text": text, "at_word": "", "duration": 1.0, "pos": "top-center"}
+            return {"asset": _sid, "text": text, "at_word": "", "duration": 1.0, "pos": "top-center"}
         _tr = [{"role": "A", "source_id": "CL", "src_in": 0, "duration": 4}]
         dr = {"beats": [
             {"story": "a", "tracks": _tr, "effects": {"stickers": [_st("超过六个字的长短语")]}},   # 8字 → 剔除
@@ -2213,6 +2222,9 @@ def t56_at_word_gate():
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import pipeline, draft as D
+        # 2026-09-19 策展解耦：动态取在册贴纸 id（validate 白名单按注册表实时判，硬编码已删 id 会被整条剔除）
+        _reg = json.load(open(os.path.join(ROOT, "registry", "stickers.json"), encoding="utf-8"))
+        _sid = next(k for k in _reg if not k.startswith("_"))
         words = [{"t": c, "s": 1.0 + i * 0.4, "e": 1.4 + i * 0.4}
                  for i, c in enumerate("我从不拿低价吸引客户")]
         seg = {"tl_in": 0.0, "dur": 10.0, "no": 1}
@@ -2224,7 +2236,7 @@ def t56_at_word_gate():
                        "transcript": {"words": [{"text": c, "start": 0.1 * i, "end": 0.1 * i + 0.1}
                                                 for i, c in enumerate("我从不拿低价吸引客户")]}}}
         def _st(aw):
-            return {"asset": "zhuyi", "text": "要点", "at_word": aw, "duration": 1.0, "pos": "top-center"}
+            return {"asset": _sid, "text": "要点", "at_word": aw, "duration": 1.0, "pos": "top-center"}
         _tr = [{"role": "A", "source_id": "M1", "src_in": 0, "duration": 10}]
         dr = {"beats": [
             {"story": "s", "tracks": _tr, "effects": {"stickers": [_st("低价")]}},      # 在词轨文本 → 保留

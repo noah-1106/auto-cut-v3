@@ -796,7 +796,8 @@ def sticker_file(conf, stk):
     返回 ""（调用方跳过）当：无样式无文件 / 文字模板无文字可用。"""
     st = conf.get("text_style")
     if not st:
-        return os.path.join(ROOT, conf.get("file") or stk.get("file", ""))
+        fp = conf.get("file") or stk.get("file")
+        return os.path.join(ROOT, fp) if fp else ""   # 已删贴纸 id：无样式无文件 → 返回 "" 调用方跳过（2026-09-19 CI 实锤：原 os.path.join(ROOT,"")=仓库根目录，exists 为真不跳过，ffmpeg 拿目录当输入整渲染炸——与音效"引用已删自动跳过不崩"同纪律）
     txt = str(stk.get("text") or conf.get("default_text") or "").strip()
     if not txt:
         return ""
