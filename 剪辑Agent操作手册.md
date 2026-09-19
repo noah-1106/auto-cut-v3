@@ -159,7 +159,8 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
    B 轨有没有说话画面（desc 含对话/口播/采访…）？content_type 合规吗？
 3. **narration.mode 与意图一致吗**（原声线全 original；配音线是 dub 且 audio 文件存在）？
 4. **效果与转场**：effects.stickers/sfx ≤2 个且 asset id 在注册表里？贴纸带 `text` 短语吗
-   （**≤6 字**，超了渲染时被剔除=白加）？transition_out 在 transitions.json 里？
+   （**≤6 字、不写无意义词、不复述原字幕里的词**——是从本幕口播里蒸馏的强调短语，
+   照抄整句或超 6 字渲染时被剔除=白加）？transition_out 在 transitions.json 里？
 5. **幕试渲（beat preview）——单幕独立验证，全片过≠单幕过**：
    ```bash
    python3 autocut3/pipeline.py beat <pid> <幕号> [sid]
@@ -359,7 +360,7 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
                 "op": "overlay-pip", "pos": "br", "scale": 0.3}],
     "narration": {"mode": "original", "words": [{"t": "字", "s": 0.12, "e": 0.35}]},
     "transition_out": "fade-black",
-    "effects": {"stickers": [{"asset": "zhuyi", "text": "得房率高", "at_word": "得房率", "duration": 1.0, "pos": "top-center"}],
+    "effects": {"stickers": [{"asset": "candy-sky", "text": "得房率高", "at_word": "得房率", "duration": 1.0, "pos": "top-center"}],
                 "sfx": [{"asset": "x_xxx", "at": 1.2, "duration": 0.8}]},
     "subtitle": {"style": "default"},
     "music": {"inherit": true}

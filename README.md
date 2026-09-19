@@ -136,7 +136,7 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 ## 注册表（效果系统）
 
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
-Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。贴纸是**文字模板制**（2026-09-18，v1 规矩回归）：注册表只存视觉样式（黄底便签/红底警示/金底干货…），短语由 draft 从本幕口播蒸馏（≤6 字硬门），渲染时 drawtext 现画（缓存），文字跟内容走不跟图走。**改注册表即改下一次渲染，无需动代码。** 2026-09-18 补**现代活泼批 12 款**（胶囊标签/多巴胺四色/荧光夜光/荧光笔/白环贴纸/漫画爆点/玻璃拟态/极简墨条），走 v2 渲染词根（`font`=wenkai/smiley/kuaile 三字体、`radius` 圆角至胶囊、`shadow`+`shadow_c` 硬投影、`ring`+`ring_c` 白边环）：紧裁画布、overlay 高度锁 sticker_h 宽随文字自适应；管理抽屉内每款出**真渲染样张**（`/api/sticker-preview/<id>` 走渲染同一实现，预览即产物）。
+Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。贴纸是**文字模板制**（2026-09-18，v1 规矩回归）：注册表只存视觉样式（黄底便签/红底警示/金底干货…），短语由 draft 从本幕口播蒸馏（≤6 字硬门），渲染时 drawtext 现画（缓存），文字跟内容走不跟图走。**改注册表即改下一次渲染，无需动代码。** 2026-09-18 补**现代活泼批**（Noah 两轮终审后现存 7 款：多巴胺四色胶囊/白环贴纸糖果红·墨黑/漫画爆点），走 v2 渲染词根（`font`=wenkai/smiley/kuaile 三字体、`radius` 圆角至胶囊、`shadow`+`shadow_c` 硬投影、`ring`+`ring_c` 白边环）：紧裁画布、overlay 高度锁 sticker_h 宽随文字自适应（1 字 182px→6 字 696px 原生宽等比保形）；**几何数据驱动**——竖版贴纸高 220、顶中 y=140 留白存 `registry/formats.json`（`sticker_h`/`sticker_top`，角位仍贴边 30），改册即改渲染；管理抽屉内每款出**真渲染样张**（`/api/sticker-preview/<id>` 走渲染同一实现，预览即产物）。
 BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环。
 音效=注册表策展制（2026-09-18 审听后仅存提示叮/成功短奏两枚，其余实测不可用已下架；源文件与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，物色到更好的随时入册——故事线引用已删音效时渲染自动跳过不崩）。
 AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）；AI 视频素材走 video_gen.py。
