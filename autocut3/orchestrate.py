@@ -355,15 +355,27 @@ def _advance(project, intent=None, story=None, only=None):
     if not todo:
         print("全部环节完成，无可推进。")
         return st
-    print("待推进: %s" % " → ".join(todo), flush=True)  # 留痕：某步被跳过时可对账 todo 快照
-    for key in todo:
-        if only and key != only:
-            continue
+    # 2026-09-19 todo 快照冻结修根（ExFlower agent 实锤）：快照一次成型时 na→pending 翻转类
+    # 环节被永久漏掉——proofread 判据=词轨存在，全新包起跑瞬间素材未转写返回 na 不入 todo，
+    # transcribe 落轨后翻 pending，快照已冻结不回头，"宣布素材段就绪"与"next=proofread"自相矛盾。
+    # 改动态重估：每步后重算 status 取 STEPS 序最早未跑 pending；ran 守卫防同环节重跑死循环。
+    print("待推进: %s（快照；步后重估，na→pending 翻转环节自动补入）" % " → ".join(todo), flush=True)
+    ran = set()
+    while True:
+        st = status(project)
+        pend = [s["step"] for s in st["steps"]
+                if s["status"] == "pending" and s["step"] not in ran]
+        if only:
+            pend = [k for k in pend if k == only]
+        if not pend:
+            break
+        key = pend[0]
         if key in _ADVANCE_INTENT and not intent:
             print(f"══ 停在故事线门：全自动素材段已就绪，创作二选一 ══")
             print(f"   A. AI 起草: python3 autocut3/orchestrate.py {name} --advance --intent \"一句话说明这条视频讲什么\"")
             print(f"   B. 人/Agent 手写: 落盘 storylines/<名字>.json（Studio 创作台/POST api/storyline）后再 --advance")
             break
+        ran.add(key)
         print(f"══ 推进: {key} ══", flush=True)
         if key == "mount":
             print("   挂载只由人/Agent 显式决定（挂什么包是创作决策，不进全自动）——Studio 素材库或 pack-mount 完成")

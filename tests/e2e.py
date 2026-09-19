@@ -2513,6 +2513,96 @@ def t60_material_pipeline():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+def t61_advance_dynamic_reestimate():
+    # 回归锚（2026-09-19 todo 快照冻结修根，ExFlower agent 实锤）：na→pending 翻转环节
+    # （proofread 判据=词轨存在）在快照瞬间是 na 不入 todo，transcribe 落轨后翻 pending——
+    # 旧 for-快照 永不回头漏跑。全打桩零计费。锚三义：①proofread 被自动补跑 ②先于 dossier/
+    # disposition（设计序保真——disposition 消费校对后词轨）③单次执行守卫无重跑 + 门保持。
+    import tempfile
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import orchestrate as ORCH
+        import proofread, disposition
+        tmp = tempfile.mkdtemp(prefix="t61_")
+        old_root = ORCH.ROOT
+        old_status, old_run = ORCH.status, ORCH._run
+        old_pf, old_disp = proofread.run, disposition.build
+        EXEC = []   # 执行顺序（可含重复=违例）
+        try:
+            ORCH.ROOT = tmp
+            pd = os.path.join(tmp, "projects", "t61")
+            os.makedirs(os.path.join(pd, "materials"))
+            json.dump({"packs": []}, open(os.path.join(pd, "materials", "library.json"), "w"))
+
+            def fake_run(cmd, label):   # 子进程环节全打桩：process/understand/dossier/vadwords…
+                k = os.path.basename(cmd[1]).replace(".py", "")
+                EXEC.append("transcribe" if k == "process" else k)  # 流水线步=转写环节的执行体
+
+            def fake_status(project):
+                tr = "transcribe" in EXEC          # process.py 流水线步=转写+视觉一起落
+                vi = tr                            # 流水线一并完成
+                def s(step, done_cond, na_cond=None):
+                    if done_cond:
+                        return "done"
+                    if na_cond:
+                        return "na"
+                    return "pending"
+                steps = [
+                    ("mount", "done", True),
+                    ("transcribe", "transcribe" in EXEC, None),
+                    ("understand", vi, None),
+                    ("digest", True, True),        # 桩语义：无包可盘点 na
+                    ("proofread", "proofread" in EXEC, not tr),   # 无词轨 na→落轨后 pending（翻转源）
+                    ("dossier", "dossier" in EXEC, None),
+                    ("disposition", "disposition" in EXEC, None),
+                    ("storyline", False, None),    # 恒 pending：门必停
+                    ("vadwords", False, None), ("dubfit", False, None),
+                    ("dubgate", False, None), ("cover", False, None),
+                    ("render", False, None), ("qc", False, None),
+                    ("aigen", False, True),
+                ]
+                sts = []
+                for k, dc, nc in steps:
+                    if dc:
+                        v = "done"
+                    elif nc:
+                        v = "na"
+                    else:
+                        v = "pending"
+                    sts.append({"step": k, "name": k, "status": v, "detail": "桩"})
+                nxt = next((x["step"] for x in sts if x["status"] == "pending"), None)
+                return {"project": "t61", "steps": sts, "next": nxt}
+
+            def fake_pf(name):
+                EXEC.append("proofread")
+
+            def fake_disp(name):
+                EXEC.append("disposition")
+
+            ORCH._run, ORCH.status = fake_run, fake_status
+            proofread.run, disposition.build = fake_pf, fake_disp
+            ret = ORCH.advance("t61")   # 无 intent：故事线门必停
+
+            ok_flip = "proofread" in EXEC                                   # ①补跑（旧代码必缺）
+            ok_order = (EXEC.index("proofread") < EXEC.index("dossier") < EXEC.index("disposition"))  # ②设计序
+            ok_once = len(EXEC) == len(set(EXEC))                           # ③单次守卫
+            ok_gate = ret["next"] == "storyline" and "storyline" not in EXEC  # 门保持（无 draft 调用）
+            check("T61 advance 动态重估（proofread 翻转补跑/设计序/单次+门）",
+                  ok_flip and ok_order and ok_once and ok_gate,
+                  "flip=%s order=%s once=%s gate=%s exec=%s" % (
+                      ok_flip, ok_order, ok_once, ok_gate, EXEC))
+        finally:
+            ORCH.ROOT = old_root
+            ORCH.status, ORCH._run = old_status, old_run
+            proofread.run, disposition.build = old_pf, old_disp
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        check("T61 advance 动态重估（proofread 翻转补跑/设计序/单次+门）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2809,6 +2899,7 @@ def main():
     t58_proofread_degenerate_guard()
     t59_transition_reserve()
     t60_material_pipeline()
+    t61_advance_dynamic_reestimate()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

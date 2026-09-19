@@ -323,6 +323,10 @@ python3 autocut3/orchestrate.py <pid> --step vadwords --story <sid>   # 单步
 ```
 - `--advance` 语义：素材段自动；storyline 无 intent 停在门；vadwords→qc 自动；
   qc 通过后自动逐幕样张（beat preview）自检，任一幕失败=拦截。
+- **步后动态重估（2026-09-19 修根）**：advance 每步执行后重算状态表再取下一 pending——
+  na→pending 翻转环节（proofread 判据=词轨存在，转写落轨后才翻 pending）自动补入，
+  全新包一条 `--advance` 跑到故事线门时素材段**真的**全绿（含校对），无需 advance 后手补。
+  每环节单会话只跑一次（部分失败留 pending 的人工复核/`--step` 重跑，不会空转）。
 - mount 只提示不自动（挂包是创作决策）。
 - **项目锁**：advance 持 `projects/<pid>/.advance.lock` 非阻塞互斥——报"被占"=另一 Agent
   正在推进同项目（ASR/LLM 会烧两遍钱），等它完成再推（2026-09-18 并发加固）。
