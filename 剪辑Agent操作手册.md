@@ -65,7 +65,8 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 
 编排器 `autocut3/orchestrate.py <project>` 从文件推导状态，人机同一判据。**先跑
 `python3 autocut3/orchestrate.py <pid>` 看状态表，再决定干什么**；`--advance` 自动推进
-（素材段 mount→disposition 自动；storyline 需 `--intent`；vadwords→qc 自动）。
+（素材段 mount→disposition 自动；storyline 门二选一：`--intent` 触发 AI 起草，或手写
+`storylines/<名字>.json` 落盘即过门；vadwords→qc 自动）。
 
 | # | 环节 | done 判据（文件事实） | 通常谁跑 |
 |---|------|----------------------|---------|
@@ -76,7 +77,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 | 5 | proofread | 全部有词轨素材 `audit.proofread ∈ {done, auto-done}` + `review-queue.json` 无 `status=="pending"` 项 | `proofread.py` + 人复核队列 |
 | 6 | dossier | `projects/<pid>/dossier.json` 存在 | `dossier.py` |
 | 7 | disposition | `disposition.json` 存在且新于其消费的 pack.json | `disposition.py` |
-| 8 | storyline | `storylines/*.json` 非空 | `draft.py --intent`（LLM） |
+| 8 | storyline | `storylines/*.json` 非空 | `draft.py --intent`（LLM）或人/Agent 手写落盘 |
 | 9 | vadwords | 当前故事线每幕 `narration.words` 在场（mode=none 除外） | `vadwords.py` |
 | 10 | dubfit | 无 dub 幕=na；有则每幕 `narration.dubfit` 在场且 `dubfit-report.json passed==true` | `dubfit.py` |
 | 11 | dubgate | `dubgate-report.json passed==true`（D1 首词/D2 末词/D3 相似≥0.9） | `dubgate.py` |
@@ -125,7 +126,11 @@ python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/�
 python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
 # 配音版（整线 TTS）：python3 autocut3/draft.py <pid> --intent "..." --save --dub
 ```
-- `--intent` 必填（编排器 storyline 环节也要求）。不加 `--save` 只打印不落盘。
+- `--intent` 必填（AI 起草路线）。不加 `--save` 只打印不落盘。
+- **手写路线**：故事线门也接受人/Agent 手写——落盘 `storylines/<名字>.json`
+  （Studio 创作台 / `POST /api/storyline` / 直接写文件）即过门，编排器不问出处；
+  手写线同样吃 vadwords→dubfit→渲染全链。大纲/意图想结构化传给 LLM 的目前只有
+  `--intent` 一句话自由文本一条通道（outline 是 LLM 输出字段，不是输入）。
 - **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
   （本地 audio8 默认注册音色 `narrator_default`）。换音色=先注册参考音色再改配置：
   `python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"`——
@@ -298,7 +303,7 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 | 命令 | 参数 | 产出 | 何时用 |
 |---|---|---|---|
 | `pipeline.py make <pid> [sid]` | — | plan-<sid>.json + subtitle-<sid>.ass | 渲前预检（不耗渲染） |
-| `pipeline.py render <pid> [sid]` | — | out-<sid>.mp4（+自动 QC） | 阶段 5 前置全满足后 |
+| `pipeline.py render <pid> [sid]` | — | out-<sid>.mp4（+自动 QC） | 阶段 5 前置全满足后。**跨进程互斥**：报"已有渲染进行中"=另一进程（CLI/Agent/另一 Studio 实例）在渲同项目——等它完成或 `ps` 对账，别强行重试（2026-09-18 并发加固） |
 | `pipeline.py beat <pid> <幕号> [sid]` | — | previews/beat_<sid>_<幕号>.mp4 | 阶段 4 逐幕审核 |
 | `qc.py <pid>` | `--story --no-deep` | qc-report.json | 渲后必跑（渲染已自动跑，人复核读报告） |
 
@@ -306,18 +311,20 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 ```bash
 python3 autocut3/orchestrate.py <pid>                 # 状态表（13 环节 done/pending/failed/na）
 python3 autocut3/orchestrate.py <pid> --json          # JSON 版（程序消费）
-python3 autocut3/orchestrate.py <pid> --advance       # 自动推进（storyline 需 --intent）
+python3 autocut3/orchestrate.py <pid> --advance       # 自动推进（storyline 门：--intent AI 起草 / 手写落盘过门）
 python3 autocut3/orchestrate.py <pid> --advance --intent "..." --story <sid>
 python3 autocut3/orchestrate.py <pid> --step vadwords --story <sid>   # 单步
 ```
 - `--advance` 语义：素材段自动；storyline 无 intent 停在门；vadwords→qc 自动；
   qc 通过后自动逐幕样张（beat preview）自检，任一幕失败=拦截。
 - mount 只提示不自动（挂包是创作决策）。
+- **项目锁**：advance 持 `projects/<pid>/.advance.lock` 非阻塞互斥——报"被占"=另一 Agent
+  正在推进同项目（ASR/LLM 会烧两遍钱），等它完成再推（2026-09-18 并发加固）。
 
 ### 4.5 生成类（按需，非每单必用）
 | 命令 | 说明 |
 |---|---|
-| `tts.py synth --text "..." [--out --voice --speed]` | 单条 TTS；provider 见 config |
+| `tts.py synth --text "..." [--out --voice --speed]` | 单条 TTS；provider 见 config。本地 audio8 服务**空闲 60 分钟自动退出**（看门狗 tts_idlekill，下次调用自启） |
 | `tts.py voiceclone --audio <f> --voice-id <n>` | 音色克隆（local-audio8） |
 | `image_gen.py "<prompt>" <out> [--ar 9:16]` | AI 封面/贴图 |
 | `video_gen.py gen <pid> --prompt "..." [--image --duration --res]` + `poll <pid>` | AI 生成片段（预留口） |
@@ -384,7 +391,7 @@ Studio API（带校验+落盘一致），**禁止手编 JSON**：
 | `bgm.json` | `{file, name, desc, loop, segments:[{name,in,out,desc}]}` | BGM：整曲或段落（segments 供幕级选段） |
 | `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id） |
 | `transitions.json` | `{type: xfade\|flash, preset, duration, ...}` | 幕间转场（transition_out） |
-| `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容） |
+| `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容）。**v2 词根**（2026-09-18 现代·活泼批 12 款：胶囊/多巴胺四色/荧光夜光/荧光笔/白环贴纸/漫画爆点/玻璃拟态/极简墨条）：`font`=wenkai/smiley/kuaile、`radius` 圆角(≥半高=胶囊)、`shadow`+`shadow_c` 硬投影(可带@alpha)、`ring`+`ring_c` 白边环；带任一 v2 词根走紧裁画布（宽随文字自适应）。样式样张：`GET /api/sticker-preview/<id>`（走渲染同一实现，改样式换哈希自动重画） |
 | `enums.json` | 五个枚举数组（video_types/cover_strategies/narration_modes/platforms/positions） | 全局词汇表（前端/后端同源；不开放编辑） |
 
 Studio 路由（http://127.0.0.1:8765）：
@@ -447,6 +454,9 @@ Studio 路由（http://127.0.0.1:8765）：
     识别：beat 试渲听幕尾有没有不属于本幕台词的字。修法：**切点后移**——增大该幕
     A 轨 `src_in`（或缩 `duration`），让 +0.35 落在句间静音里；
     **不要手编 narration.words**（词轨是 vadwords 的重跑产物，手改时间必错位）。
+12. **并发互斥报错不是故障**：渲染报"已有渲染进行中"/advance 报"被占"= 另一进程正在
+    干同一件事（多 Agent/双 Studio 同机是常态）——等待或 `ps` 对账后接力，**不要删
+    render.status / .advance.lock 强行绕过**（半截产物互踩才是真事故）。
 
 ---
 
@@ -475,7 +485,7 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
 | `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。改 beats 后记得重跑 vadwords |
 | `POST /api/storyline-delete/<proj>?story=<sid>` | 无 body | 删线 |
-| `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409 |
+| `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409；**另一进程在渲同项目也 409**（render.status 磁盘双检，2026-09-18） |
 | `POST /api/render/<proj>?story=&...` | 无 body | 同步渲染（600s 超时），长片用 render-start |
 | `GET  /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
 | `POST /api/pack/<pid>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
@@ -484,6 +494,8 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
 | `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers |
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
+| `POST /api/pack-upload/<pid>?filename=<名>` | 原始字节（文件字节） | **导入素材**（文件名中文/`#`/空格均允许）。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |
+| `GET  /api/sticker-preview/<id>` | 无 body | 贴纸样式真渲染样张（走渲染同一实现，PNG URL） |
 
 **pack.json 字段口径**：`files[].size_mb` 是十进制显示值（字节数 ÷ 1e6，只用于人看）——
 **逐字节比对/完整性校验不要用 size_mb**，用 `os.path.getsize(文件)` 对字节数。

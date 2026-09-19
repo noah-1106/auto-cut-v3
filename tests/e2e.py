@@ -55,7 +55,8 @@ def _tool(name):
 FF = _tool("ffprobe")     # 历史变量名=ffprobe（T12/T16 探时长用）
 FFMPEG = _tool("ffmpeg")
 BASE = os.environ.get("E2E_BASE", "http://localhost:8765")  # 独立 studio 回归：E2E_BASE=http://localhost:8799（2026-09-18 并行互踩实锤，studio 支持端口参数）
-PROJ = "e2e-fixture"  # E2E 夹具专属名（tests/fixtures.py 合成+跑完即删，与用户素材零命名空间交集）
+import fixtures  # PID 进程唯一（并行 e2e 各持各的包/项目——T17 假红根治，2026-09-18）
+PROJ = fixtures.PID
 PASS, FAIL = [], []
 
 
@@ -128,7 +129,7 @@ def t5_upload():
     api("/api/pack-create/", method="POST", body={"id": "e2e-upload", "name": "E2E 上传夹具"})  # 幂等：已存在 409 忽略
     # 上传源：夹具 ROT01（display_matrix=-90 合成件）——曾引用已删的真实素材 M0085，
     # ffmpeg 裁剪静默失败后用 /tmp 残留上传=假绿（2026-09-14 根治：源必须出自当次夹具）
-    src_rot = os.path.join(ROOT, "materials", "packs", "e2e-fixture", "ROT01.MP4")
+    src_rot = os.path.join(ROOT, "materials", "packs", PROJ, "ROT01.MP4")
     import tempfile
     fd, tmp = tempfile.mkstemp(suffix=".mp4"); os.close(fd)
     rc = subprocess.run([FFMPEG, "-y", "-loglevel", "error",
@@ -176,7 +177,7 @@ def t5_upload():
 
 # ---------------------------------------------------------------- T6 音效混音
 def t6_sfx():
-    aid = json.load(open(os.path.join(ROOT, "materials/packs/e2e-fixture/pack.json"), encoding="utf-8"))
+    aid = json.load(open(os.path.join(ROOT, "materials", "packs", PROJ, "pack.json"), encoding="utf-8"))
     m = [f for f in aid["files"] if f["id"] == "M0124"][0]
     sl = {"title": "E2E音效验证", "outline": "静音/语音底 + ding@1s", "origin": "test",
           "meta": {"format": "vertical"},
@@ -523,7 +524,7 @@ def t18_sar_purity():
     # 苏炜实锤：编码 1920x1080 + rotation=-90 的素材，登记/渲染若不转正，成片会被写上
     # SAR 81:256 / DAR 9:16 的补偿标记 → 播放器横向压扁画面（字幕贴纸画中画全变形）。
     # 回归：入库登记必须写显示尺寸；成片 SAR 必须干净 1:1。
-    pk = json.load(open(os.path.join(ROOT, "materials", "packs", "e2e-fixture", "pack.json"), encoding="utf-8"))
+    pk = json.load(open(os.path.join(ROOT, "materials", "packs", PROJ, "pack.json"), encoding="utf-8"))
     bad = [f["id"] for f in pk["files"]
            if f.get("_rotated") and f["width"] > f["height"]]          # 竖版内容被登记成横版 = 旧病
     norot = [f["id"] for f in pk["files"]
@@ -602,7 +603,7 @@ def t21_trim_pad_clamp():
         import draft as draftmod
         # 防"假绿"回归（Claude 审查 P1#1）：必须用生产链的 mats 构造（build_dossier）——
         # 曾因测试直塞全量 f 而生产链塞精简 dict，validate 生产从未生效
-        mats = draftmod.build_dossier(["e2e-fixture"])[1]
+        mats = draftmod.build_dossier([PROJ])[1]
         V = lambda sid, si, dur: draftmod.validate(
             {"beats": [{"tracks": [{"source_id": sid, "src_in": si, "duration": dur, "role": "A"}]}]},
             mats, ["crossDissolve"])[0]["tracks"][0]
@@ -658,7 +659,7 @@ def t23_dossier_selfaudit():
     try:
         sys.path.insert(0, os.path.join(ROOT, "autocut3"))
         import dossier
-        pk = json.load(open(os.path.join(ROOT, "materials/packs/e2e-fixture/pack.json"), encoding="utf-8"))
+        pk = json.load(open(os.path.join(ROOT, "materials", "packs", PROJ, "pack.json"), encoding="utf-8"))
         files = {f["id"]: f for f in pk["files"]}
         TERMS = ["檀溪公馆", "窗帘盒", "龙骨", "石膏板", "可耐福"]
         # 注入1：檀溪公馆 → 潭溪工馆（连续四词 中 三字同位）

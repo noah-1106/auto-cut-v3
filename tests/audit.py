@@ -58,11 +58,13 @@ if "realpath" in studio and "os.path.commonpath" in studio:
 else:
     add("P1", "A2 穿越防护", "/files/ realpath 防穿越丢失！")
 
-# A3. path 段解码：入口统一 unquote 即根治（2026-09-14 方案）；入口缺失才报 P1
-if "unquote(self.path" not in studio:
-    add("P1", "A3 入口解码", "do_GET/do_POST 入口未统一 unquote——path 段中文 id 将 400（同族问题复发风险）")
+# A3. path 段解码：正确次序=urlparse(self.path) 后仅解 path 段（2026-09-19 井号素材根修后的不变式）；
+# 旧写法 urlparse(unquote(self.path)) 会把 query 的 %23 提前还原成 # 再被锚点截断——正确 encode 的
+# 客户端也必炸 bad filename。两种偏离（缺解码 / 次序反）都算 P1 复发风险。
+if "unquote(u0.path" not in studio or "urlparse(unquote(self.path" in studio:
+    add("P1", "A3 入口解码", "入口解码次序偏离不变式——应为 urlparse(self.path) 后仅解 path 段（先解后 parse 会截断 query 的 %23/#，井号素材根修回归风险）")
 else:
-    print("  ✓ path 段入口统一解码在位")
+    print("  ✓ path 段入口解码次序正确（先 parse 后解 path 段）")
 
 # ═══════════ B. 并发写点 ═══════════
 sec("B. 并发写点")

@@ -10,7 +10,7 @@
 参考音色=零样本克隆：register_voice(name, 参考音频, 参考逐字稿)——参考音频 0.5-30s，
 逐字稿必须与 spoken 内容完全一致（模型契约，错字直接降相似度）。
 """
-import json, os, time, urllib.request
+import json, os, sys, time, urllib.request
 
 ARK = os.path.expanduser(os.environ.get("AUTOCUT_AUDIO8_HOME", "~/.local/share/autocut3/audio8"))
 _VENV_BIN = os.path.join(ARK, "venv", "Scripts" if os.name == "nt" else "bin")
@@ -20,6 +20,17 @@ MODEL_DIR = os.path.join(ARK, "model")
 VOICES_DIR = os.path.join(ARK, "voices")
 PORT = int(os.environ.get("ARKTTS_PORT", "8024"))
 BASE = "http://127.0.0.1:%d" % PORT
+LAST_USE = os.path.join(ARK, "last-use")  # 闲置看门狗的续命标记（synth/register 成功即刷新）
+IDLE_S = int(os.environ.get("ARKTTS_IDLE_S", "3600"))  # 空闲自动退出窗（Noah 2026-09-19：60 分钟）
+
+
+def _touch_use():
+    """刷新 last-use（看门狗读它的 mtime 判闲置）。"""
+    try:
+        with open(LAST_USE, "a"):
+            os.utime(LAST_USE)
+    except OSError:
+        pass
 
 
 def installed():
@@ -58,16 +69,25 @@ def ensure_server(timeout_s=180):
                PATH=_VENV_BIN + os.pathsep + os.environ.get("PATH", ""))
     log = open(os.path.join(ARK, "service.log"), "ab")
     # 启动方式对齐上游 run_server.sh：service.py 只定义 app，必须由 uvicorn 拉起
-    subprocess.Popen([VENV_PY, "-m", "uvicorn", "arktts_runtime.service:app",
-                      "--app-dir", RT_DIR, "--host", "127.0.0.1", "--port", str(PORT)],
-                     cwd=RT_DIR, env=env,
-                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    proc = subprocess.Popen([VENV_PY, "-m", "uvicorn", "arktts_runtime.service:app",
+                             "--app-dir", RT_DIR, "--host", "127.0.0.1", "--port", str(PORT)],
+                            cwd=RT_DIR, env=env,
+                            stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     t0 = time.time()
     while time.time() - t0 < timeout_s:
         if _health():
-            return
+            break
         time.sleep(1.0)
-    raise RuntimeError("Audio8 服务 %ds 未就绪——见 %s/service.log" % (timeout_s, ARK))
+    else:
+        raise RuntimeError("Audio8 服务 %ds 未就绪——见 %s/service.log" % (timeout_s, ARK))
+    _touch_use()
+    # 闲置看门狗（2026-09-19）：空闲 IDLE_S 自动回收服务（下次调用自启，零感知）；
+    # pid 只有自启路径知道——外部 run_server.sh 拉起的不在覆盖内
+    subprocess.Popen([sys.executable,
+                      os.path.join(os.path.dirname(os.path.abspath(__file__)), "tts_idlekill.py"),
+                      str(proc.pid), str(IDLE_S)],
+                     start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def voices():
@@ -97,6 +117,7 @@ def synth(text, out_wav, voice=None, max_new_tokens=1024, timeout_s=600):
         raise RuntimeError("Audio8 返回非 WAV（可能 4xx/5xx 页面）——前 80 字节: %r" % wav[:80])
     with open(out_wav, "wb") as fh:
         fh.write(wav)
+    _touch_use()  # 真实使用过模型 → 闲置计时归零（voices 查询不算）
     return out_wav
 
 
@@ -119,7 +140,9 @@ def register_voice(name, audio_path, transcript, overwrite=False, timeout_s=300)
         BASE + "/api/voices/register", data=b"".join(parts),
         headers={"Content-Type": "multipart/form-data; boundary=%s" % b})
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=timeout_s).read())
+        r = json.loads(urllib.request.urlopen(req, timeout=timeout_s).read())
+        _touch_use()  # 注册走模型处理参考音频 → 算使用
+        return r
     except urllib.error.HTTPError as e:
         raise RuntimeError("Audio8 注册音色失败 [%s]: %s" % (e.code, e.read()[:200]))
 

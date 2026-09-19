@@ -82,9 +82,22 @@ def media_duration(path):
 
 
 def extract_audio(src, wav, ff=None):
+    """素材 → 16k 单声道 wav。命中缓存即返回（素材不可变）；并发抽取走 tmp(pid)+
+    os.replace——半截 wav 永不上缓存路径（2026-09-18 并发审计）。"""
+    if os.path.exists(wav):
+        return wav
     ff = ff or ffmpeg_path()
     os.makedirs(os.path.dirname(wav), exist_ok=True)
-    subprocess.run([ff, "-y", "-loglevel", "error", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
+    tmp = "%s.tmp%d.wav" % (wav, os.getpid())  # 尾缀保 .wav：ffmpeg 按扩展名定封装（探针实锤 .tmpN 被拒）
+    try:
+        subprocess.run([ff, "-y", "-loglevel", "error", "-i", src, "-vn", "-ac", "1", "-ar", "16000", tmp], check=True)
+        os.replace(tmp, wav)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
     return wav
 
 

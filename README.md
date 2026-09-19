@@ -61,7 +61,7 @@ bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
 
 ### 0.5 本地 TTS（Audio8-TTS，可选组件）
 
-默认配音供应商是本地 [Audio8-TTS-Preview-0.6B](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4)（Apache 2.0 开源，ONNX INT4 CPU 推理，~1GB 内存）——零 pip 依赖的核心管线不受影响，运行时独立装在 `~/.local/share/autocut3/audio8/`（venv + 模型权重），适配层 `autocut3/tts_audio8.py` 只经 HTTP(127.0.0.1:8024) 通信、服务按需自启。
+默认配音供应商是本地 [Audio8-TTS-Preview-0.6B](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4)（Apache 2.0 开源，ONNX INT4 CPU 推理，~1GB 内存）——零 pip 依赖的核心管线不受影响，运行时独立装在 `~/.local/share/autocut3/audio8/`（venv + 模型权重），适配层 `autocut3/tts_audio8.py` 只经 HTTP(127.0.0.1:8024) 通信、服务按需自启。**闲置自动退出**（2026-09-19）：自启路径附带看门狗 `tts_idlekill.py`——synth/注册成功即续命 `last-use` 标记，**空闲 60 分钟**（`ARKTTS_IDLE_S` 可调）服务自动回收，下次调用零感知自启；手动 `run_server.sh` 拉起的不在看门狗覆盖内。
 
 ```bash
 # 一次性安装（模型 ~1GB，HF 被墙时脚本走 hf-mirror）：
@@ -125,7 +125,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 **管线编排器**：`autocut3/orchestrate.py` 从文件推导全部环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
 ```bash
 python3 autocut3/orchestrate.py myproj              # 看状态（✓/○/✗/· + 下一动作）
-python3 autocut3/orchestrate.py myproj --advance    # 推进到下一道门（素材段全自动；故事线门需 --intent；mount 是创作决定门）
+python3 autocut3/orchestrate.py myproj --advance    # 推进到下一道门（素材段全自动；故事线门二选一：--intent AI 起草 / 人·Agent 手写 storylines/*.json 落盘即过；mount 是创作决定门）
 ```
 Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，人随时看得见。
 
@@ -136,7 +136,7 @@ Studio 顶部管线进度条与 `/api/status/<proj>` 同源——Agent 推进，
 ## 注册表（效果系统）
 
 registry/*.json 是人和 Agent 共用的"选什么效果"的唯一事实源。管理入口：首页效果卡片 → 管理抽屉（试听/看图/字幕样张/增删改/导入）。
-Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。贴纸是**文字模板制**（2026-09-18，v1 规矩回归）：注册表只存视觉样式（黄底便签/红底警示/金底干货…），短语由 draft 从本幕口播蒸馏（≤6 字硬门），渲染时 drawtext 现画（缓存），文字跟内容走不跟图走。**改注册表即改下一次渲染，无需动代码。**
+Agent 起草时读同一张注册表选 BGM/转场/**字幕样式/贴纸/音效**（全部进 draft 提示词，LLM 按幕语义选用，validate 白名单透传）；字幕样式、贴纸、音效按 id 引用。贴纸是**文字模板制**（2026-09-18，v1 规矩回归）：注册表只存视觉样式（黄底便签/红底警示/金底干货…），短语由 draft 从本幕口播蒸馏（≤6 字硬门），渲染时 drawtext 现画（缓存），文字跟内容走不跟图走。**改注册表即改下一次渲染，无需动代码。** 2026-09-18 补**现代活泼批 12 款**（胶囊标签/多巴胺四色/荧光夜光/荧光笔/白环贴纸/漫画爆点/玻璃拟态/极简墨条），走 v2 渲染词根（`font`=wenkai/smiley/kuaile 三字体、`radius` 圆角至胶囊、`shadow`+`shadow_c` 硬投影、`ring`+`ring_c` 白边环）：紧裁画布、overlay 高度锁 sticker_h 宽随文字自适应；管理抽屉内每款出**真渲染样张**（`/api/sticker-preview/<id>` 走渲染同一实现，预览即产物）。
 BGM 条目支持 `segments`（曲内段落：name/in/out/desc）——幕级音乐轨和全局音频都可选用段落，配合 loop 标志做段落循环。
 音效=注册表策展制（2026-09-18 审听后仅存提示叮/成功短奏两枚，其余实测不可用已下架；源文件与许可存 `assets/sfx/viral/sources-manifest.json` + `LICENSE-mixkit.txt`，物色到更好的随时入册——故事线引用已删音效时渲染自动跳过不崩）。
 AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）；AI 视频素材走 video_gen.py。
@@ -226,6 +226,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 13. **封面前置闸门**：渲染前 build_cover+cover_check，不过 exit 1 不耗渲染（output-frame 唯一后置）；封面归一成片画幅；**含真人脸封面唯一保真路线=帧截图策略+title_text 本地合成**——AI 底图带真脸必被平台审核拦 1026（2026-09-18 隔离矩阵实证），AI 画中文=假字一律禁（T55 锚）
 14. **at_word 触发词门 + 词点两级匹配**：draft 校验 at_word 必须在本幕词轨文本（A 轨转写窗口+story）内否则剔贴纸；word_time 两级匹配（词项 substring→字符序列），不命中必打渲染日志 warn——静默回退 0.4s 零告警是事故（agent 实锤「低价」「评论区」永不命中，T56 锚）
 15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，90s 帽下素材预算≈86-87s（T59 锚）
+16. **并发纪律**（2026-09-18 加固，多 Agent/双 Studio 实例同机是常态）：渲染跨进程互斥——`render.status` running 且 <300s 新鲜即拒（pipeline 闸 + `/api/render-start` 磁盘双检，CLI/Agent/另一实例同权）；成片/幕预览/贴纸/音频缓存一律 tmp(pid)+`os.replace` 原子换名（**ffmpeg 按输出扩展名定封装，tmp 必须保留 `.wav`/`.mp4`/`.png` 尾缀**）；`orchestrate --advance` 项目锁 `.advance.lock` 非阻塞互斥；e2e 夹具名 `e2e-fixture-<pid>` 进程唯一（并行跑 e2e 互不踩，`fixtures.BASE` 跟 `E2E_BASE` 走）。pack.json 写者 flock 与故事线原子写是既有底盘（RMW 冒烟锚定）
 
 ---
 

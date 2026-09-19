@@ -7,12 +7,13 @@ import os, sys
 if sys.platform == "win32":
     import msvcrt
 
-    LOCK_EX, LOCK_UN = 1, 2
+    LOCK_EX, LOCK_UN, LOCK_NB = 1, 2, 4
 
     def flock(f, op):
         f.seek(0)
-        if op == LOCK_EX:
-            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)  # 阻塞型；msvcrt 约 10s 后抛错，与 flock 超时常态一致
+        if op & LOCK_EX:
+            # LOCK_NB=非阻塞（占用即抛）；阻塞型 LK_LOCK 约 10s 后抛错，与 flock 超时常态一致
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK if op & LOCK_NB else msvcrt.LK_LOCK, 1)
         elif op == LOCK_UN:
             msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
         else:
@@ -20,7 +21,7 @@ if sys.platform == "win32":
 else:
     import fcntl as _f
 
-    LOCK_EX, LOCK_UN = _f.LOCK_EX, _f.LOCK_UN
+    LOCK_EX, LOCK_UN, LOCK_NB = _f.LOCK_EX, _f.LOCK_UN, _f.LOCK_NB
     flock = _f.flock
 
 

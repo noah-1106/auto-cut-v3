@@ -657,6 +657,21 @@ def pos_xy(pos, w, h, sw, sh, margin=30, sub_clear=360):
              "bottom-left": (margin, h - sh - sub_clear), "bottom-right": (w - sw - margin, h - sh - sub_clear)}
     return table.get(pos, (margin, margin))
 
+def pos_expr(pos, margin=30, sub_clear=360):
+    """overlay 表达式版 pos_xy（v2 贴纸宽随文字自适应，须按实际 overlay_w/h 定位），
+    margin/sub_clear 语义与 pos_xy 完全一致。"""
+    table = {"top-left": ("%d" % margin, "%d" % margin),
+             "top-center": ("(main_w-overlay_w)/2", "%d" % margin),
+             "top-right": ("main_w-overlay_w-%d" % margin, "%d" % margin),
+             "center": ("(main_w-overlay_w)/2", "(main_h-overlay_h)/2"),
+             "bottom-left": ("%d" % margin, "main_h-overlay_h-%d" % sub_clear),
+             "bottom-right": ("main_w-overlay_w-%d" % margin, "main_h-overlay_h-%d" % sub_clear)}
+    return table.get(pos, ("%d" % margin, "%d" % margin))
+
+def _sticker_v2_style(conf):
+    """注册表样式是否 v2 词根（overlay 几何分流用，与 sticker_file 分派同判据）。"""
+    return any(k in (conf.get("text_style") or {}) for k in _STICKER_V2_KEYS)
+
 def word_time(words, at_word, seg):
     """贴纸词点触发：在该幕时间窗内找含关键词的词的起始时刻。
     匹配两级（2026-09-18 agent 实锤：vadwords 词轨单字粒度，多字 at_word「低价」substring
@@ -683,6 +698,96 @@ def _ff_escape_path(p):
     return "'" + p.replace("\\", "/").replace(":", "\\:") + "'"
 
 
+_STICKER_FONTS = {  # 贴纸可选字体（assets/fonts/ 下文件名）
+    "wenkai": "LXGWWenKai-Regular.ttf",   # 文楷·楷体手写（默认，存量样式零改动）
+    "smiley": "SmileySans-Oblique.ttf",    # 得意黑·现代斜体标题
+    "kuaile": "ZCOOLKuaiLe-Regular.ttf",  # 站酷快乐体·圆润活泼
+}
+_STICKER_V2_KEYS = ("font", "radius", "shadow", "ring")  # v2 样式词根：任一在场走紧裁路径
+
+
+def _sticker_bbox(png):
+    """alpha 包围盒（alphaextract→cropdetect 两段式），返回 (w,h,x,y) 或 None。"""
+    r = subprocess.run([FF, "-loglevel", "info", "-i", png, "-vf",
+                        "format=rgba,alphaextract,cropdetect=limit=16:round=2:skip=0",
+                        "-f", "null", "-"], capture_output=True, text=True)
+    m = re.findall(r"crop=(\d+):(\d+):(-?\d+):(-?\d+)", r.stderr or "")
+    return tuple(map(int, m[-1])) if m else None
+
+
+def _sticker_v2(out, tf, st, fs):
+    """v2 贴纸现画（2026-09-18 现代 · 活泼样式批）：紧裁画布 + 圆角掩膜 +
+    分层绘制（硬投影→外框环/白环→主体）。字体可选，尺寸随文字自适应。
+    词根：font/radius/shadow(+shadow_c)/ring(+ring_c)/border_w=盒外描边宽。"""
+    font = os.path.join(ROOT, "assets", "fonts",
+                        _STICKER_FONTS.get(st.get("font"), _STICKER_FONTS["wenkai"]))
+    pad = int(st.get("box_pad", 30)); bw = int(st.get("stroke_w", 0))
+    ring = int(st.get("ring", 0)); sh = int(st.get("shadow", 0))
+    box = st.get("bg"); fg = st.get("fg", "0xFFFFFF")
+    txt = open(tf, encoding="utf-8").read()
+    cw = fs * (len(txt) + 2) + 2 * (pad + bw + ring + sh) + 160
+    ch = int(fs * 2.6) + 2 * (pad + bw + ring + sh)
+
+    def _dt(color, borderw=0, bordercolor="0x000000", boxcolor=None, boxpad=0, dx=0, dy=0):
+        p = ("drawtext=fontfile=%s:textfile=%s:fontcolor=%s:fontsize=%d"
+             ":x=(w-text_w)/2+%d:y=(h-text_h)/2+%d"
+             % (_ff_escape_path(font), _ff_escape_path(tf), color, fs, dx, dy))
+        if borderw:
+            p += ":borderw=%d:bordercolor=%s" % (borderw, bordercolor)
+        if boxcolor:
+            p += ":box=1:boxcolor=%s:boxborderw=%d" % (boxcolor, boxpad)
+        return p
+
+    passes = []
+    if box:  # 盒式：投影(盒) → 外框环(大一号盒垫底) → 主体盒
+        if sh:
+            passes.append(_dt("0x000000@0", boxcolor=st.get("shadow_c", "0x111111"),
+                              boxpad=pad + bw, dx=sh, dy=sh))
+        if bw:
+            passes.append(_dt("0x000000@0", boxcolor=st.get("stroke", "0x111111"), boxpad=pad + bw))
+        passes.append(_dt(fg, boxcolor=box, boxpad=pad))
+    else:    # 裸字式：投影(带描边剪影) → 白环/粗描边 → 主体
+        if sh:
+            passes.append(_dt(fg, borderw=max(bw, ring), bordercolor=st.get("shadow_c", "0x111111"),
+                              dx=sh, dy=sh))
+        if ring:
+            passes.append(_dt(fg, borderw=ring, bordercolor=st.get("ring_c", "0xFFFFFF")))
+        passes.append(_dt(fg, borderw=bw, bordercolor=st.get("stroke", "0x111111")))
+
+    raw = "%s.raw%d.png" % (out, os.getpid())  # 并发同 key：中间帧带 pid 防互踩
+    r = subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi",
+                        "-i", "color=c=black@0.0:s=%dx%d,format=rgba" % (cw, ch),
+                        "-vf", ",".join(passes), "-frames:v", "1", raw],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(raw):
+        raise RuntimeError("贴纸现画失败 %r: %s" % (txt, (r.stderr or "")[-160:]))
+    bb = _sticker_bbox(raw)
+    if not bb or bb[0] < 4:
+        raise RuntimeError("贴纸包围盒探测失败 %r" % txt)
+    bw2, bh2, bx, by = bb
+    chain = ["crop=%d:%d:%d:%d" % (bw2, bh2, bx, by)]
+    R = int(st.get("radius") or 0)
+    if R:
+        R = min(R, bh2 // 2)  # ≥半高即胶囊
+        corner = ("hypot(max(max(%d-X,X-%d),0),max(max(%d-Y,Y-%d),0))"
+                  % (R, bw2 - 1 - R, R, bh2 - 1 - R))
+        chain.append("format=rgba")
+        chain.append("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)'"
+                     ":a='if(lt(%s,%d),alpha(X,Y),0)'" % (corner, R + 1))
+    tmp = "%s.tmp%d.png" % (out, os.getpid())
+    r = subprocess.run([FF, "-y", "-loglevel", "error", "-i", raw, "-vf",
+                        ",".join(chain), "-frames:v", "1", tmp],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(tmp):
+        raise RuntimeError("贴纸圆角失败 %r: %s" % (txt, (r.stderr or "")[-160:]))
+    os.replace(tmp, out)
+    try:
+        os.remove(raw)
+    except OSError:
+        pass
+    return out
+
+
 def sticker_file(conf, stk):
     """贴纸文件解析（2026-09-18 文字模板制，v1 规矩回归：贴纸文字跟内容走，≤6 字短语）。
     - conf 带 text_style → drawtext 现画 PNG（缓存 materials/.sticker_cache/，文字+样式哈希键，
@@ -704,7 +809,11 @@ def sticker_file(conf, stk):
     if os.path.exists(out):
         return out
     tf = os.path.join(cache, key + ".txt")   # textfile 传参：绕开 drawtext 转义地狱
-    open(tf, "w", encoding="utf-8").write(txt)
+    ttmp = "%s.tmp%d" % (tf, os.getpid())    # 并发同 key 双写者：txt/PNG 全 tmp(pid)+原子换名，读者不见半截
+    open(ttmp, "w", encoding="utf-8").write(txt)
+    os.replace(ttmp, tf)
+    if any(k in st for k in _STICKER_V2_KEYS):   # v2 现代样式批：紧裁+圆角+分层
+        return _sticker_v2(out, tf, st, int(st.get("font_size", 96)))
     font = os.path.join(ROOT, "assets", "fonts", "LXGWWenKai-Regular.ttf")
     vf = ("drawtext=fontfile=%s:textfile=%s:fontcolor=%s:fontsize=%d:"
           "borderw=%d:bordercolor=%s:box=1:boxcolor=%s@1.0:boxborderw=%d:"
@@ -713,11 +822,13 @@ def sticker_file(conf, stk):
              st.get("fg", "0xFFFFFF"), int(st.get("font_size", 96)),
              int(st.get("stroke_w", 5)), st.get("stroke", "0x000000"),
              st.get("bg", "0xFFD400"), int(st.get("box_pad", 24))))
+    tmp_png = "%s.tmp%d.png" % (out, os.getpid())
     r = subprocess.run([FF, "-y", "-loglevel", "error",
                         "-f", "lavfi", "-i", "color=c=black@0.0:s=1200x300,format=rgba",
-                        "-frames:v", "1", "-vf", vf, out], capture_output=True, text=True)
-    if r.returncode != 0 or not os.path.exists(out):
+                        "-frames:v", "1", "-vf", vf, tmp_png], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(tmp_png):
         raise RuntimeError("贴纸现画失败 %r: %s" % (txt, (r.stderr or "")[-160:]))
+    os.replace(tmp_png, out)
     return out
 
 def build_cmd(plan, ass_path, out_path):
@@ -760,11 +871,18 @@ def build_cmd(plan, ass_path, out_path):
             # 否则第 2 幕起的贴纸 enable 时刻超出本幕长度，永远不出现
             t0 = round(_wt - float(seg["tl_in"]), 2) if _wt is not None else 0.4
             sd = float(stk.get("duration") or conf.get("duration") or 1.2)
-            x, y = pos_xy(stk.get("pos") or conf.get("pos", "top-center"), w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
-            # 贴纸统一缩放进 500x140 贴纸框（文字模板画布 1200x300 也归一到同框，
-            # 与静态 PNG 时代的几何语义一致——否则按原尺寸叠，文字块会溢出屏幕）
-            fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
-            fc.append(f"[{cur}][st{bi}{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
+            pos_k = stk.get("pos") or conf.get("pos", "top-center")
+            if _sticker_v2_style(conf):
+                # v2 贴纸：紧裁画布宽随文字——高度锁框、overlay 表达式按实际宽高定位
+                xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360))
+                fc.append(f"[{sidx}:v]scale=-1:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
+                fc.append(f"[{cur}][st{bi}{k}]overlay={xe}:{ye}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
+            else:
+                x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
+                # 贴纸统一缩放进 500x140 贴纸框（文字模板画布 1200x300 也归一到同框，
+                # 与静态 PNG 时代的几何语义一致——否则按原尺寸叠，文字块会溢出屏幕）
+                fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
+                fc.append(f"[{cur}][st{bi}{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
             cur = f"bs{bi}{k}"
         beat_v.append((cur, a_idx, seg))
         for sfx in (seg.get("effects") or {}).get("sfx") or []:  # 音效：时刻混入
@@ -1119,9 +1237,15 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         t0 = word_time(plan["words"], stk.get("at_word"), seg)
         t0 = round(t0 - float(seg["tl_in"]), 2) if t0 is not None else 0.4
         sd = float(stk.get("duration") or conf.get("duration") or 1.2)
-        x, y = pos_xy(stk.get("pos") or conf.get("pos", "top-center"), w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
-        fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
-        fc.append(f"[{cur}][st{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
+        pos_k = stk.get("pos") or conf.get("pos", "top-center")
+        if _sticker_v2_style(conf):
+            xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360))
+            fc.append(f"[{sidx}:v]scale=-1:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
+            fc.append(f"[{cur}][st{k}]overlay={xe}:{ye}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
+        else:
+            x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
+            fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
+            fc.append(f"[{cur}][st{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
     fc.append(f"[{cur}]{_ass_spec(ass_path)}[vout]")
     fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
@@ -1154,7 +1278,8 @@ def render_beat(plan, project_dir, beat_no, sid=None):
     tag = f"{sfx.lstrip('-')}_" if sfx else ""
     ass, _np = build_ass(mini, pv, f"beat_{tag}{beat_no}.ass")  # 解包元组(路径,页数)
     out = f"{pv}/beat_{tag}{beat_no}.mp4"
-    cmd = build_beat_cmd(plan, seg, ass, out)
+    out_tmp = "%s.tmp%d.mp4" % (out, os.getpid())  # 双 studio 同幕预览互踩归零（2026-09-18 并发审计）
+    cmd = build_beat_cmd(plan, seg, ass, out_tmp)
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     if r.returncode != 0 and cmd[cmd.index("-c:v") + 1] != "libx264":
         # 硬编码失败回退软编（跨平台降级铁律，不限定 videotoolbox——win 的 nvenc/qsv 同理）
@@ -1163,7 +1288,12 @@ def render_beat(plan, project_dir, beat_no, sid=None):
         bi = cmd.index("-b:v"); cmd[bi] = "-crf"; cmd[bi + 1] = "20"
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     if r.returncode != 0:
+        try:
+            os.remove(out_tmp)
+        except OSError:
+            pass
         print("BEAT FAIL:", r.stderr[-600:]); sys.exit(1)
+    os.replace(out_tmp, out)
     print(f"BEAT OK: {out} ({os.path.getsize(out)//1024}KB)")
 
 def _overlap_d(plan, prev_seg):
@@ -1187,6 +1317,16 @@ def render(plan, project_dir, sid=None):
     import threading, json as _json
 
     status_path = os.path.join(project_dir, "render.status")
+    # 跨进程渲染互斥（2026-09-18 并发审计）：running 且 <300s 新鲜（与 Studio 显示窗同口径）即拒——
+    # CLI/Agent/双 studio 实例同权，out/ass/status 互踩归零；崩溃残留 running 由 300s 窗口自愈。
+    try:
+        import time
+        if json.load(open(status_path, encoding="utf-8")).get("running") \
+                and time.time() - os.path.getmtime(status_path) < 300:
+            print("RENDER FAIL: 已有渲染进行中（render.status running 且 <300s 新鲜）——跨进程互斥", flush=True)
+            sys.exit(1)
+    except (OSError, ValueError):
+        pass
     def _status(**kv):
         try:
             st = {"running": True, "stage": "plan", "pct": 0, "ok": None, "tail": [], "source": "cli"}
@@ -1215,7 +1355,8 @@ def render(plan, project_dir, sid=None):
             sys.exit(1)
     ass, npages = build_ass(plan, project_dir, f"subtitle{sfx}.ass")
     out = os.path.join(project_dir, f"out{sfx}.mp4")
-    cmd = build_cmd(plan, ass, out) + ["-progress", "pipe:1", "-nostats"]
+    out_tmp = "%s.tmp%d.mp4" % (out, os.getpid())  # 原子换名：读者见到的 out 永远是完整成片
+    cmd = build_cmd(plan, ass, out_tmp) + ["-progress", "pipe:1", "-nostats"]
     print("STAGE ffmpeg", flush=True)
     _status(stage="ffmpeg", pct=0)
     r = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", cwd=ROOT)  # cwd=ROOT：滤镜串内嵌相对路径（_ass_spec）的解析锚点
@@ -1247,9 +1388,14 @@ def render(plan, project_dir, sid=None):
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)  # 软编回退同锚点
         errbuf = list(r.stderr or "")
     if r.returncode != 0:
+        try:
+            os.remove(out_tmp)
+        except OSError:
+            pass
         _status(running=False, ok=False, tail=["".join(errbuf)[-400:]])
         print("RENDER FAIL:", "".join(errbuf)[-800:], flush=True)
         sys.exit(1)
+    os.replace(out_tmp, out)
     if _cov_strategy == "output-frame":
         cover = build_cover(plan, project_dir, sfx)  # 成片抽帧特例：渲染后才存在 out{sfx}.mp4
     # QC 审片层（delivery gate）：渲染后自动体检，结论并入渲染尾行与 status.tail——QC 自身异常不阻塞渲染结果

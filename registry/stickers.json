@@ -1,53 +1,213 @@
 {
- "zhuyi": {
-  "type": "text", "name": "注意·黄底便签", "desc": "强调短语贴纸（黄底黑字，词点触发）",
-  "default_text": "注意", "pos": "top-center", "duration": 1.3,
-  "text_style": {"bg": "0xFFD400", "fg": "0x1A1A1A", "stroke": "0x1A1A1A", "stroke_w": 5, "font_size": 96, "box_pad": 24}
+ "pill-pop": {
+  "type": "text",
+  "name": "胶囊标签·白底黑边硬投影",
+  "desc": "关键词强调/悬念钩子（新粗野主义胶囊：白底粗黑边右下硬投影，站酷快乐体——现代醒目首选）",
+  "default_text": "别点进来",
+  "pos": "top-center",
+  "duration": 1.3,
+  "text_style": {
+   "font": "kuaile",
+   "bg": "0xFFFFFF",
+   "fg": "0x111111",
+   "stroke": "0x111111",
+   "stroke_w": 8,
+   "font_size": 110,
+   "box_pad": 38,
+   "shadow": 12,
+   "shadow_c": "0x111111",
+   "radius": 200
+  }
  },
- "warn-frame": {
-  "type": "text", "name": "警示·红底白字", "desc": "警示/提醒类短语（红底白字黑描边）",
-  "default_text": "注意看", "pos": "top-center", "duration": 1.2,
-  "text_style": {"bg": "0xE23A2E", "fg": "0xFFFFFF", "stroke": "0x000000", "stroke_w": 5, "font_size": 96, "box_pad": 24}
+ "candy-lime": {
+  "type": "text",
+  "name": "多巴胺·柠檬绿胶囊",
+  "desc": "轻松惊讶/反差确认（柠檬绿底深墨字，圆润糖果感）",
+  "default_text": "真的假的",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "kuaile",
+   "bg": "0xB9F73E",
+   "fg": "0x17301A",
+   "font_size": 112,
+   "box_pad": 40,
+   "radius": 200
+  }
  },
- "ganhuo": {
-  "type": "text", "name": "干货·金底黑字", "desc": "干货/价值点强调（金底黑字）",
-  "default_text": "干货", "pos": "top-center", "duration": 1.2,
-  "text_style": {"bg": "0xF5C518", "fg": "0x111111", "stroke": "0x111111", "stroke_w": 5, "font_size": 96, "box_pad": 24}
+ "candy-pink": {
+  "type": "text",
+  "name": "多巴胺·蜜桃粉胶囊",
+  "desc": "少女感惊喜/心动瞬间（蜜桃粉底深梅紫字）",
+  "default_text": "好家伙",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "kuaile",
+   "bg": "0xFFB3D9",
+   "fg": "0x501F4B",
+   "font_size": 112,
+   "box_pad": 40,
+   "radius": 200
+  }
  },
- "huadian": {
-  "type": "text", "name": "划重点·蓝底白字", "desc": "知识点/要点强调（蓝底白字）",
-  "default_text": "划重点", "pos": "top-center", "duration": 1.2,
-  "text_style": {"bg": "0x2F6BFF", "fg": "0xFFFFFF", "stroke": "0x000000", "stroke_w": 5, "font_size": 96, "box_pad": 24}
+ "candy-sky": {
+  "type": "text",
+  "name": "多巴胺·天空蓝胶囊",
+  "desc": "科普/知识点提醒（天空蓝底深海蓝字，得意黑斜体速度感）",
+  "default_text": "注意看",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "bg": "0x9FE2FF",
+   "fg": "0x0B3B5C",
+   "font_size": 104,
+   "box_pad": 38,
+   "radius": 200
+  }
  },
- "gaoneng": {
-  "type": "text", "name": "高能预警·黑底黄字", "desc": "高能/反转预告（黑底黄字）",
-  "default_text": "前方高能", "pos": "top-center", "duration": 1.4,
-  "text_style": {"bg": "0x111111", "fg": "0xFFD400", "stroke": "0xFFD400", "stroke_w": 4, "font_size": 96, "box_pad": 24}
+ "candy-lilac": {
+  "type": "text",
+  "name": "多巴胺·丁香紫胶囊",
+  "desc": "涨知识/温柔强调（丁香紫底深紫字，柔和高级的活泼）",
+  "default_text": "涨知识了",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "kuaile",
+   "bg": "0xCDB4F6",
+   "fg": "0x2D1B69",
+   "font_size": 108,
+   "box_pad": 38,
+   "radius": 200
+  }
  },
- "tuijian": {
-  "type": "text", "name": "推荐·红底白字", "desc": "推荐/安利角标（红底白字）",
-  "default_text": "推荐", "pos": "top-right", "duration": 1.2,
-  "text_style": {"bg": "0xE23A2E", "fg": "0xFFFFFF", "stroke": "0x000000", "stroke_w": 5, "font_size": 88, "box_pad": 22}
+ "neon-night": {
+  "type": "text",
+  "name": "荧光夜光·黑底绿字",
+  "desc": "重磅揭晓/反转前夜（黑底荧光绿描边+霓虹投影，得意黑）",
+  "default_text": "重点来了",
+  "pos": "top-center",
+  "duration": 1.4,
+  "text_style": {
+   "font": "smiley",
+   "bg": "0x111318",
+   "fg": "0x39FF14",
+   "stroke": "0x39FF14",
+   "stroke_w": 6,
+   "font_size": 106,
+   "box_pad": 36,
+   "shadow": 10,
+   "shadow_c": "0x39FF14@0.45",
+   "radius": 200
+  }
  },
- "guanzhu": {
-  "type": "text", "name": "关注引导·红底白字", "desc": "结尾关注引导（红底白字）",
-  "default_text": "点个关注", "pos": "top-right", "duration": 1.5,
-  "text_style": {"bg": "0xE23A2E", "fg": "0xFFFFFF", "stroke": "0x000000", "stroke_w": 5, "font_size": 88, "box_pad": 22}
+ "marker": {
+  "type": "text",
+  "name": "荧光笔·划重点",
+  "desc": "价格/数字要点强调（半透明荧光黄条像真笔划过，得意黑）",
+  "default_text": "就这价格",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "bg": "0xFFE83D@0.62",
+   "fg": "0x141414",
+   "font_size": 112,
+   "box_pad": 30,
+   "radius": 12
+  }
  },
- "shoucang": {
-  "type": "text", "name": "收藏引导·橙底白字", "desc": "结尾收藏引导（橙底白字）",
-  "default_text": "先收藏", "pos": "top-right", "duration": 1.5,
-  "text_style": {"bg": "0xFF7A00", "fg": "0xFFFFFF", "stroke": "0x000000", "stroke_w": 5, "font_size": 88, "box_pad": 22}
+ "diecut-red": {
+  "type": "text",
+  "name": "白边贴纸·糖果红",
+  "desc": "紧迫感/限时提醒（实体贴纸感：糖果红字厚白环软投影，得意黑）",
+  "default_text": "限时",
+  "pos": "top-right",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "fg": "0xFF4D6D",
+   "ring": 26,
+   "ring_c": "0xFFFFFF",
+   "shadow": 8,
+   "shadow_c": "0x000000@0.35",
+   "font_size": 122
+  }
  },
- "dianzan": {
-  "type": "text", "name": "点赞引导·白底黑字", "desc": "结尾点赞引导（白底黑字）",
-  "default_text": "点赞", "pos": "top-right", "duration": 1.5,
-  "text_style": {"bg": "0xFFFFFF", "fg": "0x111111", "stroke": "0x111111", "stroke_w": 4, "font_size": 88, "box_pad": 22}
+ "diecut-ink": {
+  "type": "text",
+  "name": "白边贴纸·墨黑",
+  "desc": "冷静吐槽/否定强调（墨黑字厚白环软影，实体贴纸感）",
+  "default_text": "别买错",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "fg": "0x1A1A1A",
+   "ring": 24,
+   "ring_c": "0xFFFFFF",
+   "shadow": 8,
+   "shadow_c": "0x000000@0.30",
+   "font_size": 116
+  }
+ },
+ "comic-pop": {
+  "type": "text",
+  "name": "漫画爆点·黄字黑描边",
+  "desc": "情绪爆点/夸张反应（黄字厚黑描边+硬投影，漫画分镜跳字感，得意黑）",
+  "default_text": "好家伙",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "fg": "0xFFD400",
+   "stroke_w": 12,
+   "stroke": "0x111111",
+   "shadow": 10,
+   "shadow_c": "0x111111",
+   "font_size": 116
+  }
+ },
+ "glass-chip": {
+  "type": "text",
+  "name": "玻璃拟态·磨砂白片",
+  "desc": "轻量提示/行动引导（半透磨砂白片白字细白边，现代 UI 感，画面亮处慎用）",
+  "default_text": "先收藏",
+  "pos": "top-right",
+  "duration": 1.3,
+  "text_style": {
+   "font": "smiley",
+   "bg": "0x0E1014@0.34",
+   "fg": "0xFFFFFF",
+   "stroke": "0xFFFFFF@0.9",
+   "stroke_w": 4,
+   "font_size": 106,
+   "box_pad": 40,
+   "radius": 200
+  }
+ },
+ "ink-min": {
+  "type": "text",
+  "name": "极简·墨黑圆角条",
+  "desc": "步骤/序号提示（黑条白字零描边小圆角，克制干净）",
+  "default_text": "第一步",
+  "pos": "top-center",
+  "duration": 1.2,
+  "text_style": {
+   "font": "smiley",
+   "bg": "0x101012@0.92",
+   "fg": "0xFFFFFF",
+   "font_size": 96,
+   "box_pad": 30,
+   "radius": 10
+  }
  },
  "_meta": {
   "schema": "2026-09-18 文字模板制（v1 规矩回归）：贴纸=样式模板+≤6字短语，文字跟视频内容走",
   "text_rule": "storyline effects.stickers[].text 必填（draft 从本幕口播蒸馏，≤6 字）；缺省回退 default_text；>6 字 validate 硬剔除",
-  "style_fields": "text_style: bg/fg/stroke/stroke_w/font_size/box_pad（drawtext 渲染，缓存 materials/.sticker_cache/）",
+  "style_fields": "text_style: bg/fg/stroke/stroke_w/font_size/box_pad（drawtext 渲染，缓存 materials/.sticker_cache/）；v2 词根（2026-09-18 现代·活泼批）：font=wenkai|smiley|kuaile、radius=圆角px(≥半高即胶囊)、shadow+shadow_c=硬投影偏移与色(可带@alpha)、ring+ring_c=白环宽与色；v2 走紧裁画布，overlay 高度锁 sticker_h 宽随文字自适应；v2 盒式 stroke_w=盒外描边宽(非文字描边)",
   "compat": "type=text 渲染时 drawtext 现画；无 text_style 的条目按老路径读 file（图标类静态 PNG 兼容）"
  }
 }

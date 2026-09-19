@@ -669,7 +669,8 @@ async function renderRegMgr(){
       if((REGCUR==='bgm'||REGCUR==='sfx')&&e.file)
         prev='<audio controls preload="none" src="/files/'+esc(e.file)+'" style="height:32px;max-width:230px"></audio>';
       else if(REGCUR==='stickers'&&e.text_style)
-        prev='<span style="display:inline-block;padding:8px 16px;border-radius:8px;font:600 14px var(--sans);'+cssbg(e.text_style)+'">'+esc(e.default_text||'样字')+'</span>';
+        prev='<span class="stkchip-'+esc(id)+'" style="display:inline-block;padding:8px 16px;border-radius:8px;font:600 14px var(--sans);'+cssbg(e.text_style)+'">'+esc(e.default_text||'样字')+'</span>'+
+             '<img data-stkpv="'+esc(id)+'" style="display:none;height:64px;border-radius:8px;border:1px solid var(--line);background:#141414;padding:4px" alt="贴纸样张">';
       else if(REGCUR==='stickers'&&e.file)
         prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=&quot;font:10px var(--mono);color:var(--faint)&quot;>图缺失</span>\'">';
       else if(REGCUR==='subtitles')
@@ -689,6 +690,16 @@ async function renderRegMgr(){
   document.querySelectorAll('#regmgr-body img[data-subpv]').forEach(async img=>{
     try{const r=await(await fetch('/api/sub-preview/'+encodeURIComponent(img.dataset.subpv))).json();if(r.ok)img.src=r.url;else img.remove();}
     catch(e){img.remove();}
+  });
+  // 贴纸样式样张：同模式走 /api/sticker-preview（渲染器现画真样张），成图换掉 CSS 猜样子
+  document.querySelectorAll('#regmgr-body img[data-stkpv]').forEach(async img=>{
+    try{
+      const r=await(await fetch('/api/sticker-preview/'+encodeURIComponent(img.dataset.stkpv))).json();
+      if(!r.ok){img.remove();return}
+      img.onload=()=>{img.style.display='block';const c=document.querySelector('.stkchip-'+CSS.escape(img.dataset.stkpv));if(c)c.style.display='none'};
+      img.onerror=()=>img.remove();
+      img.src=r.url;
+    }catch(e){img.remove();}
   });
 }
 async function regSet(id,k,v){

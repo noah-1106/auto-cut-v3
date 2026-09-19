@@ -11,7 +11,8 @@
 设计要点：
   · 状态全部从文件推导（零新数据库）——与人看到的必然是同一份事实
   · 素材处理段全自动（mount→转写→理解→digest→校对→档案→缺陷台账）；
-    创作段以"意图"为门（--intent），draft 之后 vadwords→dubfit→dubgate→渲染→QC 继续自动
+    创作段二选一：--intent 触发 AI 起草，或人/Agent 手写 storylines/*.json（落盘即过门）；
+    draft 之后 vadwords→dubfit→dubgate→渲染→QC 继续自动
   · 每步推进都走现有模块入口（subprocess），不复制逻辑；失败即停，错误原样透出
   · aigen（AI 生成素材，video_gen.py）为预留槽位：默认 n/a，见 STATUS 表
 
@@ -156,7 +157,9 @@ def _step_disposition(pdir):
 def _step_storyline(pdir):
     sid = _latest_story(pdir)
     return ("done" if sid else "pending",
-            f"当前故事线: {sid}" if sid else "需要创作故事线（--advance --intent \"…\" 触发 AI 起草）")
+            f"当前故事线: {sid}" if sid else
+            "两条路任选：AI 起草（--advance --intent \"…\"）或 人/Agent 手写 storylines/<名字>.json"
+            "（Studio 创作台/POST api/storyline 落盘即过门）")
 
 
 def _active_story(pdir):
@@ -322,7 +325,26 @@ def _run(cmd, label):
 
 
 def advance(project, intent=None, story=None, only=None):
-    """推进到下一道门。返回最终 status。任何一步失败即停并抛出。"""
+    """推进到下一道门。返回最终 status。任何一步失败即停并抛出。
+    项目级互斥（2026-09-18 并发审计）：双 Agent 同项目并发 advance=ASR/LLM 烧钱两遍，
+    .advance.lock 非阻塞抢占，被占即明确退出（e2e T42 同进程调用——finally 必解锁）。"""
+    pdir = project if os.path.isdir(project) else os.path.join(ROOT, "projects", project)
+    if not os.path.isdir(pdir):
+        raise SystemExit(f"无项目目录: {pdir}")
+    import flock as _fl
+    _lf = open(os.path.join(pdir, ".advance.lock"), "w")
+    try:
+        _fl.flock(_lf, _fl.LOCK_EX | _fl.LOCK_NB)
+    except OSError:
+        _lf.close()
+        raise SystemExit("✗ 该项目已有 advance 在跑（.advance.lock 被占）——等它完成再推（ps 对账）")
+    try:
+        return _advance(project, intent, story, only)
+    finally:
+        _fl.flock(_lf, _fl.LOCK_UN); _lf.close()
+
+
+def _advance(project, intent=None, story=None, only=None):
     name = os.path.basename(project.rstrip("/"))
     pdir = project if os.path.isdir(project) else os.path.join(ROOT, "projects", project)
     py = sys.executable
@@ -338,8 +360,9 @@ def advance(project, intent=None, story=None, only=None):
         if only and key != only:
             continue
         if key in _ADVANCE_INTENT and not intent:
-            print(f"══ 停在故事线门：全自动素材段已就绪，创作需要意图 ══")
-            print(f"   python3 autocut3/orchestrate.py {name} --advance --intent \"一句话说明这条视频讲什么\"")
+            print(f"══ 停在故事线门：全自动素材段已就绪，创作二选一 ══")
+            print(f"   A. AI 起草: python3 autocut3/orchestrate.py {name} --advance --intent \"一句话说明这条视频讲什么\"")
+            print(f"   B. 人/Agent 手写: 落盘 storylines/<名字>.json（Studio 创作台/POST api/storyline）后再 --advance")
             break
         print(f"══ 推进: {key} ══", flush=True)
         if key == "mount":

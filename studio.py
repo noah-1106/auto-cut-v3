@@ -68,7 +68,12 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(d)
 
     def do_GET(self):
-        u = urlparse(unquote(self.path, encoding="utf-8"))  # path 段统一解码：中文 id 的 percent 编码态在此还原（同族问题根治点）
+        # 先 urlparse 再解码 path 段（顺序是硬规矩，2026-09-19 井号素材根修）：
+        # 若先 unquote 整条，query 里的 %23/%3F/%26 被提前还原成 #/?/&，urlparse 再把
+        # # 后当锚点截断——正确 encode 的客户端也必炸 bad filename。query 的解码
+        # 由 parse_qs 对原文单次完成；path 段解码=中文 id 还原（原设计不变）。
+        u0 = urlparse(self.path)
+        u = u0._replace(path=unquote(u0.path, encoding="utf-8"))
         if u.path in ("/", "/index.html"):
             fp = os.path.join(ROOT, "studio", "index.html")
             try:
@@ -272,7 +277,7 @@ class H(BaseHTTPRequestHandler):
                 pj = jload(f"{ROOT}/materials/packs/{pid}/pack.json", {})
                 for f in pj.get("files", []):
                     f2 = dict(f); f2["pack"] = pid
-                    f2["url"] = f"/files/materials/packs/{pid}/{f['file']}"
+                    f2["url"] = f"/files/materials/packs/{pid}/{urllib.parse.quote(f['file'])}"  # quote：#/?/空格/中文名进 src 不被浏览器当锚点/查询截断（2026-09-19 井号素材实锤）
                     f2["thumb"] = f"/files/materials/packs/{pid}/thumbs/{f['id']}.jpg"
                     pack_files.append(f2)
             self._json({
@@ -324,6 +329,29 @@ class H(BaseHTTPRequestHandler):
                 if r.returncode != 0 or not os.path.exists(jpg):
                     return self._json({"err": "preview render failed: " + (r.stderr or "")[-200:]}, 500)
             return self._json({"ok": True, "url": f"/files/assets/preview/sub-{sid}.jpg"})
+        elif u.path.startswith("/api/sticker-preview/"):
+            # 贴纸样式预览：用注册表 text_style 现画 default_text → 透明 PNG
+            # （走渲染器 sticker_file 同一实现——预览即渲染产物零偏差；样式改动换哈希自动重画）
+            sid = u.path.split("/")[3]
+            try:
+                sid = urllib.parse.unquote(sid, encoding="utf-8")
+            except Exception:
+                pass
+            if not _safe_id(sid):
+                return self._json({"err": "bad id"}, 400)
+            conf = jload(f"{ROOT}/registry/stickers.json", {}).get(sid)
+            if not conf or not conf.get("text_style"):
+                return self._json({"err": "no such text style"}, 404)
+            try:
+                sys.path.insert(0, f"{ROOT}/autocut3")
+                import pipeline as PP
+                png = PP.sticker_file(conf, {"text": conf.get("default_text") or "样张"})
+            except Exception as ex:
+                return self._json({"err": "preview render failed: " + str(ex)[-200:]}, 500)
+            if not png or not os.path.exists(png):
+                return self._json({"err": "preview render failed"}, 500)
+            rel = os.path.relpath(png, ROOT).replace(os.sep, "/")
+            return self._json({"ok": True, "url": f"/files/{rel}"})
         elif u.path == "/api/voices" or u.path.startswith("/api/voice-register") \
                 or u.path.startswith("/api/voice-delete/") or u.path.startswith("/api/voice-test/"):
             return self._handle_voice(u)
@@ -435,7 +463,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": True, "url": "/files/assets/preview/voicetest-%s.mp3?t=%d" % (name, int(time.time()))})
 
     def do_POST(self):
-        u = urlparse(unquote(self.path, encoding="utf-8"))  # 同 do_GET
+        u0 = urlparse(self.path)
+        u = u0._replace(path=unquote(u0.path, encoding="utf-8"))  # 先 parse 再解 path（同 do_GET：%23 不能提前还原，2026-09-19）
         if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/"):
             return self._handle_voice(u)
         if u.path.startswith("/api/cover-gen/"):
@@ -589,6 +618,11 @@ class H(BaseHTTPRequestHandler):
             with open(f"{p}/params.json", "w", encoding="utf-8") as f:
                 json.dump(params, f, ensure_ascii=False, indent=1)
             key = f"{name}:{sid or 'main'}"
+            # 跨进程双检（2026-09-18 并发审计）：磁盘 render.status 新鲜 running=另一进程在渲
+            # （CLI/Agent/另一 studio 实例）——内存 RENDER_JOBS 只管本实例，拦不住跨实例
+            rs = jload(f"{p}/render.status", None)
+            if rs and rs.get("running") and time.time() - os.path.getmtime(f"{p}/render.status") < 300:
+                return self._json({"ok": False, "err": "另一进程正在渲染该项目（render.status 新鲜 running）"}, 409)
             job = RENDER_JOBS.get(key)
             if job and job.get("running"):
                 return self._json({"ok": False, "err": "该故事线已有渲染在进行"}, 409)
@@ -747,7 +781,7 @@ class H(BaseHTTPRequestHandler):
                 json.dump(pk2, open(f"{pk_dir}/pack.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             finally:
                 fcntl.flock(_lf, fcntl.LOCK_UN); _lf.close()
-            entry["url"] = f"/files/materials/packs/{pid}/{fname}"
+            entry["url"] = f"/files/materials/packs/{pid}/{urllib.parse.quote(fname)}"  # quote：# 等特殊字符进 src 不截断（与 /api/project 同口径）
             entry["thumb"] = thumb
             return self._json({"ok": True, "entry": entry})
         if u.path.startswith("/api/storyline-delete/"):

@@ -8,8 +8,9 @@ import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FF = os.path.join(ROOT, "bin", "ffmpeg")
-BASE = "http://127.0.0.1:8765"
-PID = "e2e-fixture"  # E2E 夹具专属命名空间（绝不与用户数据同名——清场后磁盘一眼可辨；
+BASE = os.environ.get("E2E_BASE", "http://127.0.0.1:8765")  # hermetic 回归必须跟 e2e.py 同一 studio（否则夹具建到别人实例上）
+PID = "e2e-fixture-%d" % os.getpid()  # 进程唯一（2026-09-18 并行 e2e 互踩根治：两跑各持各的包/项目，T17 假红不再）；
+# remove() 顺带扫 >6h 的 e2e-fixture-* 崩溃残留（并行活体不碰）
 # 素材 id 仍用 M0124 等断言锚，但包/项目隔离，用户新素材 M 编号撞车无影响）
 
 # id → (时长s, 尺寸, 词尾锚点或None, 台词)  —— 锚点对齐 T21 钳制断言（7.2/3.95/10.2）
@@ -158,11 +159,12 @@ def ensure():
 
 def remove():
     """夹具清理：跑完即删（磁盘不残留任何测试数据——维护者 迎接新素材，持久化夹具=污染源）。
-    双保险：只删带 fixture 标记的包/项目；E2E_KEEP_FIXTURES=1 时保留（调试用）。"""
+    双保险：只删带 fixture 标记的包/项目；E2E_KEEP_FIXTURES=1 时保留（调试用）。
+    PID 进程唯一后，顺带扫 >6h 的 e2e-fixture-* 崩溃残留（并行跑的活体不碰）。"""
     if os.environ.get("E2E_KEEP_FIXTURES") == "1":
         print("  [fixtures] E2E_KEEP_FIXTURES=1，保留夹具（调试模式）")
         return
-    import shutil
+    import glob, shutil, time
     pp = os.path.join(ROOT, "materials", "packs", PID, "pack.json")
     if os.path.exists(pp):
         mark = json.load(open(pp, encoding="utf-8")).get("fixture")
@@ -172,6 +174,17 @@ def remove():
     for d in (os.path.join(ROOT, "materials", "packs", PID),
               os.path.join(ROOT, "projects", PID)):
         if os.path.exists(d):
+            shutil.rmtree(d, ignore_errors=True)
+    # 崩溃残留清扫（并行保护：只清 >6h 旧目录；无 fixture 标记的包不删——安全阀同款）
+    now = time.time()
+    for pat in (os.path.join(ROOT, "materials", "packs", "e2e-fixture*"),
+                os.path.join(ROOT, "projects", "e2e-fixture*")):
+        for d in glob.glob(pat):
+            if os.path.basename(d) == PID or now - os.path.getmtime(d) < 21600:
+                continue  # 自己已删 / 疑似并行活体
+            ppk = os.path.join(d, "pack.json")
+            if os.path.exists(ppk) and not json.load(open(ppk, encoding="utf-8")).get("fixture"):
+                continue
             shutil.rmtree(d, ignore_errors=True)
     print("  [fixtures] 夹具已清理（磁盘干净）")
 
