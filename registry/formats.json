@@ -5,7 +5,8 @@
   "width": 1080,
   "height": 1920,
   "sticker_w": 500,
-  "sticker_h": 140,
+  "sticker_h": 220,
+  "sticker_top": 140,
   "sub_clear": 360
  },
  "landscape": {

@@ -616,6 +616,7 @@ def build_plan(project_dir, sid=None):
         "version": "0.5", "story": real_sid, "fps": 30,
         "width": int(fmt["width"]), "height": int(fmt["height"]),
         "format": fmt_id, "sticker_w": int(fmt.get("sticker_w", 500)), "sticker_h": int(fmt.get("sticker_h", 140)),
+        "sticker_top": int(fmt.get("sticker_top", 30)),   # 顶行贴纸 y（2026-09-19 Noah 定：留白140；角位仍 margin 30）
         "sub_clear": int(fmt.get("sub_clear", 360)),
         "duration": total, "title": story["title"],
         "outline": story.get("outline", ""),
@@ -651,17 +652,19 @@ def build_plan(project_dir, sid=None):
         json.dump(plan, f, ensure_ascii=False, indent=1)
     return plan, real_sid
 
-def pos_xy(pos, w, h, sw, sh, margin=30, sub_clear=360):
-    table = {"top-left": (margin, margin), "top-center": ((w - sw) // 2, margin),
+def pos_xy(pos, w, h, sw, sh, margin=30, sub_clear=360, top_y=None):
+    ty = margin if top_y is None else top_y   # top_y=顶中独享下沉位（sticker_top），角位保持 margin
+    table = {"top-left": (margin, margin), "top-center": ((w - sw) // 2, ty),
              "top-right": (w - sw - margin, margin), "center": ((w - sw) // 2, (h - sh) // 2),
              "bottom-left": (margin, h - sh - sub_clear), "bottom-right": (w - sw - margin, h - sh - sub_clear)}
     return table.get(pos, (margin, margin))
 
-def pos_expr(pos, margin=30, sub_clear=360):
+def pos_expr(pos, margin=30, sub_clear=360, top_y=None):
     """overlay 表达式版 pos_xy（v2 贴纸宽随文字自适应，须按实际 overlay_w/h 定位），
-    margin/sub_clear 语义与 pos_xy 完全一致。"""
+    margin/sub_clear/top_y 语义与 pos_xy 完全一致。"""
+    ty = margin if top_y is None else top_y
     table = {"top-left": ("%d" % margin, "%d" % margin),
-             "top-center": ("(main_w-overlay_w)/2", "%d" % margin),
+             "top-center": ("(main_w-overlay_w)/2", "%d" % ty),
              "top-right": ("main_w-overlay_w-%d" % margin, "%d" % margin),
              "center": ("(main_w-overlay_w)/2", "(main_h-overlay_h)/2"),
              "bottom-left": ("%d" % margin, "main_h-overlay_h-%d" % sub_clear),
@@ -875,11 +878,11 @@ def build_cmd(plan, ass_path, out_path):
             pos_k = stk.get("pos") or conf.get("pos", "top-center")
             if _sticker_v2_style(conf):
                 # v2 贴纸：紧裁画布宽随文字——高度锁框、overlay 表达式按实际宽高定位
-                xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360))
+                xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360), top_y=plan.get("sticker_top"))
                 fc.append(f"[{sidx}:v]scale=-1:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
                 fc.append(f"[{cur}][st{bi}{k}]overlay={xe}:{ye}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{bi}{k}]")
             else:
-                x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
+                x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360), top_y=plan.get("sticker_top"))
                 # 贴纸统一缩放进 500x140 贴纸框（文字模板画布 1200x300 也归一到同框，
                 # 与静态 PNG 时代的几何语义一致——否则按原尺寸叠，文字块会溢出屏幕）
                 fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{bi}{k}]")
@@ -1240,11 +1243,11 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
         sd = float(stk.get("duration") or conf.get("duration") or 1.2)
         pos_k = stk.get("pos") or conf.get("pos", "top-center")
         if _sticker_v2_style(conf):
-            xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360))
+            xe, ye = pos_expr(pos_k, sub_clear=plan.get("sub_clear", 360), top_y=plan.get("sticker_top"))
             fc.append(f"[{sidx}:v]scale=-1:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
             fc.append(f"[{cur}][st{k}]overlay={xe}:{ye}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         else:
-            x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360))
+            x, y = pos_xy(pos_k, w, h, plan.get("sticker_w", 500), plan.get("sticker_h", 140), sub_clear=plan.get("sub_clear", 360), top_y=plan.get("sticker_top"))
             fc.append(f"[{sidx}:v]scale={plan.get('sticker_w', 500)}:{plan.get('sticker_h', 140)},settb=AVTB,fps={fps}[st{k}]")
             fc.append(f"[{cur}][st{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
