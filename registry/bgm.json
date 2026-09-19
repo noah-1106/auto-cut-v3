@@ -16,68 +16,6 @@
    }
   ]
  },
- "bgm_n002_light": {
-  "file": "assets/music/bgm_n002_light.mp3",
-  "name": "流行舞步",
-  "desc": "Mixkit「One More Dance」Arulo（Pop，1:40）——快节奏干货口播（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
-  "loop": true,
-  "source": "https://assets.mixkit.co/music/288/288.mp3",
-  "license": "https://mixkit.co/license/#musicFree",
-  "segments": [
-   {
-    "name": "整条",
-    "in": 0,
-    "out": null,
-    "desc": "全曲（默认，曲位=时间轴位）"
-   }
-  ]
- },
- "bgm_n003_deep": {
-  "file": "assets/music/bgm_n003_deep.mp3",
-  "name": "暗涌氛围",
-  "desc": "Mixkit「Echoes」Andrew Ev（Atmospheres，3:46）——警示/检核类低频铺底（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
-  "loop": true,
-  "source": "https://assets.mixkit.co/music/188/188.mp3",
-  "license": "https://mixkit.co/license/#musicFree",
-  "segments": [
-   {
-    "name": "整条",
-    "in": 0,
-    "out": null,
-    "desc": "全曲（默认，曲位=时间轴位）"
-   }
-  ]
- },
- "bgm_n004_soft": {
-  "file": "assets/music/bgm_n004_soft.mp3",
-  "name": "山谷落日",
-  "desc": "Mixkit「Valley Sunset」A. M.（Ambient，2:14）——情感/收尾柔和叙事（Mixkit Stock Music Free License 免费商用，2026-09-14 替换占位合成音）",
-  "loop": true,
-  "source": "https://assets.mixkit.co/music/127/127.mp3",
-  "license": "https://mixkit.co/license/#musicFree",
-  "segments": [
-   {
-    "name": "整条",
-    "in": 0,
-    "out": null,
-    "desc": "全曲（默认，曲位=时间轴位）"
-   }
-  ]
- },
- "bgm_u001_upbeat": {
-  "file": "assets/music/bgm_upbeat_backbeat.mp3",
-  "name": "轻快节拍",
-  "desc": "46s 律动底拍——快节奏/活力内容循环用",
-  "loop": true,
-  "segments": [
-   {
-    "name": "整条",
-    "in": 0,
-    "out": null,
-    "desc": "全曲（默认，曲位=时间轴位）"
-   }
-  ]
- },
  "bgm_c001_chill": {
   "file": "assets/music/bgm_chill_be_chillin.mp3",
   "name": "松弛律动",
