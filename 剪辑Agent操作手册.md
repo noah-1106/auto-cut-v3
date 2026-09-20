@@ -41,6 +41,12 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
    - **写成"总结腔分镜摘要"是事故**——它会被念出来/铺进字幕（vadwords 注释警告的
      正是这种失效模式，不是"story 与字幕无关"）。改 original 字幕 = 改素材转写
      （proofread 等长替换，保字符-时间对齐）；改 story/转写/窗口后必须重跑 vadwords。
+   - **分页由标点驱动（2026-09-20 结构分页）**：句末标点（。！？；）=换页点；超页宽
+     的句在句内标点（，、：）处切，快说慢说不影响切点。写 story 的操作含义：
+     **标点就是分页遥控器**——想让哪句整句一页，控制整句 ≤ 页宽（kaiti-warm 14 字，
+     其余样式 12）；想在某处换页，放个逗号；**别写超过页宽的无标点长句**——无结构
+     切点只能在任意字位硬切=劈词（「几年后我在舟山装了几百套房子。」15 字无内部
+     标点，实锤劈成「几｜百套」）。
 3. **时间源=实测**（2026-09-18 勘误）：转写 tier=word（MiniMax timestamp_level=word 实测，
    与 VAD 物理测量互证 ±0.05s）时 vadwords 直取词时间；tier=vad/sent 是合成时间禁作锚，
    时间源只有 vadwords 的 VAD。**重转写新素材后自动走 word 直通道，别再手工修时间。**
@@ -399,7 +405,7 @@ Studio API（带校验+落盘一致），**禁止手编 JSON**：
 |---|---|---|
 | `sfx.json` | `{name, desc, file}` | 音效：draft 选→渲染混音（现存仅 ding/success；引用已删 id 渲染自动跳过，别选表外 id） |
 | `bgm.json` | `{file, name, desc, loop, segments:[{name,in,out,desc}]}` | BGM：整曲或段落（segments 供幕级选段） |
-| `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id） |
+| `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id）。`max_chars`=分页页宽（kaiti-warm 14，其余未写吃默认 12；页严格不超宽）。**加宽前必须实测帧宽**：size×字数+左右 margin 160px ≤1080px（pop-round 实锤 78px 下 12 字已 936px 裁边，收敛至 70） |
 | `transitions.json` | `{type: xfade\|flash, preset, duration, ...}` | 幕间转场（transition_out） |
 | `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容）。**v2 词根**（2026-09-18 现代·活泼批 12 款：胶囊/多巴胺四色/荧光夜光/荧光笔/白环贴纸/漫画爆点/玻璃拟态/极简墨条）：`font`=wenkai/smiley/kuaile、`radius` 圆角(≥半高=胶囊)、`shadow`+`shadow_c` 硬投影(可带@alpha)、`ring`+`ring_c` 白边环；带任一 v2 词根走紧裁画布（宽随文字自适应）。样式样张：`GET /api/sticker-preview/<id>`（走渲染同一实现，改样式换哈希自动重画） |
 | `enums.json` | 五个枚举数组（video_types/cover_strategies/narration_modes/platforms/positions） | 全局词汇表（前端/后端同源；不开放编辑） |

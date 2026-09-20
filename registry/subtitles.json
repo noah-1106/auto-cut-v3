@@ -55,8 +55,9 @@
   "border": 3,
   "marginv": 180,
   "karaoke": true,
+  "max_chars": 14,
   "name": "文楷暖橙",
-  "desc": "暖调文楷，家居/生活美学"
+  "desc": "暖调文楷，家居/生活美学 ｜2026-09-20 结构分页配套：62px 下 14 字≈868px<920px 可用宽；12 字档必切「人这一辈子最想靠的岸是家。」（13 字），14 字整句保住"
  },
  "zcool-pop": {
   "font": "ZCOOL KuaiLe",
@@ -120,7 +121,7 @@
  },
  "pop-round": {
   "font": "ZCOOL KuaiLe",
-  "size": 78,
+  "size": 70,
   "primary": "&H00FFFFFF",
   "secondary": "&H00FFC080",
   "outline_col": "&H00401040",
@@ -128,7 +129,8 @@
   "marginv": 280,
   "karaoke": true,
   "name": "弹跳圆边",
-  "desc": "v1 pop 平移：圆润快乐体+特粗描边（描边弹跳气质）"
+  "desc": "v1 pop 平移：圆润快乐体+特粗描边（描边弹跳气质） ｜2026-09-20 卡F5 溢出修正：size78 下满页 12 字=936px>1080−160margin=920px 仍裁边（旧 17 字硬上限页 1122px 实测）→ size 收敛至 70（840px，边距 40px）+显式 max_chars 12",
+  "max_chars": 12
  },
  "grad-duo": {
   "font": "Smiley Sans",

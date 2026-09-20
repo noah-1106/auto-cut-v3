@@ -2603,6 +2603,63 @@ def t61_advance_dynamic_reestimate():
         sys.path = [p for p in sys.path if "autocut3" not in p]
 
 
+# ---------------------------------------------------------------- T62 字幕分页结构信号（2026-09-20 根修）
+def t62_structural_pagination():
+    # 回归锚（2026-09-20 王亚伦片 35 页 13 违规页根修）：断页从韵律信号（gap 停顿，
+    # 快说慢说切点漂移）换轨到文本结构信号（句界/句内标点/禁起字）。全离线合成词轨。
+    # 锚六义：①句内标点优先切点（「目的|地」劈词病灶）②整句不劈（「做|的」/13 字句
+    # 在 14 字档整句保住）③短句合并不独立闪页（「会查。」）④时序不变性：×10 慢说/
+    # 逐字前 5s 气口轰炸，页文本必须一字不变（韵律不动结构=换轨本身的锚）
+    # ⑤不变式：页首非标点/页宽不超/片长≥3/页首非禁起字 ⑥确定性（R10 重放根基）。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import pipeline
+
+        def mk(text, per=0.3):
+            return [(ch, round(i * per, 2), round((i + 1) * per, 2)) for i, ch in enumerate(text)]
+
+        def txt(pages):
+            return ["".join(c[0] for c in pg) for pg in pages]
+
+        # ①句内标点优先：旧逻辑实锤劈「目的|地」
+        ok1 = txt(pipeline.build_pages(mk("开船的时候航向偏一度，目的地相差十万八千里。"), 14)) \
+            == ["开船的时候航向偏一度，", "目的地相差十万八千里。"]
+        # ②整句不劈：「说明咱们做|的」病灶 / 13 字句 14 字档整句
+        ok2 = txt(pipeline.build_pages(mk("说明咱们做的没问题。"), 14)) == ["说明咱们做的没问题。"]
+        ok3 = txt(pipeline.build_pages(mk("人这一辈子最想靠的岸是家。"), 14)) == ["人这一辈子最想靠的岸是家。"]
+        # ③短句合并：「会查。」不再独立闪页；句末标点后接续新句合法（两句同页形态）
+        t3 = txt(pipeline.build_pages(mk("所以每个工地我都会跑，都会查。在海上我学了一件事，"), 14))
+        ok4 = t3 == ["所以每个工地我都会跑，", "都会查。在海上我学了一件事，"]
+        # ④时序不变性：同一文本三种韵律 → 页文本一字不变
+        base = mk("几年后我在舟山装了几百套房子。其实我在海上漂了几年，想明白了一件事。", 0.25)
+        slow = [(c, round(s * 10, 2), round(e * 10, 2)) for c, s, e in base]
+        gappy, tt = [], 0.0
+        for c, _s, _e in base:
+            gappy.append((c, round(tt + 5, 2), round(tt + 5.2, 2)))   # 每字前塞 5s 气口
+            tt += 5.3
+        ok5 = (txt(pipeline.build_pages(base, 14)) == txt(pipeline.build_pages(slow, 14))
+               == txt(pipeline.build_pages(gappy, 14)))
+        # ⑤不变式：页首非标点/非禁起字、页宽不超、片长≥3（无标点 15 字句）
+        t5 = txt(pipeline.build_pages(mk("我想住在大房子的院子里每天看书"), 14))
+        ok6 = (len(t5) == 2 and all(x and x[0] not in pipeline.PUNCT
+                                    and x[0] not in pipeline.NO_START
+                                    and 3 <= len(x) <= 14 for x in t5))
+        # ⑤b 禁起字软约束定向：填满切点撞「的」必须让位
+        t6 = txt(pipeline.build_pages(mk("九个字凑一凑凑一的字的后八字凑凑"), 14))
+        ok7 = len(t6) == 2 and not any(x.startswith("的") for x in t6)
+        # ⑥确定性
+        ok8 = pipeline.build_pages(base, 14) == pipeline.build_pages(base, 14)
+        check("T62 字幕分页结构信号（句界/整句/合并/时序不变/禁起字/确定性）",
+              ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8,
+              "句内标点=%s 整句=%s/%s 合并=%s 时序不变=%s 不变式=%s 禁起=%s 确定性=%s" % (
+                  ok1, ok2, ok3, ok4, ok5, ok6, ok7, ok8))
+    except Exception as e:
+        check("T62 字幕分页结构信号（句界/整句/合并/时序不变/禁起字/确定性）",
+              False, "异常: %s" % str(e)[:140])
+    finally:
+        sys.path = [p for p in sys.path if "autocut3" not in p]
+
+
 def t34_narration_vocab_guard():
     # 回归锚（2026-09-15 维护者 实锤）：前端 enums.json narration_modes 词汇表曾与后端脱钩——
     # 前端用 tts、后端全家（draft/vadwords/dubfit/dubgate/pipeline）用 dub。脱钩双向错：
@@ -2900,6 +2957,7 @@ def main():
     t59_transition_reserve()
     t60_material_pipeline()
     t61_advance_dynamic_reestimate()
+    t62_structural_pagination()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）

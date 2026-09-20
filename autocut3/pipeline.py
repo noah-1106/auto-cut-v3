@@ -195,64 +195,84 @@ def char_level(words):
 
 PUNCT = "。！？；，、,:;!?）)】》\"\"''"
 SENT_END = "。！？；!?"
+INTRA_PUNCT = "，、,："        # 句内停顿标点：结构切点首选（左页以其结尾）
+NO_START = "的地得着了过吗呢吧啊嘛呀么"  # 禁起字（软约束）：虚词/后缀尽量不作页首
 
-def build_pages(chars, max_chars=12, hard_max=15, gap=0.35, seek_gap=0.12):
-    """字流 → 字幕页。断句规则（2026-09-13 修复"一个字断在前一句后面"）：
-    1) 标点字符永远粘住页尾：既不触发断页，也绝不落页首（逗号甩下页的病灶）；
-    2) 句末标点（。！？；）后必断页：下句开头不再粘进前句页尾的病灶；
-    3) 满 12 字进入"找断点"模式：小停顿(>seek_gap)/句末才断，15 字硬上限兜底——
-       避免在词语正中间硬切；
-    4) 孤字页回吞：断页产物 ≤2 字且并回上页不超 hard_max+2 时，并回上页
-       （"还"字单独一页的病灶）。"""
-    pages, cur = [], []
+def _split_long(sent, max_chars):
+    """超宽句的结构切分（纯结构信号，不读时间）。切点打分取最高：
+    ① 左片以句内标点（，、：）结尾 +100——文本结构与朗读韵律双吻合处；
+    ② 右侧余量 ≥5 +10（<3 直接不合格——孤尾/短句尾独立页的病灶）；
+    ③ 右片首字非禁起字 +5（软约束：无更优候选时不阻塞，「的确」类真词开头不受累）；
+    ④ 左片尽量填满（+左片字数）。
+    硬约束：切点右侧不得是任何标点（标点必须归左片）。"""
+    n = len(sent)
+    pieces, pos = [], 0
+    while n - pos > max_chars:
+        w = min(max_chars, n - pos)
+        best, best_score = None, -1
+        for i in range(3, w + 1):            # i=左片字数，≥3 防碎页
+            k = pos + i
+            if k < n and sent[k][0] in PUNCT:
+                continue                      # 右片首字是标点 → 违反「标点归左」
+            rem = n - k
+            if rem < 3 and sent[k - 1][0] not in INTRA_PUNCT:
+                continue                      # 右余 <3 且无标点救场 → 让位
+            score = i                         # ④ 左片填满优先（打底分）
+            if sent[k - 1][0] in INTRA_PUNCT:
+                score += 100                  # ①
+            if rem >= 5:
+                score += 10                   # ②
+            if sent[k][0] not in NO_START:
+                score += 5                    # ③
+            if score > best_score:
+                best, best_score = i, score
+        if best is None:                      # 极端无候选（全标点/全禁起）：直切并吸尾部标点
+            best = max(3, w)
+            while pos + best < n and sent[pos + best][0] in PUNCT:
+                best += 1
+        pieces.append(sent[pos:pos + best])
+        pos += best
+    pieces.append(sent[pos:])
+    return pieces
+
+def build_pages(chars, max_chars=12):
+    """字流 → 字幕页（2026-09-20 结构信号重写：王亚伦片 35 页 13 处违规的根修）。
+    旧逻辑拿停顿(gap)断页，是在韵律维度上调参——同一句快说慢说停顿分布完全不同，
+    0.35→0.8 只把 47 页压到 35 页，劈词（说明咱们做|的）/孤尾（一件事，人这）/
+    短句尾独立页（会查。）一处没少：停顿是声音的属性，不是文本结构的属性。
+    新逻辑断页只读文本结构，时间只用于页起止：
+    1) 句末标点（。！？；!?）切句、标点归左句（含句首裸标点回粘上句——实数据有
+       独立「，」token）；句是装页的最小完整单元；
+    2) 超宽句（> max_chars）走 _split_long 结构切点，页严格 ≤ max_chars
+       （不设 hard_max 溢出——pop-round size78 下 17 字页实测 1122px 裁字的教训）；
+    3) 整句装箱：上页以句末标点收尾且装得下时，下一句并入同页（短句合并，
+       「会查。」不再独立成 0.5s 闪页）；
+    4) 时间信号（gap/seek_gap）完全退出断页；无标点长句按 ①-④ 偏好切。
+    不变式：页首永非标点；每页 ≤ max_chars；句末标点落页中=两句同页
+    （短句合并的合法形态，如「都会查。在海上我学了一件事，」）。"""
+    sentences, cur = [], []
     for it in chars:
         ch = it[0]
-        if not cur and pages and ch in PUNCT:
-            pages[-1].append(it)
+        if ch in PUNCT and not cur and sentences:   # 句首裸标点回粘上句尾
+            sentences[-1].append(it)
             continue
-        if cur and ch not in PUNCT:
-            clen = sum(len(c[0]) for c in cur)
-            last = cur[-1][0]
-            g = it[1] - cur[-1][2]
-            punct_break = last in SENT_END
-            gap_break = g > gap
-            seek_break = clen >= max_chars and (punct_break or g > seek_gap or last in "，、,")
-            if punct_break or gap_break or seek_break or clen >= hard_max:
-                # 孤字回吞三守卫：新页自身非句末碎片 + 上页不以句末标点结尾（句号后
-                # 刚分出的下句开头绝不容许回吞——"对着查。|接"被并回的病灶）+ 容量
-                if (len(cur) <= 2 and pages
-                        and cur[-1][0] not in SENT_END
-                        and pages[-1][-1][0] not in SENT_END
-                        and sum(len(c[0]) for c in pages[-1]) + len(cur) <= hard_max + 2):
-                    pages[-1].extend(cur)
-                else:
-                    pages.append(cur)
-                cur = []
         cur.append(it)
+        if ch in SENT_END:
+            sentences.append(cur)
+            cur = []
     if cur:
-        pages.append(cur)
-    # 后处理：孤字页（≤2字）按身份定向吸收——
-    #   以句末标点结尾（"弹。"）＝ 上句的尾巴 → 向前合并回上页（完整句尾）；
-    #   不含句末标点（"接"）   ＝ 下句的开头 → 向后合并进下页（"接下来"），
-    #     绝不向前（前页以句号结尾时向前合并=把下句开头粘回前句，即原始病灶）。
-    merged = True
-    while merged and len(pages) > 1:
-        merged = False
-        for k in range(len(pages)):
-            if len(pages[k]) > 2:
-                continue
-            klen = sum(len(c[0]) for c in pages[k])
-            if k > 0 and pages[k][-1][0] in SENT_END \
-                    and sum(len(c[0]) for c in pages[k-1]) + klen <= hard_max + 2:
-                pages[k-1].extend(pages[k])
-                del pages[k]
-                merged = True
-                break
-            if k + 1 < len(pages) and sum(len(c[0]) for c in pages[k+1]) + klen <= hard_max + 2:
-                pages[k + 1] = pages[k] + pages[k + 1]
-                del pages[k]
-                merged = True
-                break
+        sentences.append(cur)
+    pages = []
+    for sent in sentences:
+        pieces = _split_long(sent, max_chars) if len(sent) > max_chars else [sent]
+        for piece in pieces:
+            # 装箱：仅当上页以句末标点收尾（句意已完整）且装得下才并入——
+            # 句中碎片页绝不再吸收下一句（否则句末标点落页中，读序破碎）
+            if pages and pages[-1][-1][0] in SENT_END \
+                    and sum(len(c[0]) for c in pages[-1]) + len(piece) <= max_chars:
+                pages[-1].extend(piece)
+            else:
+                pages.append(piece)
     return pages
 
 def fmt_ts(sec):
