@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>auto-cut V3 · Studio</title>
+<title>AutoCut Studio</title>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 <style>
 /* 项目字体（registry/subtitles 样张与界面共用——assets/fonts 直 serve） */
@@ -39,8 +39,7 @@ body{
 .brand:hover .dot{transform:scale(1.3)}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold);transition:.2s}
 .brand small{color:var(--faint);font-weight:400;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
-.crumb{margin-left:6px;color:var(--dim);font-size:13px}
-.crumb b{color:var(--txt)}
+.crumbbox{display:flex;align-items:center;gap:10px;min-width:0}
 .status{margin-left:auto;font:12px var(--mono);color:var(--dim);display:flex;align-items:center;gap:8px;min-width:0}
 .status #status{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rline{font:11px var(--mono);color:var(--gold);white-space:nowrap}
@@ -102,6 +101,14 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 .stag.has{border-color:rgba(123,224,162,.4);color:var(--ok)}
 .pdel{position:absolute;top:12px;right:12px;background:none;border:0;cursor:pointer;font-size:13px;opacity:0;transition:.15s}
 .pcard:hover .pdel{opacity:.6}
+.pcard.newcard{border-style:dashed;border-color:var(--line2);cursor:pointer}
+.pcard.newcard:hover{border-color:var(--gold-line)}
+.pcard.newcard.open{border-style:solid;cursor:default;transform:none}
+.pcard.newcard .wz-collapsed{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:118px;color:var(--dim)}
+.pcard.newcard .wz-collapsed:hover{color:var(--txt)}
+.pcard.newcard .wz-form{display:flex;flex-direction:column;gap:8px}
+.pcard.newcard .wz-form input,.pcard.newcard .wz-form select{width:100%}
+.pcard.newcard .wz-note{font-size:11px;color:var(--faint);line-height:1.5}
 .pdel:hover{opacity:1;filter:brightness(1.4)}
 .reggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .regcard{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;animation:fadeUp .4s ease both}
@@ -109,11 +116,9 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 .regcard h5::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--gold-soft);border:1px solid var(--gold-line)}
 .regcard .cnt{font:28px var(--mono);font-weight:700}
 .regcard .items{font-size:11px;color:var(--dim);line-height:1.9;margin-top:6px}
-.slider-row{display:flex;align-items:center;gap:12px;margin:12px 0}
-.slider-row label{font-size:12px;color:var(--dim);width:160px;flex:0 0 auto}
-.slider-row input[type=range]{flex:1;accent-color:var(--gold)}
-.slider-row .val{font-family:var(--mono);color:var(--gold);width:44px;text-align:right}
-/* ── 创作台顶行：成片｜大纲·贯穿元素｜封面 ── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}  /* 2026-10-15 补：新建项目条曾引用未定义类裸奔 */
+/* （.slider-row 死样式已删——2026-10-15 体检：全站无 range input 使用） */
+/* ── 创作台顶行：成片｜大纲·贯穿元素（封面卡已挪进幕序列第 0 张，见 beats-zone）── */
 .topline{display:grid;grid-template-columns:236px minmax(0,1fr);gap:14px;margin-bottom:20px;align-items:stretch;max-width:1500px}
 .out-pane{display:flex;flex-direction:column;min-height:0}
 #monwrap{flex:1;min-height:0;display:flex}
@@ -121,7 +126,7 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 #monwrap .phbox{flex:1;width:100%}
 .vmeta-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 16px;margin-bottom:12px;
   background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:12px;
-  font:11.5px var(--mono);color:var(--dim)}
+  font:12px var(--mono);color:var(--dim)}  /* 12px：11.5 半像素字号渲染发虚（2026-10-15 体检） */
 .vmeta-bar .big{font-size:14px;color:var(--txt);font-family:'Satoshi',-apple-system,'PingFang SC',sans-serif;font-weight:700}
 .vmeta-bar .render-row{margin-left:auto;display:flex;gap:8px}
 .pane-act{margin-left:auto;font-size:11px;color:var(--gold);background:var(--gold-soft);border:1px solid var(--gold-line);border-radius:8px;height:var(--ctl-h-s);padding:0 12px;cursor:pointer;flex:0 0 auto}
@@ -147,7 +152,6 @@ button.danger:hover{background:rgba(255,122,122,.2)}
 .cc-head::before{content:'';width:7px;height:7px;border-radius:2px;background:var(--gold-soft);border:1px solid var(--gold-line);flex:0 0 auto}
 .cc-head .hint{margin-left:auto;text-transform:none;letter-spacing:0}
 .beats-wrap{position:relative;padding-top:4px;flex:1;min-width:0}
-/* （监视器条已并入顶行三联左列）*/
 /* ── 幕横排 ── */
 .beats-wrap::before{content:'';position:absolute;left:0;right:0;top:24px;height:2px;
   background:linear-gradient(90deg,var(--gold) 0%,rgba(255,212,0,.25) 40%,transparent 95%)}
@@ -270,15 +274,15 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <body>
 
 <header class="topbar">
-  <div class="brand" onclick="goHome()" title="返回主页"><span class="dot"></span>auto-cut V3 <small>Studio</small></div>
+  <div class="brand" onclick="goHome()" data-i18n-t="tab.home"><span class="dot"></span>AutoCut <small>Studio</small></div>
   <div class="crumbbox">
-    <span class="crumb" id="crumb">配置 · 项目与注册表</span>
     <div class="storysel" id="storysel-wrap"></div>
   </div>
   <div class="status">
     <span class="rline" id="cli-render-bar" style="display:none"></span>
-    <button class="savechip" id="save-chip" onclick="if(DIRTY)saveStory()" style="display:none">✓ 已保存</button>
-    <span class="led"></span><span id="status">就绪</span>
+    <button class="ghost" id="langbtn" onclick="toggleLang()" style="height:26px;padding:0 10px;font-size:11px">EN</button>
+    <button class="savechip" id="save-chip" onclick="if(DIRTY)saveStory()" style="display:none" data-i18n="chip.saved">✓ 已自动保存</button>
+    <span class="led"></span><span id="status" data-i18n="status.ready">就绪</span>
   </div>
 </header>
 
@@ -288,25 +292,15 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <main>
 <!-- ═══════════ 配置页 · 项目 ═══════════ -->
 <section id="s-config">
-  <div class="card" style="margin-bottom:14px">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <b style="font-size:13px">＋ 新建项目</b>
-      <input id="wz-name" placeholder="项目名（字母数字-，如 my-first-project）" style="flex:1;min-width:180px">
-      <input id="wz-title" placeholder="标题（可中文）" style="flex:1;min-width:140px">
-      <select id="wz-fmt" style="max-width:130px"></select>
-      <button class="primary" onclick="wizardCreate()">创建</button>
-    </div>
-    <div class="note" style="margin-top:6px">画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。</div>
-  </div>
-  <div class="sec">视频项目</div>
-  <div class="note">一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。</div>
+  <div class="sec" data-i18n="cfg.projects">视频项目</div>
+  <div class="note" data-i18n-html="cfg.projnote">一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。</div>
   <div class="projgrid" id="projgrid"></div>
 </section>
 
 <!-- ═══════════ 配置页 · 注册表 ═══════════ -->
 <section id="s-registry">
-  <div class="sec">全盘注册表</div>
-  <div class="note">创作台的一切下拉都从这来——<b class="k">改 JSON 即改界面</b>（registry/*.json）。当前为只读展示，增删条目直接改文件。</div>
+  <div class="sec" data-i18n="cfg.registry">全盘注册表</div>
+  <div class="note" data-i18n-html="cfg.regnote">创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。</div>
   <div class="reggrid" id="reggrid"></div>
 </section>
 
@@ -314,11 +308,11 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <div id="regmgr" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80" onclick="if(event.target===this)closeRegMgr()">
   <div style="position:absolute;right:0;top:0;bottom:0;width:min(680px,94vw);background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)">
-      <h3 id="regmgr-title" style="margin:0;font-size:15px">注册表管理</h3>
+      <h3 id="regmgr-title" style="margin:0;font-size:15px" data-i18n="reg.mgr">注册表管理</h3>
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="ghost" onclick="regAddEntry()">＋ 新增条目</button>
-        <button class="ghost" onclick="regImport()">⬆ 导入素材文件</button>
-        <button class="ghost" onclick="closeRegMgr()">✕ 关闭</button>
+        <button class="ghost" onclick="regAddEntry()" data-i18n="reg.add">＋ 新增条目</button>
+        <button class="ghost" onclick="regImport()" data-i18n="reg.import">⬆ 导入素材文件</button>
+        <button class="ghost" onclick="closeRegMgr()" data-i18n="dlg.close">✕ 关闭</button>
       </div>
     </div>
     <div id="regmgr-body" style="flex:1;overflow:auto;padding:16px 22px"></div>
@@ -330,10 +324,10 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <div id="voicemgr" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80" onclick="if(event.target===this)closeVoiceMgr()">
   <div style="position:absolute;right:0;top:0;bottom:0;width:min(680px,94vw);background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)">
-      <h3 style="margin:0;font-size:15px">声纹管理 · 本地 TTS</h3>
-      <span class="statusline" id="voice-hint">零样本克隆：参考音频 0.5-30s + 逐字稿一字不差</span>
+      <h3 style="margin:0;font-size:15px" data-i18n="voice.title">声纹管理 · 本地 TTS</h3>
+      <span class="statusline" id="voice-hint" data-i18n="voice.hint">零样本克隆：参考音频 0.5-30s + 逐字稿一字不差</span>
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="ghost" onclick="closeVoiceMgr()">✕ 关闭</button>
+        <button class="ghost" onclick="closeVoiceMgr()" data-i18n="dlg.close">✕ 关闭</button>
       </div>
     </div>
     <div id="voicemgr-body" style="flex:1;overflow:auto;padding:16px 22px"></div>
@@ -345,25 +339,25 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 
 <!-- ═══════════ 操作页 · 创作台 ═══════════ -->
 <section id="s-create">
-  <!-- 顶行三联：左=成片（预览+基本信息在下），中=大纲·贯穿元素（合并），右=封面 -->  <div class="topline">
+  <!-- 顶行两联：左=成片监视器，右=大纲·贯穿元素（封面卡在幕序列第 0 张） -->  <div class="topline">
     <div class="pane out-pane">
-      <h4>成片</h4>
+      <h4 data-i18n="cr.final">成片</h4>
       <div id="monwrap"></div>
     </div>
     <div class="pane story-pane">
       <div class="vmeta-bar" id="vmeta"></div>
-      <h4>故事线大纲 · 贯穿元素 <span class="hint">手写 / Agent 审计 / 脚本分幕</span>
-        <button class="pane-act" id="draftbtn" onclick="aiDraft()" title="AI 读取素材理解档案，起草一条新故事线（不碰现有线）">✨ AI 起草</button></h4>
-      <textarea id="outline" placeholder="这条故事线在讲什么——人和 Agent 共同的创作参考"></textarea>
+      <h4><span data-i18n="cr.outline">故事线大纲 · 贯穿元素</span> <span class="hint" data-i18n="cr.outline.hint">手写 / Agent 审计 / 脚本分幕</span>
+        <button class="pane-act" id="draftbtn" onclick="aiDraft()" data-i18n="cr.draft" data-i18n-t="cr.draft.t">✨ AI 起草</button></h4>
+      <textarea id="outline" data-i18n-ph="cr.outline.ph" placeholder="这条故事线在讲什么——人和 Agent 共同的创作参考"></textarea>
       <div class="mgrid" id="metabar"></div>
     </div>
   </div>
 
-  <div class="sec">幕序列 · 每幕是多轨上的一刀</div>
-  <div class="note">最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。</div>
+  <div class="sec" data-i18n="cr.beats">幕序列 · 每幕是多轨上的一刀</div>
+  <div class="note" data-i18n-html="cr.beatsnote">最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。</div>
   <div class="beats-zone">
     <div class="cover-card">
-      <div class="cc-head">封面收口 <span class="hint">第 0 张 · 钉在最左</span></div>
+      <div class="cc-head"><span data-i18n="cr.cover">封面收口</span> <span class="hint" data-i18n="cr.cover.hint">第 0 张 · 钉在最左</span></div>
       <div id="coverwrap" style="width:100%;flex:0 0 auto"></div>
       <div class="cover-ops" id="coverops"></div>
     </div>
@@ -373,26 +367,26 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 
 <!-- ═══════════ 操作页 · 素材库 ═══════════ -->
 <section id="s-library">
-  <div class="sec">项目素材 <span class="packtag" style="border-color:var(--line);color:var(--dim)">仅本项目</span></div>
-  <div class="note">本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。</div>
+  <div class="sec"><span data-i18n="lib.mine">项目素材</span> <span class="packtag" style="border-color:var(--line);color:var(--dim)" data-i18n="lib.mine.tag">仅本项目</span></div>
+  <div class="note" data-i18n="lib.minenote">本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。</div>
   <div class="libgrid" id="cutgrid"></div>
 
-  <div class="sec" style="margin-top:26px">跨项目素材 <span class="packtag">仓库级</span></div>
-  <div class="note"><b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。</div>
+  <div class="sec" style="margin-top:26px"><span data-i18n="lib.packs">跨项目素材</span> <span class="packtag" data-i18n="lib.packs.tag">仓库级</span></div>
+  <div class="note" data-i18n-html="lib.packsnote"><b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。</div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-    <input id="pk-id" placeholder="新包 id（字母数字-）" style="max-width:190px">
-    <input id="pk-name" placeholder="包名（可中文）" style="max-width:190px">
-    <button class="ghost" onclick="packCreate()">＋ 建包</button>
+    <input id="pk-id" data-i18n-ph="pk.id.ph" placeholder="新包 id（字母数字-）" style="max-width:190px">
+    <input id="pk-name" data-i18n-ph="pk.name.ph" placeholder="包名（可中文）" style="max-width:190px">
+    <button class="ghost" onclick="packCreate()" data-i18n="pk.create">＋ 建包</button>
     <select id="pk-mount" style="max-width:230px"></select>
-    <button class="ghost" onclick="packMount(1)">挂载到本项目</button>
-    <button class="ghost" onclick="packMount(0)">卸载选中</button>
+    <button class="ghost" onclick="packMount(1)" data-i18n="pk.mount">挂载到本项目</button>
+    <button class="ghost" onclick="packMount(0)" data-i18n="pk.unmount">卸载选中</button>
     <span class="statusline" id="pkstat"></span>
   </div>
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-    <button class="ghost" id="tallbtn" onclick="transcribeAll()">↻ 转写全部待审</button>
-    <button class="ghost" id="uallbtn" onclick="understandAll()">◉ 识别全部待审</button>
-    <input type="text" id="tsearch" placeholder="按台词搜素材：试试「定时炸弹」或「窗帘盒」" style="max-width:360px" oninput="renderPack()">
-    <button class="ghost" style="font-size:11px" onclick="rebuildDigest()" title="包级统一理解：导演视角盘点全部素材（题材/资产清单/逐条定位/缺口）。识别有增删后建议重跑——draft 起草会以它开头">📋 重新盘点</button>
+    <button class="ghost" id="tallbtn" onclick="transcribeAll()" data-i18n="pk.tall">↻ 转写全部待审</button>
+    <button class="ghost" id="uallbtn" onclick="understandAll()" data-i18n="pk.uall">◉ 识别全部待审</button>
+    <input type="text" id="tsearch" data-i18n-ph="pk.search.ph" placeholder="按台词搜素材（转写文本 / 素材 id）" style="max-width:360px" oninput="renderPack()">
+    <button class="ghost" style="font-size:11px" onclick="rebuildDigest()" data-i18n="pk.digest" data-i18n-t="pk.digest.t">📋 重新盘点</button>
     <span class="statusline" id="tallstat"></span>
   </div>
   <div id="packgroups"></div>
@@ -406,6 +400,209 @@ const $=id=>document.getElementById(id);
 const nz=(v,d)=>(v===undefined||v===null||v==='')?d:v;
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // 单引号转义：inline onclick 单引号拼接断串/XSS 根（Claude P1-①）
 const cssbg=st=>'background:'+String(st.bg||'0xFFD400').replace('0x','#')+';color:'+String(st.fg||'0x111').replace('0x','#')+';border:2px solid '+String(st.stroke||'0x000').replace('0x','#');  // 贴纸文字模板 swatch（drawtext 的 0xRRGGBB → CSS）
+
+/* ═══ i18n（2026-10-15 双语化）：DOM 模板保留中文原文+data-i18n 属性，渲染后 applyLang() 统一改写；
+   非 DOM 文案（alert/confirm/prompt/setStatus）走 t()。语言存 localStorage，默认 zh 与历史行为一致。
+   加新文案纪律：三处同步——data-i18n 属性 + zh + en。t(k,a,b…) 依次替换 %s。═══ */
+const I18N={
+zh:{
+'status.ready':'就绪',
+'chip.saved':'✓ 已自动保存','chip.dirty':'● 未保存 · 点我重试',
+'tab.config':'项目','tab.registry':'注册表','tab.create':'创作台','tab.library':'素材库','tab.home':'⌂ 返回主页',
+'st.lbl':'故事线','st.del.t':'删除该故事线（归档可找回）','st.new.t':'新建故事线（同一批素材的另一种成片取法）',
+'pipe.next':'下一动作: ','pipe.alldone':'全部就绪',
+'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目名（字母/数字/-，如 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
+'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
+'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。',
+'cfg.registry':'全盘注册表','cfg.regnote':'创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。',
+'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹',
+'reg.manage':'管理 →','reg.empty':'空','reg.noruntime':'未装运行时','reg.single':'单故事线','reg.mgr':'注册表管理',
+'reg.add':'＋ 新增条目','reg.import':'⬆ 导入素材文件','dlg.close':'✕ 关闭',
+'reg.fmtnote':'文件格式：%s · 注册表是人与 Agent 共用的选材事实源——改完保存即生效，下一次渲染使用新值',
+'reg.name.ph':'名称','reg.desc.ph':'描述（Agent 选材依据）','reg.del':'删除','reg.emptylist':'空注册表——点右上「新增条目」或「导入素材文件」',
+'reg.imgmissing':'图缺失','reg.file.bgm':'音频（mp3/wav/m4a/flac）','reg.file.sfx':'音频（mp3/wav/m4a/flac）','reg.file.stickers':'图片（png 透明底）','reg.file.subtitles':'—纯JSON样式，无需文件—','reg.file.transitions':'—纯JSON转场，无需文件—',
+'voice.title':'声纹管理 · 本地 TTS','voice.hint':'零样本克隆：参考音频 0.5-30s + 逐字稿一字不差',
+'voice.test':'试听','voice.del':'删除','voice.none':'暂无已注册音色','voice.name.ph':'音色名（英文/数字）','voice.pick':'选参考音频…','voice.nofile':'未选择','voice.text.ph':'参考音频逐字稿（一字不差，硬契约）','voice.register':'注册音色',
+'voice.notinstalled':'⚠ Audio8 运行时未安装——按 README「本地 TTS」装 ~/.local/share/autocut3/audio8 后重开',
+'cr.final':'成片','cr.outline':'故事线大纲 · 贯穿元素','cr.outline.hint':'手写 / Agent 审计 / 脚本分幕','cr.draft':'✨ AI 起草','cr.draft.t':'AI 读取素材理解档案，起草一条新故事线（不碰现有线）',
+'cr.outline.ph':'这条故事线在讲什么——人和 Agent 共同的创作参考',
+'cr.beats':'幕序列 · 每幕是多轨上的一刀',
+'cr.beatsnote':'最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。',
+'cr.cover':'封面收口','cr.cover.hint':'第 0 张 · 钉在最左',
+'meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量','meta.grade':'画幅氛围',
+'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','meta.grade.natural':'自然','mus.bgm.t':'幕级换曲（注册表）','meta.grade.warm':'暖调','meta.grade.cool':'冷调','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
+'cov.strategy':'封面策略','cov.title':'封面标题','cov.beat':'底图幕号','cov.at':'幕内秒','cov.prompt':'提示词',
+'cov.prompt.ph':'保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白',
+'cov.gen':'✨ AI 试样（出样张）','cov.make':'🖼 出封面（保存→生成→体检）','cov.upload':'⬆ 上传封面','cov.none':'暂无封面 · 「出封面」按钮或渲染前自动生成',
+'beat.add.t':'在此处插入一幕','beat.append.t':'在末尾追加一幕','beat.del.t':'删幕','beat.preview':'▶ 幕预览','beat.rendering':'渲染中…',
+'beat.roleA':'A 主画','beat.roleB':'B 叠加','beat.src.t':'素材来源','beat.in':'入点','beat.dur':'时长','beat.win.t':'本轨取用的素材窗口（原始素材内起止秒）',
+'beat.in.t':'源入点秒：从素材第几秒开始取','beat.dur.t':'时长秒：取多少秒（右侧即素材窗口起止）',
+'beat.req.t':'选用理由/素材要求——Agent 起草时自述为什么选这条素材；点击可改为你的采购要求。纯档案字段，渲染不读','beat.req.add':'＋ 选材理由（点击填写）','beat.req.ph':'选材理由 / 采购要求（回车或失焦生效）',
+'beat.pos.t':'画中画位置','beat.scale.t':'缩放','beat.deltrk.t':'删轨',
+'eff.text':'短语','eff.text.ph':'≤6字','eff.atword':'词点','eff.dur':'时长','eff.at':'时刻','eff.none':'无',
+'lane.preview':'幕预览','lane.preview.hint':'点框即渲 · 秒级低清','lane.sub':'字幕轨','lane.video':'视频轨','lane.video.hint':'A 定时长 · B 叠加','lane.nar':'旁白轨','lane.nar.hint':'本幕语音来源','lane.trans':'转场轨','lane.trans.hint':'本幕→下一幕','lane.sticker':'贴纸轨','lane.sticker.hint':'词点触发','lane.sfx':'音效轨','lane.sfx.hint':'时刻触发','lane.music':'音乐轨',
+'beat.addB':'＋ B 轨','beat.addstk':'＋ 贴纸','beat.addsfx':'＋ 音效','beat.norole':'（无）','beat.followglobal':'（跟随全局）',
+'sub.dub':'配音台词 · TTS+卡拉OK','sub.none':'静音幕 · 无字幕','sub.orig':'原声转写 · 只读',
+'sub.dub.t':'dub 幕：这段文字就是配音台词=卡拉OK字幕（pipeline 按配音实测时长均分词轨）。按口语台词标准写；改后下次渲染生效',
+'sub.none.body':'静音幕——无字幕。已有文本仅作语义摘要存档（创作台可见），不上画面。',
+'sub.empty':'该素材窗口内暂无转写词轨——素材库跑转写后这里显示精确字幕',
+'sub.meta':'精确字幕 · 素材原声转写 · 窗口 %s–%s · 只读（改内容=换素材或改入点/时长）',
+'sub.style.t':'幕级字幕样式（注册表）；留空=继承全局','nar.mode.t':'切换后字幕轨随之分流：dub=台词可编辑 / original=原声转写只读 / none=静音无字幕',
+'mus.inherit':'继承贯穿 BGM','mus.nobgm':'（此幕无 BGM）','mus.seg':'段落','mus.loop':'循环','mus.seg.t':'选用曲内段落（注册表 segments）','mus.loop.t':'段/曲短于幕时循环盖满；取消=播完即静音','mus.noseg':'该曲无段落','mus.whole':'（整条）',
+'lib.mine':'项目素材','lib.mine.tag':'仅本项目','lib.minenote':'本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。',
+'lib.packs':'跨项目素材','lib.packs.tag':'仓库级','lib.packsnote':'<b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。',
+'pk.id.ph':'新包 id（字母数字-）','pk.name.ph':'包名（可中文）','pk.create':'＋ 建包','pk.mount':'挂载到本项目','pk.unmount':'卸载选中','pk.pick':'— 选择包 —','pk.mounted':'（已挂）',
+'pk.tall':'↻ 转写全部待审','pk.uall':'◉ 识别全部待审','pk.search.ph':'按台词搜素材（转写文本 / 素材 id）','pk.digest':'📋 重新盘点','pk.digest.t':'包级统一理解：导演视角盘点全部素材（题材/资产清单/逐条定位/缺口）。识别有增删后建议重跑——draft 起草会以它开头',
+'pk.empty':'还没有挂载素材包——上方「＋ 建包」后上传素材，或从下拉挂载已有包；挂载后点「↻ 转写全部待审」开始审计',
+'pk.nohit':'无命中——台词搜索覆盖已转写素材','pack.missing':'素材文件缺失','pack.unusable':'素材不可用',
+'pack.kind.video':'▶ 视频 · 转写+识别','pack.kind.image':'🖼 图片 · 识别+OCR','pack.kind.audio':'♪ 音频 · 转写',
+'pack.hit':'命中','pack.nospeech':'（无有效语音 · 纯画面镜头）','pack.usage':'▸ 用途：','pack.manual':'人工·','pack.log':'台账·',
+'pack.pending':'◌ 待审','pack.usable':'✓ 可用','pack.waste':'✕ 拍摄废片','pack.usebadge.t':'点击切换拍摄层可用性',
+'pack.adddefect':'＋ 缺陷','pack.tr.dash':'转写 —','pack.tr.go':'⟳ 转写','pack.tr.ok':'转写 ✓','pack.tr.t':'云端转写（供应商见 config/services.json）',
+'pack.pf':'文字校对 · ','pack.pf.ok':'✓','pack.pf.edit':'可编辑','pack.vi.dash':'视觉 —','pack.vi.go':'⟳ 画面识别','pack.vi.ok':'识别 ✓','pack.vi.t':'采样帧+视觉模型（供应商见 config/services.json）',
+'pack.text.ph':'校对转写文本……','cut.text.ph':'校对台词（失焦即落盘）','cut.empty':'尚无项目切片——渲染成片后由源片自动切出（窗口+权威词轨随切片落档）',
+'def.type.p':'缺陷类型（说错 / 卡等 / 重复 / 气口 / 抖动 / 其他）','def.at.p':'发生时刻（秒）','def.note.p':'备注',
+'view.noout':'暂无成片 · 点「保存并重渲」生成','view.rendered':'✓ 已出片','view.notrendered':'未出片','view.render':'▶ 保存并重渲','view.replay':'▷ 重放','view.replay.t':'成片已存在时在监视器重放',
+'pulse.rendering':'⚙ 渲染中（%s）[%s] %s%——后台/命令行启动的渲染也能看到',
+'msg.unsaved.confirm':'当前故事线有未保存修改，切换将丢弃——继续？',
+'msg.delstory.confirm':'删除故事线「%s」？成片/字幕/预览一并归档到 projects/_attic/，可手工找回。',
+'msg.delproj.confirm':'删除项目「%s」？整个工程目录归档到 projects/_attic/；跨项目素材是仓库级资产，不受影响。',
+'msg.delbeat.confirm':'删除幕 #%s？自动落盘后不可找回（整条幕的轨道/贴纸/音效一并消失）',
+'msg.deltrack.confirm':'删除该 B 轨叠加？自动落盘后不可找回',
+'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？','msg.delcutdef.confirm':'删除这条缺陷标记？',
+'msg.newstory.p':'新故事线 id（字母数字下划线中划线）：\n例：koubo2 / aidraft-x','msg.badid':'id 只允许字母数字下划线中划线',
+'msg.save.fail':'✗ 保存失败：%s——DIRTY 保持，点右上角芯片重试',
+'msg.draft.p':'给 AI 一句起草意图：\n例：用开场钩子和空镜起一条 3 幕口播线，总长 40 秒',
+'msg.sync.new':'↻ 对方更新了 %s，自动载入','msg.sync.conflict':'对方（Agent）刚更新了「%s」，你的本地改动未保存。\n载入新版本（丢弃本地改动）？',
+'msg.voice.test.p':'试听文本','msg.voice.test.d':'你好，这是一条试听配音。',
+'msg.regimport.badid':'id 只允许字母/数字/下划线/中划线（≤40）——与新增条目同口径',
+'msg.wizard.badname':'项目名只允许字母/数字/._-（开头须字母或数字）——与服务端白名单同口径',
+'voice.pickfile.err':'✗ 先选参考音频文件','voice.name.err':'✗ 音色名只能英文/数字/._-','voice.text.err':'✗ 逐字稿必填（零样本克隆硬契约）','voice.registering':'注册中（零样本克隆推理中，请稍候）…','voice.registered':'✓ 已注册 %s','voice.regfail':'注册失败','voice.synth':'试听合成中…（已 %ss，本地 CPU 推理）','voice.testready':'✓ 试听已生成，加载播放中…','voice.playing':'✓ 试听播放中（生成 %ss）','voice.autoplay':'✓ 试听已生成（浏览器拦截自动播放，点页面任意处再听）','voice.testfail':'试听失败','voice.del.confirm':'删除音色 %s？',
+'msg.deleted':'✓ 已删除 %s','msg.delfail':'删除失败','msg.createfail':'创建失败：','msg.savefail':'保存失败：','msg.importfail':'导入失败：',
+'cfg.pdel.t':'删除项目（归档到 _attic，可找回）','reg.bgm':'BGM','reg.subtitles':'字幕样式','reg.transitions':'转场','reg.sfx':'音效','reg.stickers':'贴纸','reg.sample':'样字','msg.regdel.confirm':'删除条目「%s」？\n（素材文件保留在 assets/，可再导入恢复）','msg.regimport.idp':'条目 id（Agent 用它引用）：','msg.regimport.dup':'id 已存在','msg.regadd.idp':'新条目 id（字母/数字/下划线/中划线，Agent 用它引用）：',
+'src.project':'（项目自有切片）','src.project.suffix':' · 项目自有',
+'msg.wizard.noname':'先填项目名','msg.wizard.done':'✓ 项目已创建：%s',
+'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：',
+'msg.draft.d':'用开场钩子+空镜，起一条 3 幕口播线','msg.draft.busy':'✨ 起草中…（约1分钟）','msg.draft.busy2':'AI 正在读素材档案起草故事线…','msg.draft.done':'✓ AI 草稿已落盘：%s 幕 · %s','msg.draft.fail':'起草失败：',
+'msg.saving':'保存中…','msg.saved':'✓ 已保存 %s · 人和 Agent 同一事实',
+'msg.render.queue':'渲染排队…','msg.render.startfail':'任务启动失败','msg.render.timeout':'✗ 渲染进度轮询超时（25 分钟无结果）——任务可能仍在跑，看 render.status 或稍后刷新','msg.render.ing':'渲染中 [%s] %s%','msg.render.fail':'✗ 渲染失败：','msg.render.done':'✓ 渲染完成 %s · 监视器/封面已刷新','msg.render.none':'还没有成片——先「保存并重渲」',
+'msg.cover.done':'✓ 封面已收口','msg.cover.upfail':'✗ 上传失败','msg.cover.noprompt':'✗ 先填提示词（写法见提示框）','msg.cover.genbusy':'✨ AI 试样中（约 10-30s）…','msg.cover.sampledone':'✓ 样张已出——满意后保存，再「出封面」正式收口','msg.cover.genfail':'生成失败','msg.cover.making':'🖼 出封面中…','msg.cover.ready':'封面就绪','msg.cover.fail':'封面失败',
+'msg.pv.done':'✓ 幕 #%s 独立预览（%s）','msg.pv.fail':'✗ 幕渲染失败：%s（完整日志见 studio 终端）',
+'msg.digest.busy':'⏳ 盘点中…（全包 LLM 调用，约 15-30s）','msg.digest.done':'📋 素材包盘点已更新：%s','msg.digest.fail':'盘点失败：','msg.digest.reqfail':'盘点请求失败：',
+'msg.pk.count':'%s 条','pack.text.t':'转写文本（%s）· 可直接校对，失焦即落盘','pack.mark':'标记',
+'msg.pack.savefail':'✗ 拍摄层保存失败','def.type.d':'说错',
+'msg.tr.busy':'⟳ 转写中…','msg.tr.done':'✓ 转写完成 %s','msg.tr.fail':'转写失败','msg.un.busy':'⟳ 识别中…','msg.un.done':'✓ 画面识别完成 %s','msg.un.fail':'识别失败','msg.un.none':'没有待识别素材','msg.un.progress':'识别 %s/%s…','msg.unknown':'未知原因','msg.un.doneall':'✓ 本次识别 %s 条','msg.un.failpart':' · ✗ 失败 %s 条：%s','msg.tr.none':'没有待转写素材','msg.tr.progress':'转写 %s/%s…','msg.tr.doneall':'✓ 本次转写 %s 条','msg.tr.failpart':' · ✗ 失败 %s 条：%s',
+'cut.waste':'废','cut.pf':'校对 · ','cut.vi.t':'切片为源片窗口，不做独立画面识别','msg.cut.savefail':'✗ 切片档案保存失败','msg.pf.done':'✓ 校对已落盘 %s（文字校对 ✓）','msg.pf.fail':'✗ 校对保存失败：','msg.pf.done2':'%s 校对已落盘',
+'msg.nr.done':'✓ 渲染完成 · %s','msg.nr.donebody':'监视器已自动刷新，可回来验收','msg.nr.donetitle':'✓ 渲染完成——AutoCut','msg.nr.donestatus':'✓ 渲染完成（后台任务）· 监视器已刷新','msg.nr.fail':'✗ 渲染失败 · %s','msg.nr.failbody':'见终端/日志','msg.nr.failstatus':'✗ 后台渲染失败（见终端/日志）','msg.sync.data':'↻ 检测到数据更新（Agent/后台），素材库与列表已同步',
+},
+en:{
+'status.ready':'Ready',
+'chip.saved':'✓ Autosaved','chip.dirty':'● Unsaved · click to retry',
+'tab.config':'Projects','tab.registry':'Registries','tab.create':'Creator','tab.library':'Library','tab.home':'⌂ Home',
+'st.lbl':'Storylines','st.del.t':'Delete this storyline (archived, recoverable)','st.new.t':'New storyline (another cut of the same materials)',
+'pipe.next':'Next: ','pipe.alldone':'All done',
+'cfg.newproj':'＋ New project','cfg.name.ph':'Project name (letters/digits/-, e.g. my-first-project)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
+'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
+'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials). Click a card to open; deletion always <b class="k">archives to _attic</b> — recoverable.',
+'cfg.registry':'Global registries','cfg.regnote':'Every dropdown in Creator reads from here — <b class="k">click a card to manage</b> (add/edit/delete/import). Saved changes apply to the next render.',
+'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices',
+'reg.manage':'Manage →','reg.empty':'empty','reg.noruntime':'runtime not installed','reg.single':'single storyline','reg.mgr':'Registry manager',
+'reg.add':'＋ Add entry','reg.import':'⬆ Import asset file','dlg.close':'✕ Close',
+'reg.fmtnote':'File: %s · Registries are the shared source of truth for humans and agents — saved changes apply to the next render',
+'reg.name.ph':'Name','reg.desc.ph':'Description (how the agent picks it)','reg.del':'Delete','reg.emptylist':'Empty registry — use "Add entry" or "Import asset file" above',
+'reg.imgmissing':'missing','reg.file.bgm':'Audio (mp3/wav/m4a/flac)','reg.file.sfx':'Audio (mp3/wav/m4a/flac)','reg.file.stickers':'Image (transparent png)','reg.file.subtitles':'—pure JSON style, no file—','reg.file.transitions':'—pure JSON transition, no file—',
+'voice.title':'Voice manager · Local TTS','voice.hint':'Zero-shot cloning: 0.5–30s reference audio + exact transcript',
+'voice.test':'Listen','voice.del':'Delete','voice.none':'No voices registered yet','voice.name.ph':'Voice name (letters/digits)','voice.pick':'Pick reference audio…','voice.nofile':'None','voice.text.ph':'Exact transcript of the reference audio (word-for-word)','voice.register':'Register voice',
+'voice.notinstalled':'⚠ Audio8 runtime not installed — see README "Local TTS" to install ~/.local/share/autocut3/audio8, then reopen',
+'cr.final':'Final cut','cr.outline':'Storyline outline · recurring elements','cr.outline.hint':'manual / agent audit / scripted beats','cr.draft':'✨ AI draft','cr.draft.t':'AI reads the material dossier and drafts a new storyline (existing lines untouched)',
+'cr.outline.ph':'What this storyline is about — shared reference for human and agent',
+'cr.beats':'Beat sequence · each beat is one cut on the timeline',
+'cr.beatsnote':'The leftmost card is the <b class="k">cover</b> (card 0, always pinned first). Horizontal = timeline direction. <b class="k">A track</b> is the main picture and sets duration; <b class="k">B track</b> overlays. Stickers trigger on <b class="k">words</b>, SFX mix at <b class="k">beat-relative times</b>. Edits are conclusions — <b class="k">autosaved</b> (1s after you pause; watch the chip top-right); the <b class="k">＋</b> on the gold line inserts a beat anywhere.',
+'cr.cover':'Cover','cr.cover.hint':'Card 0 · pinned left',
+'meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume','meta.grade':'Grade',
+'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'beat-frame = representative material frame (only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','meta.grade.natural':'Natural','mus.bgm.t':'Beat-level track override (registry)','meta.grade.warm':'Warm','meta.grade.cool':'Cool','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
+'cov.strategy':'Cover strategy','cov.title':'Cover title','cov.beat':'Base beat','cov.at':'Offset (s)','cov.prompt':'Prompt',
+'cov.prompt.ph':'Keep the reference scene unchanged, warm natural light, slight background blur, leave the top empty',
+'cov.gen':'✨ AI sample','cov.make':'🖼 Build cover (save→generate→check)','cov.upload':'⬆ Upload cover','cov.none':'No cover yet · use "Build cover" or it is generated before render',
+'beat.add.t':'Insert a beat here','beat.append.t':'Append a beat','beat.del.t':'Delete beat','beat.preview':'▶ Preview','beat.rendering':'Rendering…',
+'beat.roleA':'A main','beat.roleB':'B overlay','beat.src.t':'Source material','beat.in':'In','beat.dur':'Dur','beat.win.t':'Source window used by this track (start–end seconds in the original)',
+'beat.in.t':'Source in-point (seconds): where to start taking from the material','beat.dur.t':'Duration (seconds): how much to take (window shown on the right)',
+'beat.req.t':'Why this material / procurement note — the drafting agent states why it picked this clip; click to turn it into your requirement. Archive field only, not read by render','beat.req.add':'＋ Selection reason (click to edit)','beat.req.ph':'Selection reason / requirement (Enter or blur to apply)',
+'beat.pos.t':'PiP position','beat.scale.t':'Scale','beat.deltrk.t':'Delete track',
+'eff.text':'Text','eff.text.ph':'≤6 chars','eff.atword':'At word','eff.dur':'Dur','eff.at':'At','eff.none':'None',
+'lane.preview':'Preview','lane.preview.hint':'click to render · quick low-res','lane.sub':'Subtitles','lane.video':'Video tracks','lane.video.hint':'A sets duration · B overlays','lane.nar':'Narration','lane.nar.hint':'voice source of this beat','lane.trans':'Transition','lane.trans.hint':'this beat → next','lane.sticker':'Stickers','lane.sticker.hint':'word-triggered','lane.sfx':'SFX','lane.sfx.hint':'time-triggered','lane.music':'Music',
+'beat.addB':'＋ B track','beat.addstk':'＋ Sticker','beat.addsfx':'＋ SFX','beat.norole':'(none)','beat.followglobal':'(inherit global)',
+'sub.dub':'Dubbed lines · TTS + karaoke','sub.none':'Silent beat · no subtitles','sub.orig':'Original audio transcript · read-only',
+'sub.dub.t':'dub beat: this text IS the dubbing line = karaoke subtitles (pipeline spreads the word track over the measured dub duration). Write like spoken lines; applies on next render',
+'sub.none.body':'Silent beat — no subtitles. Existing text is kept as a semantic summary (visible in Creator) and never reaches the picture.',
+'sub.empty':'No transcript in this window yet — run transcribe in Library and precise subtitles appear here',
+'sub.meta':'Precise subtitles · source-audio transcript · window %s–%s · read-only (to change content, swap material or adjust in/duration)',
+'sub.style.t':'Beat-level subtitle style (registry); empty = inherit global','nar.mode.t':'Subtitles follow the mode: dub = editable lines / original = source transcript read-only / none = silent',
+'mus.inherit':'Inherit global BGM','mus.nobgm':'(no BGM this beat)','mus.seg':'Segment','mus.loop':'Loop','mus.seg.t':'Pick an intra-track segment (registry segments)','mus.loop.t':'Loop to cover when the segment/track is shorter than the beat; off = silence after it ends','mus.noseg':'No segments on this track','mus.whole':'(whole track)',
+'lib.mine':'Project materials','lib.mine.tag':'this project only','lib.minenote':'Materials and derived assets owned by this project — hand-picked source cuts with authoritative word tracks (live and die with the project). Cross-project shared materials below.',
+'lib.packs':'Shared materials','lib.packs.tag':'repo-wide','lib.packsnote':'<b class="k">Repo-wide materials</b> (materials/packs/, owned by no project) — shoots and generic b-roll, mountable by any project; transcribe/proofread once, reuse everywhere. <b class="k">Review and file first, then use</b>.',
+'pk.id.ph':'New pack id (letters/digits/-)','pk.name.ph':'Pack name (any language)','pk.create':'＋ New pack','pk.mount':'Mount to this project','pk.unmount':'Unmount selected','pk.pick':'— Pick a pack —','pk.mounted':'(mounted)',
+'pk.tall':'↻ Transcribe all pending','pk.uall':'◉ Identify all pending','pk.search.ph':'Search by transcript text or material id','pk.digest':'📋 Re-digest','pk.digest.t':'Pack-level unified understanding: director-view inventory (theme/assets/per-clip roles/gaps). Re-run after identifications change — drafting starts from it',
+'pk.empty':'No packs mounted yet — "＋ New pack" above then upload materials, or mount an existing pack from the dropdown; then "↻ Transcribe all pending" to start auditing',
+'pk.nohit':'No match — transcript search covers transcribed materials','pack.missing':'Material file missing','pack.unusable':'Material unavailable',
+'pack.kind.video':'▶ Video · transcribe+identify','pack.kind.image':'🖼 Image · identify+OCR','pack.kind.audio':'♪ Audio · transcribe',
+'pack.hit':'hit','pack.nospeech':'(no speech · pure footage)','pack.usage':'▸ Use:','pack.manual':'manual·','pack.log':'log·',
+'pack.pending':'◌ pending','pack.usable':'✓ usable','pack.waste':'✕ reject','pack.usebadge.t':'Click to toggle shoot-level usability',
+'pack.adddefect':'＋ Defect','pack.tr.dash':'Transcribe —','pack.tr.go':'⟳ Transcribe','pack.tr.ok':'Transcribe ✓','pack.tr.t':'Cloud transcription (provider in config/services.json)',
+'pack.pf':'Proofread · ','pack.pf.ok':'✓','pack.pf.edit':'editable','pack.vi.dash':'Visual —','pack.vi.go':'⟳ Identify','pack.vi.ok':'Identify ✓','pack.vi.t':'Sampled frames + vision model (provider in config/services.json)',
+'pack.text.ph':'Proofread the transcript…','cut.text.ph':'Proofread the line (saves on blur)','cut.empty':'No project cuts yet — after rendering, cuts are auto-derived from the source (window + authoritative word track filed with each cut)',
+'def.type.p':'Defect type (misspoke / pause / repeat / breath / shake / other)','def.at.p':'At (seconds)','def.note.p':'Note',
+'view.noout':'No final cut yet · use "Save & render"','view.rendered':'✓ rendered','view.notrendered':'not rendered','view.render':'▶ Save & render','view.replay':'▷ Replay','view.replay.t':'Replay the final cut in the monitor when it exists',
+'pulse.rendering':'⚙ Rendering (%s) [%s] %s% — visible even for CLI/background renders',
+'msg.unsaved.confirm':'Current storyline has unsaved changes; switching discards them — continue?',
+'msg.delstory.confirm':'Delete storyline "%s"? Final cut/subtitles/previews are archived to projects/_attic/ — manually recoverable.',
+'msg.delproj.confirm':'Delete project "%s"? The whole workspace is archived to projects/_attic/; shared packs are repo-level assets and unaffected.',
+'msg.delbeat.confirm':'Delete beat #%s? Unrecoverable after autosave (its tracks/stickers/SFX go with it)',
+'msg.deltrack.confirm':'Delete this B-track overlay? Unrecoverable after autosave',
+'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?','msg.delcutdef.confirm':'Delete this defect mark?',
+'msg.newstory.p':'New storyline id (letters/digits/underscore/dash):\ne.g. koubo2 / aidraft-x','msg.badid':'id allows only letters, digits, underscore, dash',
+'msg.save.fail':'✗ Save failed: %s — DIRTY kept, click the chip top-right to retry',
+'msg.draft.p':'Give the AI a one-line intent:\ne.g. draft a 3-beat narration line with a hook opener and b-roll, ~40s total',
+'msg.sync.new':'↻ The other side updated %s, reloading','msg.sync.conflict':'The other side (agent) just updated "%s" and your local edits are unsaved.\nLoad the new version (discard local edits)?',
+'msg.voice.test.p':'Sample text','msg.voice.test.d':'Hello, this is a test narration.',
+'msg.regimport.badid':'id allows only letters/digits/underscore/dash (≤40) — same rule as Add entry',
+'msg.wizard.badname':'Project name allows only letters/digits/._- (must start with a letter or digit) — same whitelist as the server',
+'voice.pickfile.err':'✗ Pick a reference audio file first','voice.name.err':'✗ Voice name allows only letters/digits/._-','voice.text.err':'✗ Transcript is required (zero-shot cloning hard contract)','voice.registering':'Registering (zero-shot cloning inference, please wait)…','voice.registered':'✓ Registered %s','voice.regfail':'registration failed','voice.synth':'Synthesizing sample… (%ss elapsed, local CPU inference)','voice.testready':'✓ Sample ready, loading…','voice.playing':'✓ Sample playing (generated in %ss)','voice.autoplay':'✓ Sample ready (browser blocked autoplay — click anywhere to hear it)','voice.testfail':'sample failed','voice.del.confirm':'Delete voice %s?',
+'msg.deleted':'✓ Deleted %s','msg.delfail':'delete failed','msg.createfail':'Create failed: ','msg.savefail':'Save failed: ','msg.importfail':'Import failed: ',
+'cfg.pdel.t':'Delete project (archived to _attic, recoverable)','reg.bgm':'BGM','reg.subtitles':'Subtitle styles','reg.transitions':'Transitions','reg.sfx':'SFX','reg.stickers':'Stickers','reg.sample':'Aa','msg.regdel.confirm':'Delete entry "%s"?\n(the asset file stays in assets/ and can be re-imported)','msg.regimport.idp':'Entry id (the agent references it):','msg.regimport.dup':'id already exists','msg.regadd.idp':'New entry id (letters/digits/underscore/dash, the agent references it):',
+'src.project':'(project cuts)','src.project.suffix':' · project-owned',
+'msg.wizard.noname':'Enter a project name first','msg.wizard.done':'✓ Project created: %s',
+'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ',
+'msg.draft.d':'draft a 3-beat narration line with a hook opener and b-roll','msg.draft.busy':'✨ Drafting… (~1 min)','msg.draft.busy2':'AI is reading the material dossier and drafting a storyline…','msg.draft.done':'✓ AI draft saved: %s beats · %s','msg.draft.fail':'Draft failed: ',
+'msg.saving':'Saving…','msg.saved':'✓ Saved %s · human and agent share one truth',
+'msg.render.queue':'Queued for render…','msg.render.startfail':'failed to start task','msg.render.timeout':'✗ Render progress poll timed out (no result in 25 min) — the task may still be running; check render.status or refresh later','msg.render.ing':'Rendering [%s] %s%','msg.render.fail':'✗ Render failed: ','msg.render.done':'✓ Render complete %s · monitor/cover refreshed','msg.render.none':'No final cut yet — use "Save & render" first',
+'msg.cover.done':'✓ Cover finalized','msg.cover.upfail':'✗ Upload failed','msg.cover.noprompt':'✗ Write a prompt first (see the guide)','msg.cover.genbusy':'✨ AI sampling (~10-30s)…','msg.cover.sampledone':'✓ Sample ready — if satisfied, save and "Build cover" to finalize','msg.cover.genfail':'generation failed','msg.cover.making':'🖼 Building cover…','msg.cover.ready':'cover ready','msg.cover.fail':'cover failed',
+'msg.pv.done':'✓ Beat #%s standalone preview (%s)','msg.pv.fail':'✗ Beat render failed: %s (full log in the studio terminal)',
+'msg.digest.busy':'⏳ Digesting… (whole-pack LLM call, ~15-30s)','msg.digest.done':'📋 Pack digest updated: %s','msg.digest.fail':'Digest failed: ','msg.digest.reqfail':'Digest request failed: ',
+'msg.pk.count':'%s items','pack.text.t':'Transcript (%s) · proofread directly, saves on blur','pack.mark':'marks',
+'msg.pack.savefail':'✗ Failed to save shoot-level flag','def.type.d':'misspoke',
+'msg.tr.busy':'⟳ Transcribing…','msg.tr.done':'✓ Transcribed %s','msg.tr.fail':'transcribe failed','msg.un.busy':'⟳ Identifying…','msg.un.done':'✓ Identified %s','msg.un.fail':'identify failed','msg.un.none':'No materials pending identification','msg.un.progress':'Identifying %s/%s…','msg.unknown':'unknown reason','msg.un.doneall':'✓ Identified %s this round','msg.un.failpart':' · ✗ %s failed: %s','msg.tr.none':'No materials pending transcription','msg.tr.progress':'Transcribing %s/%s…','msg.tr.doneall':'✓ Transcribed %s this round','msg.tr.failpart':' · ✗ %s failed: %s',
+'cut.waste':'rej','cut.pf':'Proofread · ','cut.vi.t':'Cuts are windows of the source — no separate visual identification','msg.cut.savefail':'✗ Failed to save cut archive','msg.pf.done':'✓ Proofread saved %s (proofread ✓)','msg.pf.fail':'✗ Proofread save failed: ','msg.pf.done2':'%s proofread saved',
+'msg.nr.done':'✓ Render complete · %s','msg.nr.donebody':'Monitor refreshed automatically — come back to review','msg.nr.donetitle':'✓ Render complete — AutoCut','msg.nr.donestatus':'✓ Render complete (background task) · monitor refreshed','msg.nr.fail':'✗ Render failed · %s','msg.nr.failbody':'see terminal/logs','msg.nr.failstatus':'✗ Background render failed (see terminal/logs)','msg.sync.data':'↻ Data updated by agent/background — library and lists synced',
+}};
+let LANG=localStorage.getItem('ac3-lang')||'zh';
+function t(k){let s=(I18N[LANG]&&I18N[LANG][k])!==undefined?I18N[LANG][k]:(I18N.zh[k]!==undefined?I18N.zh[k]:k);
+  for(let i=1;i<arguments.length;i++)s=s.replace('%s',arguments[i]);return s;}
+function applyLang(root){
+  const r=root||document;
+  r.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  r.querySelectorAll('[data-i18n-html]').forEach(el=>{el.innerHTML=t(el.dataset.i18nHtml);});
+  r.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.placeholder=t(el.dataset.i18nPh);});
+  r.querySelectorAll('[data-i18n-t]').forEach(el=>{el.title=t(el.dataset.i18nT);});
+  const lb=$('langbtn');if(lb)lb.textContent=(LANG==='zh'?'EN':'中');
+  document.documentElement.lang=(LANG==='zh'?'zh':'en');
+}
+function toggleLang(){  // 切换=全量重渲染（动态区重建 DOM 时经 applyLang 收尾）
+  LANG=(LANG==='zh'?'en':'zh');localStorage.setItem('ac3-lang',LANG);
+  if(VIEW.page==='config'){loadConfig().then(()=>{renderTabs();applyLang();});}
+  else if(P){buildCreator();buildViews();renderPack();renderCuts();renderTabs();pipePoll();applyLang();}
+  else{renderTabs();applyLang();}
+}
 let P=null, DRAFT=null, VIEW={page:'config',tab:'config',proj:null,story:null};
 let DIRTY=false, SYNC=null;  // DIRTY: 创作台有未落盘改动；SYNC: 当前故事线的 mtime 基线
 let AUTOSAVE_TIMER=null;
@@ -419,31 +616,31 @@ function updateSaveChip(){
   const c=$('save-chip');if(!c)return;
   c.classList.toggle('show',!!P&&VIEW.page==='proj');
   c.classList.toggle('dirty',DIRTY);
-  c.textContent=DIRTY?'● 未保存（自动保存中…）':'✓ 已自动保存';
+  c.textContent=DIRTY?t('chip.dirty'):t('chip.saved');  // 旧文案「自动保存中…」在 debounce 等待/保存失败时均属撒谎（2026-10-15 体检）
 }
 let PULSE=null, CLI_RENDER_SHOWN=null;  // PULSE: /api/pulse 基线；CLI 渲染已展示到的百分比
 let PV_BUSY=false;  // 幕预览渲染中：抑制 PULSE 数据热重载（重建 DOM 会把预览条/滚动位置顶掉——维护者 #9 渲染跳动实锤）
 
-function setStatus(s){$('status').textContent=s;}
-function fmtT(s){s=Math.round((+s)*10)/10;if(isNaN(s))return'?';const m=Math.floor(s/60);let r=Math.round((s-m*60)*10)/10;if(r>=60){m+=1;r=0}return m+':'+(r<10?'0':'')+r.toFixed(1);}
+function setStatus(s,tone){const el=$('status');el.textContent=s;el.style.color=(tone==='bad')?'var(--bad)':'';}  // tone='bad' 错误红（原第二参静默丢弃——1163/1164 实锤漂移）
+function fmtT(s){s=Math.round((+s)*10)/10;if(isNaN(s))return'?';let m=Math.floor(s/60);let r=Math.round((s-m*60)*10)/10;if(r>=60){m+=1;r=0}return m+':'+(r<10?'0':'')+r.toFixed(1);}  // m 须 let：59.95s+ 进位分支 m+=1，const 直接 TypeError 崩渲染（2026-10-15 体检实锤）
 function fmtD(s){if(s===undefined||s===null||isNaN(+s))return'?';return (Math.round(s*10)/10).toFixed(1)+'s';}
 function phReplace(el,text){
-  const d=document.createElement('div');d.className='phbox';d.textContent=text||'素材不可用';
+  const d=document.createElement('div');d.className='phbox';d.textContent=text||t('pack.unusable');
   el.replaceWith(d);return d;
 }
 function setVideo(wrapId,src,phText,poster){
   const w=$(wrapId);if(!w)return;
   w.innerHTML='<video controls playsinline></video>';
   const v=w.querySelector('video');
-  v.onerror=()=>phReplace(v,phText||'素材不可用');
+  v.onerror=()=>phReplace(v,phText||t('pack.unusable'));
   if(poster)v.poster=poster;
   v.src=src;
 }
 
 /* ═══ 页面/签（按 id 定位，永不错位）═══ */
 const PAGES={
-  config:{tabs:[['config','项目'],['registry','注册表']]},
-  proj:{tabs:[['create','创作台'],['library','素材库']]}
+  config:{tabs:[['config','tab.config'],['registry','tab.registry']]},
+  proj:{tabs:[['create','tab.create'],['library','tab.library']]}
 };
 const SECMAP={config:'s-config',registry:'s-registry',create:'s-create',library:'s-library'};
 
@@ -451,45 +648,46 @@ function renderTabs(){
   const pg=PAGES[VIEW.page],t=$('tabs');t.innerHTML='';
   const sel=$('storysel-wrap');
   if(VIEW.page==='proj'){
-    const h=document.createElement('div');h.className='tab home';h.textContent='⌂ 返回主页';
+    const h=document.createElement('div');h.className='tab home';h.dataset.i18n='tab.home';h.textContent='⌂ 返回主页';
     h.onclick=()=>goHome();t.appendChild(h);
   }
   pg.tabs.forEach(([id,lb])=>{
-    const d=document.createElement('div');d.className='tab';d.textContent=lb;d.dataset.id=id;
+    const d=document.createElement('div');d.className='tab';d.dataset.i18n=lb;d.textContent=I18N.zh[lb]||lb;d.dataset.id=id;
     if(VIEW.tab===id)d.classList.add('active');
     d.onclick=()=>showTab(id);
     t.appendChild(d);
   });
   // 故事线切换器：随面包屑（左上角），不再占页签行
   if(VIEW.page==='proj'&&P&&(P.stories||[]).length){
-    sel.innerHTML='<span class="lbl">故事线</span>';
+    sel.innerHTML='<span class="lbl" data-i18n="st.lbl">故事线</span>';
     (P.stories||[]).forEach(s=>{
       const b=document.createElement('div');b.className='stpill'+(VIEW.story===s?' on':'');
       const hasOut=(P.outs||[]).includes(s);
       b.innerHTML=esc(s)+(hasOut?' <span class="done">✓</span>':'')+
-        (((P.stories||[]).length>1)?'<span class="px" title="删除「'+esc(s)+'」（归档可找回）" onclick="event.stopPropagation();delStory(\''+esc(s)+'\')">✕</span>':'');
+        (((P.stories||[]).length>1)?'<span class="px" data-i18n-t="st.del.t" title="'+esc(t('st.del.t'))+'" onclick="event.stopPropagation();delStory(\''+esc(s)+'\')">✕</span>':'');
       b.onclick=()=>openProj(VIEW.proj,s);
       sel.appendChild(b);
     });
-    const add=document.createElement('div');add.className='stpill';add.title='新建故事线（同一批素材的另一种成片取法）';
+    const add=document.createElement('div');add.className='stpill';add.dataset.i18nT='st.new.t';add.title=t('st.new.t');
     add.textContent='＋';add.onclick=newStory;
     sel.appendChild(add);
     sel.classList.add('show');
   }else{
     sel.innerHTML='';sel.classList.remove('show');
   }
+  applyLang();
 }
 async function newStory(){
-  const n=prompt('新故事线 id（字母数字下划线中划线）：\n例：koubo2 / aidraft-x');
+  const n=prompt(t('msg.newstory.p'));
   if(!n)return;
-  if(!/^[\w-]+$/.test(n))return alert('id 只允许字母数字下划线中划线');
+  if(!/^[\w-]+$/.test(n))return alert(t('msg.badid'));
   try{
     const sl={outline:'',meta:{},beats:[]};
     const r=await(await fetch('/api/storyline/'+VIEW.proj+'?story='+encodeURIComponent(n),
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sl)})).json();
     if(r.ok){await refreshPills();await openProj(VIEW.proj,n);}
-    else alert('创建失败：'+(r.err||''));
-  }catch(e){alert('创建失败：'+e);}
+    else alert(t('msg.createfail')+(r.err||''));
+  }catch(e){alert(t('msg.createfail')+e);}
 }
 function showTab(id){
   VIEW.tab=id;
@@ -500,41 +698,52 @@ function showTab(id){
 function go(page){
   VIEW.page=page;VIEW.tab=PAGES[page].tabs[0][0];
   renderTabs();showTab(VIEW.tab);
-  $('crumb').innerHTML=(page==='config')?'配置 · 项目与注册表':
-    ('项目 · <b>'+esc((P&&P.projTitle)||'')+'</b>'+(VIEW.story?' <span class="mono" style="color:var(--gold)">/ '+esc(VIEW.story)+'</span>':''));
 }
 async function goHome(){VIEW.proj=null;P=null;try{await loadConfig();}finally{go('config');}}  // finally：加载失败也保证页面切回首页
 
 /* ═══ 配置页 ═══ */
 async function loadConfig(){
   const projs=await(await fetch('/api/projects')).json();
-  $('projgrid').innerHTML=projs.map((p,i)=>'<div class="pcard" style="animation-delay:'+Math.min(i*0.06,0.4)+'s" onclick="openProj(\''+esc(p.name)+'\')">'+
-    '<button class="pdel" title="删除项目（归档到 _attic，可找回）" onclick="event.stopPropagation();delProject(\''+esc(p.name)+'\')">🗑</button>'+
+  $('projgrid').innerHTML=
+    '<div class="pcard newcard" id="wzcard">'+
+      '<div class="wz-collapsed" onclick="wzToggle()"><span style="font-size:22px;color:var(--gold);line-height:1">＋</span><h3 style="margin:0" data-i18n="cfg.newproj">'+esc(t('cfg.newproj'))+'</h3></div>'+
+      '<div class="wz-form" style="display:none" onclick="event.stopPropagation()">'+
+        '<input id="wz-name" data-i18n-ph="cfg.name.ph" placeholder="'+esc(t('cfg.name.ph'))+'">'+
+        '<input id="wz-title" data-i18n-ph="cfg.title.ph" placeholder="'+esc(t('cfg.title.ph'))+'">'+
+        '<select id="wz-fmt"></select>'+
+        '<button class="primary" onclick="wizardCreate()" data-i18n="cfg.create">'+esc(t('cfg.create'))+'</button>'+
+        '<div class="wz-note" data-i18n="cfg.fmtnote">'+esc(t('cfg.fmtnote'))+'</div>'+
+      '</div>'+
+    '</div>'+
+    projs.map((p,i)=>'<div class="pcard" style="animation-delay:'+Math.min(i*0.06,0.4)+'s" onclick="openProj(\''+esc(p.name)+'\')">'+
+    '<button class="pdel" data-i18n-t="cfg.pdel.t" title="'+esc(t('cfg.pdel.t'))+'" onclick="event.stopPropagation();delProject(\''+esc(p.name)+'\')">🗑</button>'+
     '<div class="pid">'+esc(p.name)+'</div><h3>'+esc(p.title)+'<span class="arrow">→</span></h3>'+
-    '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag">单故事线</span>')+'</div>'+
+    '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag" data-i18n="reg.single">单故事线</span>')+'</div>'+
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
-  const REGS=[['bgm','BGM'],['subtitles','字幕样式'],['transitions','转场'],['sfx','音效'],['stickers','贴纸']];
+  const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers']];
   P={registry:{}};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）
-  for(const[rn]of REGS)P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
+  const _regs=await Promise.all(REGS.map(([rn])=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发取五件套（原串行 5 个 RTT，2026-10-15 体检）
+  REGS.forEach(([rn],i)=>P.registry[rn]=_regs[i]);
   try{P._voices=await(await fetch('/api/voices')).json();}catch(e){P._voices={installed:false,voices:[]};}
   const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
   const names=rn=>items(rn).map(k=>(P.registry[rn][k].name||k)).join(' · ');
   const vlist=(P._voices.voices||[]);
   const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
-    [['视频类型',(en.video_types||[]).length,names(en.video_types||[])&&((en.video_types||[]).map(x=>x.name).join(' · '))],
-     ['封面策略',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
-     ['旁白模式',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
-     ['平台',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
-    ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5>'+r[0]+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
-    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(4*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5>声纹<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||'空')+(P._voices.installed?'':' · 未装运行时')+'</div></div>'+
-    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+5)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5>'+r[1]+'<span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400">管理 →</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||'空')+'</div></div>').join('');
+    [['reg.video_types',(en.video_types||[]).length,names(en.video_types||[])&&((en.video_types||[]).map(x=>x.name).join(' · '))],
+     ['reg.cover_strategies',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
+     ['reg.narration_modes',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
+     ['reg.platforms',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
+    ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5 data-i18n="'+r[0]+'">'+esc(t(r[0]))+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
+    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(4*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+'</div></div>'+
+    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+5)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
+  applyLang();
 }
 /* ═══ 项目操作页 ═══ */
 async function openProj(name,story,silent){
   if(DIRTY&&P&&!silent){
-    if(!confirm('当前故事线有未保存修改，切换将丢弃——继续？'))return;
+    if(!confirm(t('msg.unsaved.confirm')))return;
     DIRTY=false;
   }
   const q=story?('?story='+encodeURIComponent(story)):'';
@@ -546,7 +755,9 @@ async function openProj(name,story,silent){
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
   P.registry={};
-  for(const rn of ['bgm','subtitles','transitions','sfx','stickers'])P.registry[rn]=await(await fetch('/api/registry/'+rn)).json();
+  const _rn=['bgm','subtitles','transitions','sfx','stickers'];
+  const _rv=await Promise.all(_rn.map(rn=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发（openProj 关键路径原串行白多 4 个 RTT）
+  _rn.forEach((rn,i)=>P.registry[rn]=_rv[i]);
   go('proj');renderTabs();buildCreator();buildViews();
   renderPack();renderCuts();
   if(!silent)showTab('create');
@@ -564,27 +775,27 @@ async function openProj(name,story,silent){
 async function delStory(sid){
   sid=sid||VIEW.story;
   if(!sid)return;
-  if(!confirm('删除故事线「'+sid+'」？成片/字幕/预览一并归档到 projects/_attic/，可手工找回。'))return;
+  if(!confirm(t('msg.delstory.confirm',sid)))return;
   try{
     const r=await(await fetch('/api/storyline-delete/'+VIEW.proj+'?story='+encodeURIComponent(sid),{method:'POST'})).json();
-    if(r.ok){setStatus('已删除 '+sid+' → '+String(r.attic).split('projects/').pop());VIEW.story=((P.stories||[]).filter(s=>s!==sid))[0]||null;await openProj(VIEW.proj,VIEW.story);}
-    else alert('删除失败：'+(r.err||''));
-  }catch(e){alert('删除失败：'+e);}
+    if(r.ok){setStatus(t('msg.deleted',sid)+' → '+String(r.attic).split('projects/').pop());VIEW.story=((P.stories||[]).filter(s=>s!==sid))[0]||null;await openProj(VIEW.proj,VIEW.story);}
+    else alert(t('msg.delfail')+'：'+(r.err||''));
+  }catch(e){alert(t('msg.delfail')+'：'+e);}
 }
 async function delProject(name){
-  if(!confirm('删除项目「'+name+'」？整个工程目录归档到 projects/_attic/；跨项目素材是仓库级资产，不受影响。'))return;
+  if(!confirm(t('msg.delproj.confirm',name)))return;
   try{
     const r=await(await fetch('/api/project-delete/'+name,{method:'POST'})).json();
-    if(r.ok){setStatus('已删除项目 → '+r.attic);VIEW.page='config';await loadConfig();go('config');}
-    else alert('删除失败：'+(r.err||''));
-  }catch(e){alert('删除失败：'+e);}
+    if(r.ok){setStatus(t('msg.deleted',name)+' → '+r.attic);VIEW.page='config';await loadConfig();go('config');}
+    else alert(t('msg.delfail')+'：'+(r.err||''));
+  }catch(e){alert(t('msg.delfail')+'：'+e);}
 }
 
 /* ═══ 创作台 ═══ */
 /* ═══ 声纹管理抽屉（本地 Audio8 零样本克隆音色） ═══ */
 function openVoiceMgr(){
   $('voicemgr').style.display='block';
-  $('voice-hint').textContent='零样本克隆：参考音频 0.5-30s + 逐字稿一字不差';
+  $('voice-hint').textContent=t('voice.hint');
   renderVoiceMgr();
 }
 function closeVoiceMgr(){$('voicemgr').style.display='none'}
@@ -596,62 +807,62 @@ async function renderVoiceMgr(){
     const n=v.name||v;
     return '<div class="regrow" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)">'+
       '<b style="flex:1">'+esc(n)+'</b>'+
-      '<button class="ghost" onclick="voiceTest(\''+esc(n)+'\')">试听</button>'+
-      '<button class="ghost" style="color:#e5484d" onclick="voiceDel(\''+esc(n)+'\')">删除</button></div>';
+      '<button class="ghost" onclick="voiceTest(\''+esc(n)+'\')">'+esc(t('voice.test'))+'</button>'+
+      '<button class="ghost" style="color:var(--bad)" onclick="voiceDel(\''+esc(n)+'\')">'+esc(t('voice.del'))+'</button></div>';
   }).join('');
   $('voicemgr-body').innerHTML=
-    (!r.installed?'<div style="padding:14px;color:var(--gold)">⚠ Audio8 运行时未安装——按 README「本地 TTS」装 ~/.local/share/autocut3/audio8 后重开</div>':'')+
-    (rows||'<div style="padding:14px;color:var(--faint)">暂无已注册音色</div>')+
+    (!r.installed?'<div style="padding:14px;color:var(--gold)">'+esc(t('voice.notinstalled'))+'</div>':'')+
+    (rows||'<div style="padding:14px;color:var(--faint)">'+esc(t('voice.none'))+'</div>')+
     '<div style="padding:16px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
-    '<input id="vname" placeholder="音色名（英文/数字）" style="width:160px">'+
-    '<button class="ghost" onclick="$(\'voicefile\').click()">选参考音频…</button>'+
-    '<span id="vfile-label" style="color:var(--faint);font-size:12px">未选择</span>'+
-    '<input id="vtext" placeholder="参考音频逐字稿（一字不差，硬契约）" style="flex:1;min-width:220px">'+
-    '<button class="primary" onclick="voiceRegister()">注册音色</button></div>';
-  $('voicefile').onchange=()=>{$('vfile-label').textContent=($('voicefile').files[0]||{}).name||'未选择';};
+    '<input id="vname" placeholder="'+esc(t('voice.name.ph'))+'" style="width:160px">'+
+    '<button class="ghost" onclick="$(\'voicefile\').click()">'+esc(t('voice.pick'))+'</button>'+
+    '<span id="vfile-label" style="color:var(--faint);font-size:12px">'+esc(t('voice.nofile'))+'</span>'+
+    '<input id="vtext" placeholder="'+esc(t('voice.text.ph'))+'" style="flex:1;min-width:220px">'+
+    '<button class="primary" onclick="voiceRegister()">'+esc(t('voice.register'))+'</button></div>';
+  $('voicefile').onchange=()=>{$('vfile-label').textContent=($('voicefile').files[0]||{}).name||t('voice.nofile');};
 }
 async function voiceRegister(){
   const f=$('voicefile').files[0];
   const name=($('vname').value||'').trim();
   const text=($('vtext').value||'').trim();
-  if(!f){$('voice-hint').textContent='✗ 先选参考音频文件';return;}
-  if(!/^[\w.-]+$/.test(name)){$('voice-hint').textContent='✗ 音色名只能英文/数字/._-';return;}
-  if(!text){$('voice-hint').textContent='✗ 逐字稿必填（零样本克隆硬契约）';return;}
-  $('voice-hint').textContent='注册中（零样本克隆推理中，请稍候）…';
+  if(!f){$('voice-hint').textContent=t('voice.pickfile.err');return;}
+  if(!/^[\w.-]+$/.test(name)){$('voice-hint').textContent=t('voice.name.err');return;}
+  if(!text){$('voice-hint').textContent=t('voice.text.err');return;}
+  $('voice-hint').textContent=t('voice.registering');
   try{
     const r=await(await fetch('/api/voice-register?name='+encodeURIComponent(name)+'&text='+encodeURIComponent(text),
       {method:'POST',body:f})).json();
-    if(r.ok){$('voice-hint').textContent='✓ 已注册 '+name;renderVoiceMgr();loadConfig();}
-    else $('voice-hint').textContent='✗ '+((r.err||r.error)||'注册失败');
+    if(r.ok){$('voice-hint').textContent=t('voice.registered',name);renderVoiceMgr();loadConfig();}
+    else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.regfail'));
   }catch(e){$('voice-hint').textContent='✗ '+e;}
 }
 async function voiceTest(name){
   const t0=Date.now();
-  const tick=setInterval(()=>{$('voice-hint').textContent='试听合成中…（已 '+Math.round((Date.now()-t0)/1000)+'s，本地 CPU 推理）';},1000);
+  const tick=setInterval(()=>{$('voice-hint').textContent=t('voice.synth',Math.round((Date.now()-t0)/1000));},1000);
   try{
-    const text=prompt('试听文本','大家好，今天继续讲装修避坑。')||'';
+    const text=prompt(t('msg.voice.test.p'),t('msg.voice.test.d'))||'';
     if(!text)return;
     const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text))).json();
-    if(r.ok){$('voice-hint').textContent='✓ 试听已生成，加载播放中…';new Audio(r.url).play()
-      .then(()=>{$('voice-hint').textContent='✓ 试听播放中（生成 '+Math.round((Date.now()-t0)/1000)+'s）';})
-      .catch(()=>{$('voice-hint').textContent='✓ 试听已生成（浏览器拦截自动播放，点页面任意处再听）';});}
-    else $('voice-hint').textContent='✗ '+((r.err||r.error)||'试听失败');
+    if(r.ok){$('voice-hint').textContent=t('voice.testready');new Audio(r.url).play()
+      .then(()=>{$('voice-hint').textContent=t('voice.playing',Math.round((Date.now()-t0)/1000));})
+      .catch(()=>{$('voice-hint').textContent=t('voice.autoplay');});}
+    else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.testfail'));
   }catch(e){$('voice-hint').textContent='✗ '+e;}
-  clearInterval(tick);
+  finally{clearInterval(tick);}  // 取消 prompt 的 return 也要还计时器——否则"合成中"每秒刷屏到下次操作（2026-10-15 体检）
 }
 async function voiceDel(name){
-  if(!confirm('删除音色 '+name+'？'))return;
+  if(!confirm(t('voice.del.confirm',name)))return;
   const r=await(await fetch('/api/voice-delete/'+encodeURIComponent(name),{method:'POST'})).json();
-  $('voice-hint').textContent=r.ok?('✓ 已删除 '+name):('✗ '+((r.err||r.error)||'删除失败'));
+  $('voice-hint').textContent=r.ok?t('msg.deleted',name):('✗ '+((r.err||r.error)||t('msg.delfail')));
   renderVoiceMgr();loadConfig();
 }
 
 /* ═══ 注册表管理抽屉：五件套（bgm/subtitles/transitions/sfx/stickers）增删改+素材导入 ═══ */
 let REGCUR=null;
-const REGFILE={bgm:'音频（mp3/wav/m4a/flac）',sfx:'音频（mp3/wav/m4a/flac）',stickers:'图片（png 透明底）',subtitles:'—纯JSON样式，无需文件—',transitions:'—纯JSON转场，无需文件—'};
-function openRegMgr(rn,title){
+const REGFILE={bgm:'reg.file.bgm',sfx:'reg.file.sfx',stickers:'reg.file.stickers',subtitles:'reg.file.subtitles',transitions:'reg.file.transitions'};  // 值=i18n key
+function openRegMgr(rn,titleKey){
   REGCUR=rn;
-  $('regmgr-title').textContent=title+' · 注册表管理';
+  $('regmgr-title').textContent=t(titleKey)+' · '+t('reg.mgr');
   $('regmgr').style.display='block';
   renderRegMgr();
 }
@@ -662,16 +873,16 @@ async function renderRegMgr(){
   const ids=Object.keys(reg).filter(k=>!k.startsWith('_'));
   const needFile=(REGCUR==='bgm'||REGCUR==='sfx'||REGCUR==='stickers');
   $('regmgr-body').innerHTML=
-    '<div style="font-size:11px;color:var(--faint);margin-bottom:12px">文件格式：'+REGFILE[REGCUR]+' · 注册表是人与 Agent 共用的选材事实源，改完即时生效（下一次渲染生效）</div>'+
+    '<div style="font-size:11px;color:var(--faint);margin-bottom:12px">'+esc(t('reg.fmtnote',t(REGFILE[REGCUR])))+'</div>'+
     ids.map(id=>{const e=reg[id];
       let prev='';
       if((REGCUR==='bgm'||REGCUR==='sfx')&&e.file)
         prev='<audio controls preload="none" src="/files/'+esc(e.file)+'" style="height:32px;max-width:230px"></audio>';
       else if(REGCUR==='stickers'&&e.text_style)
-        prev='<span class="stkchip-'+esc(id)+'" style="display:inline-block;padding:8px 16px;border-radius:8px;font:600 14px var(--sans);'+cssbg(e.text_style)+'">'+esc(e.default_text||'样字')+'</span>'+
+        prev='<span class="stkchip-'+esc(id)+'" style="display:inline-block;padding:8px 16px;border-radius:8px;font:600 14px var(--sans);'+cssbg(e.text_style)+'">'+esc(e.default_text||t('reg.sample'))+'</span>'+
              '<img data-stkpv="'+esc(id)+'" style="display:none;height:64px;border-radius:8px;border:1px solid var(--line);background:#141414;padding:4px" alt="贴纸样张">';
       else if(REGCUR==='stickers'&&e.file)
-        prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=&quot;font:10px var(--mono);color:var(--faint)&quot;>图缺失</span>\'">';
+        prev='<img src="/files/'+esc(e.file)+'" style="height:46px;border-radius:6px;border:1px solid var(--line);background:#141414;padding:3px" onerror="this.outerHTML=\'<span style=&quot;font:10px var(--mono);color:var(--faint)&quot;>'+esc(t('reg.imgmissing'))+'</span>\'">';
       else if(REGCUR==='subtitles')
         prev=regStyleCard(e)+'<img data-subpv="'+esc(id)+'" style="height:60px;border-radius:6px;border:1px solid var(--line);display:block;margin-top:6px" onerror="this.remove()">';
       else if(REGCUR==='transitions')
@@ -680,11 +891,11 @@ async function renderRegMgr(){
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
       (prev?'<div style="flex:0 0 auto;min-width:150px">'+prev+'</div>':'')+
       '<span style="font:12px var(--mono);color:var(--gold)">'+esc(id)+'</span>'+
-      '<input class="req" style="flex:1;min-width:120px" value="'+esc(e.name||'')+'" placeholder="名称" onchange="regSet(\''+id+'\',\'name\',this.value)">'+
-      '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="描述（Agent 选材依据）" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
+      '<input class="req" style="flex:1;min-width:120px" value="'+esc(e.name||'')+'" placeholder="'+esc(t('reg.name.ph'))+'" onchange="regSet(\''+id+'\',\'name\',this.value)">'+
+      '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="'+esc(t('reg.desc.ph'))+'" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
       (needFile?'<span style="font:10px var(--mono);color:var(--faint)">'+esc(e.file||'')+'</span>':'')+
-      '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">删除</button>'+
-      '</div></div>';}).join('')||'<div class="empty">空注册表——点右上「新增条目」或「导入素材文件」</div>';
+      '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">'+esc(t('reg.del'))+'</button>'+
+      '</div></div>';}).join('')||'<div class="empty">'+esc(t('reg.emptylist'))+'</div>';
   // 字幕样式样张：先请后端按需生成（/api/sub-preview 返回 {ok,url}），再挂图
   document.querySelectorAll('#regmgr-body img[data-subpv]').forEach(async img=>{
     try{const r=await(await fetch('/api/sub-preview/'+encodeURIComponent(img.dataset.subpv))).json();if(r.ok)img.src=r.url;else img.remove();}
@@ -709,15 +920,15 @@ async function regSet(id,k,v){
 async function regSave(reg){
   const st=await fetch('/api/registry-save/'+REGCUR,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reg)});
   const d=await st.json();
-  if(!d.ok){alert('保存失败：'+(d.err||st.status));return false}
+  if(!d.ok){alert(t('msg.savefail')+(d.err||st.status));return false}
   P.registry[REGCUR]=reg;
   return true;
 }
 async function regDel(id){
-  if(!confirm('删除条目「'+id+'」？\n（素材文件保留在 assets/，可再导入恢复）'))return;
+  if(!confirm(t('msg.regdel.confirm',id)))return;
   const st=await fetch('/api/registry-delete/'+REGCUR+'/'+id,{method:'POST'});
   const d=await st.json();
-  if(!d.ok){alert('删除失败：'+(d.err||st.status));return}
+  if(!d.ok){alert(t('msg.delfail')+'：'+(d.err||st.status));return}
   delete P.registry[REGCUR][id];
   renderRegMgr();
 }
@@ -727,20 +938,21 @@ function regImport(){
   fi.onchange=async()=>{
     const f=fi.files[0];if(!f)return;
     let id=(f.name.replace(/\.[^.]+$/,'').toLowerCase()||'asset').replace(/[^a-z0-9_\-]/g,'_');
-    id=prompt('条目 id（Agent 用它引用）:',id)||'';if(!id)return;
+    id=prompt(t('msg.regimport.idp'),id)||'';if(!id)return;
+    if(!/^[\w\-]{1,40}$/.test(id)){alert(t('msg.regimport.badid'));return}  // 前端先拦（2026-10-15 体检：regImport 曾绕过 regAddEntry 的校验）
     const st=await fetch('/api/registry-upload/'+REGCUR+'/'+encodeURIComponent(id)+'?filename='+encodeURIComponent(f.name),{method:'POST',body:f});
     const d=await st.json();
-    if(!d.ok){alert('导入失败：'+(d.err||st.status));return}
+    if(!d.ok){alert(t('msg.importfail')+(d.err||st.status));return}
     await renderRegMgr();
   };
   fi.click();
 }
 function regAddEntry(){
-  let id=prompt('新条目 id（字母/数字/下划线/中划线，Agent 用它引用）:');
+  let id=prompt(t('msg.regadd.idp'));
   if(!id)return;id=id.trim();
-  if(!/^[A-Za-z0-9_\-]{1,40}$/.test(id)){alert('id 只允许字母/数字/下划线/中划线');return}
+  if(!/^[A-Za-z0-9_\-]{1,40}$/.test(id)){alert(t('msg.regimport.badid'));return}
   const reg=Object.assign({},P.registry[REGCUR]);
-  if(reg[id]){alert('id 已存在');return}
+  if(reg[id]){alert(t('msg.regimport.dup'));return}
   const proto=REGCUR==='subtitles'?{font:'Smiley Sans',size:64,primary:'&H00FFFFFF',secondary:'&H00F0F0F0',outline_col:'&H00101010',border:3,marginv:180,karaoke:true,name:id,desc:''}
              :REGCUR==='transitions'?{type:'xfade',preset:'fade',duration:0.5,name:id,desc:''}
              :{name:id,desc:''};
@@ -769,88 +981,89 @@ function bgmTrackId(b){  // 该幕生效的 BGM id（继承→全局，独立→
 function segOptsHtml(bid,cur){
   const conf=((P.registry||{}).bgm||{})[bid];
   const segs=(conf&&conf.segments)||[];
-  return optHtml([{id:'',name:'（整条）'}].concat(segs.map(s=>({id:s.name,name:s.name+(s.desc?'：'+s.desc:'')}))),cur||'');
+  return optHtml([{id:'',name:t('mus.whole')}].concat(segs.map(s=>({id:s.name,name:s.name+(s.desc?'：'+s.desc:'')}))),cur||'');
 }
 function segSelectHtml(bid,cur,i){
-  if(!(((P.registry||{}).bgm||{})[bid]||{}).segments)return '<span style="font-size:10px;color:var(--faint)">该曲无段落</span>';
-  return '<select title="选用曲内段落（注册表 segments）" onchange="DRAFT.beats['+i+'].music.segment=this.value||null;markDirty()">'+segOptsHtml(bid,cur)+'</select>';
+  if(!(((P.registry||{}).bgm||{})[bid]||{}).segments)return '<span style="font-size:10px;color:var(--faint)">'+esc(t('mus.noseg'))+'</span>';
+  return '<select title="'+esc(t('mus.seg.t'))+'" onchange="DRAFT.beats['+i+'].music.segment=this.value||null;markDirty()">'+segOptsHtml(bid,cur)+'</select>';
 }
 function musicRow(b,i){
   const mi=(b.music||{}).inherit!==false, mu=b.music||{};
-  return '<div class="trow"><label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+(mi?'checked':'')+' onchange="DRAFT.beats['+i+'].music.inherit=this.checked;renderBeats()"> 继承贯穿 BGM</label>'+
-    (mi?'':'<select onchange="DRAFT.beats['+i+'].music.bgm=this.value||null;renderBeats()" title="幕级换曲（注册表）">'+
-      optHtml([{id:'',name:'（此幕无 BGM）'}].concat(regList('bgm')),mu.bgm||'')+'</select>')+'</div>'+
-    '<div class="trow"><span style="font-size:10px;color:var(--faint)">段落</span>'+segSelectHtml(bgmTrackId(b),mu.segment||'',i)+
-    '<label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+((mu.loop!==false)?'checked':'')+' onchange="DRAFT.beats['+i+'].music.loop=this.checked;markDirty()" title="段/曲短于幕时循环盖满；取消=播完即静音"> 循环</label></div>';
+  return '<div class="trow"><label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+(mi?'checked':'')+' onchange="DRAFT.beats['+i+'].music.inherit=this.checked;renderBeats()"> '+esc(t('mus.inherit'))+'</label>'+
+    (mi?'':'<select onchange="DRAFT.beats['+i+'].music.bgm=this.value||null;renderBeats()" title="'+esc(t('mus.bgm.t'))+'">'+
+      optHtml([{id:'',name:t('mus.nobgm')}].concat(regList('bgm')),mu.bgm||'')+'</select>')+'</div>'+
+    '<div class="trow"><span style="font-size:10px;color:var(--faint)">'+esc(t('mus.seg'))+'</span>'+segSelectHtml(bgmTrackId(b),mu.segment||'',i)+
+    '<label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+((mu.loop!==false)?'checked':'')+' onchange="DRAFT.beats['+i+'].music.loop=this.checked;markDirty()" title="'+esc(t('mus.loop.t'))+'"> '+esc(t('mus.loop'))+'</label></div>';
 }
 function buildCreator(){
   const m=DRAFT.meta,en=P.enums||{};
   $('outline').value=DRAFT.outline||'';
   $('metabar').innerHTML=
-    '<div class="mf"><label>视频类型</label><select onchange="DRAFT.meta.type=this.value">'+optHtml(en.video_types,m.type)+'</select></div>'+
-    '<div class="mf"><label>人设</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
-    '<div class="mf"><label>平台</label><select onchange="DRAFT.meta.platform=this.value">'+optHtml(en.platforms,m.platform)+'</select></div>'+
-    '<div class="mf"><label>字幕风格</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
-    '<div class="mf"><label>BGM</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表">'+optHtml([{id:'',name:'（无 BGM）'}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
-    (m.audio.bgm_id?'<div class="mf"><label>BGM 段落</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="贯穿曲默认段落；幕级音乐轨可再覆盖">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
-    (m.audio.bgm_id?'<div class="mf"><label>BGM 循环</label><select onchange="DRAFT.meta.audio.bgm_loop=this.value===\'\'?null:this.value===\'true\'" title="段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音"><option value="">自动</option><option value="true"'+(m.audio.bgm_loop===true?' selected':'')+'>循环</option><option value="false"'+(m.audio.bgm_loop===false?' selected':'')+'>不循环</option></select></div>':'')+
-    '<div class="mf"><label>BGM 音量</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="BGM 相对音量 0–1（默认 0.22）"></div>'+
-    '<div class="mf"><label>画幅氛围</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:'自然'},{id:'warm',name:'暖调'},{id:'cool',name:'冷调'}],m.style.grade)+'</select></div>';
+    '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="DRAFT.meta.type=this.value">'+optHtml(en.video_types,m.type)+'</select></div>'+
+    '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
+    '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="DRAFT.meta.platform=this.value">'+optHtml(en.platforms,m.platform)+'</select></div>'+
+    '<div class="mf"><label data-i18n="meta.subtitle">'+esc(t('meta.subtitle'))+'</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
+    '<div class="mf"><label data-i18n="meta.bgm">'+esc(t('meta.bgm'))+'</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="'+esc(t('meta.bgm.t'))+'">'+optHtml([{id:'',name:t('meta.nobgm')}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
+    (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmseg">'+esc(t('meta.bgmseg'))+'</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="'+esc(t('meta.bgmseg.t'))+'">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
+    (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmloop">'+esc(t('meta.bgmloop'))+'</label><select onchange="DRAFT.meta.audio.bgm_loop=this.value===\'\'?null:this.value===\'true\'" title="'+esc(t('meta.bgmloop.t'))+'"><option value="">'+esc(t('meta.auto'))+'</option><option value="true"'+(m.audio.bgm_loop===true?' selected':'')+'>'+esc(t('meta.loop'))+'</option><option value="false"'+(m.audio.bgm_loop===false?' selected':'')+'>'+esc(t('meta.noloop'))+'</option></select></div>':'')+
+    '<div class="mf"><label data-i18n="meta.bgmvol">'+esc(t('meta.bgmvol'))+'</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="'+esc(t('meta.bgmvol.t'))+'"></div>'+
+    '<div class="mf"><label data-i18n="meta.grade">'+esc(t('meta.grade'))+'</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:t('meta.grade.natural')},{id:'warm',name:t('meta.grade.warm')},{id:'cool',name:t('meta.grade.cool')}],m.style.grade)+'</select></div>';
   $('coverops').innerHTML=
-    '<div class="mf"><label>封面策略</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
-    '<div class="mf"><label>封面标题</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value" title="核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）"></div>'+
+    '<div class="mf"><label data-i18n="cov.strategy">'+esc(t('cov.strategy'))+'</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="'+esc(t('cov.strategy.t'))+'">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
+    '<div class="mf"><label data-i18n="cov.title">'+esc(t('cov.title'))+'</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value" title="'+esc(t('cov.title.t'))+'"></div>'+
     ((m.cover.strategy==='beat-frame'||m.cover.strategy==='ai-generated')?
-      '<div class="mf"><label>底图幕号</label><input type="text" style="width:56px" value="'+esc(String(m.cover.beat_no||1))+'" onchange="DRAFT.meta.cover.beat_no=parseInt(this.value)||1" title="'+(m.cover.strategy==='ai-generated'?'AI 底图取自该幕':'封面取自该幕')+'"></div>'+
-      '<div class="mf"><label>幕内秒</label><input type="text" style="width:56px" value="'+esc(String(m.cover.at||0))+'" onchange="DRAFT.meta.cover.at=parseFloat(this.value)||0"></div>':'')+
+      '<div class="mf"><label data-i18n="cov.beat">'+esc(t('cov.beat'))+'</label><input type="text" style="width:56px" value="'+esc(String(m.cover.beat_no||1))+'" onchange="DRAFT.meta.cover.beat_no=parseInt(this.value)||1" title="'+esc(t(m.cover.strategy==='ai-generated'?'cov.beat.t.ai':'cov.beat.t.frame'))+'"></div>'+
+      '<div class="mf"><label data-i18n="cov.at">'+esc(t('cov.at'))+'</label><input type="text" style="width:56px" value="'+esc(String(m.cover.at||0))+'" onchange="DRAFT.meta.cover.at=parseFloat(this.value)||0"></div>':'')+
     ((m.cover.strategy==='ai-generated')?
-      '<div class="mf"><label>提示词</label><textarea rows="3" style="width:100%" oninput="DRAFT.meta.cover.prompt=this.value" placeholder="保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白">'+esc(m.cover.prompt||'')+'</textarea></div>'+
-      '<div style="font-size:11px;color:var(--muted);line-height:1.6;border-left:2px solid var(--line);padding-left:8px">提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截（1026）——含人封面请改用「首帧/指定幕帧」+标题</div>'+
-      '<div><button class="ghost" onclick="genCover()">✨ AI 试样（出样张）</button></div>':'')+
-    '<div><button class="ghost" onclick="makeCover()">🖼 出封面（保存→生成→体检）</button></div>'+
-    '<div><button class="ghost" onclick="$(\'covfile\').click()">⬆ 上传封面</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>';
+      '<div class="mf"><label data-i18n="cov.prompt">'+esc(t('cov.prompt'))+'</label><textarea rows="3" style="width:100%" oninput="DRAFT.meta.cover.prompt=this.value" placeholder="'+esc(t('cov.prompt.ph'))+'">'+esc(m.cover.prompt||'')+'</textarea></div>'+
+      '<div style="font-size:11px;color:var(--dim);line-height:1.6;border-left:2px solid var(--line);padding-left:8px">提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截——含人封面请改用「首帧/指定幕帧」+标题</div>'+
+      '<div><button class="ghost" onclick="genCover()" data-i18n="cov.gen">'+esc(t('cov.gen'))+'</button></div>':'')+
+    '<div><button class="ghost" onclick="makeCover()" data-i18n="cov.make">'+esc(t('cov.make'))+'</button></div>'+
+    '<div><button class="ghost" onclick="$(\'covfile\').click()" data-i18n="cov.upload">'+esc(t('cov.upload'))+'</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>';
   const cw=$('coverwrap');
   cw.innerHTML='<img alt="封面" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#000;min-height:120px;object-fit:cover">';
   const cim=cw.querySelector('img');
-  cim.onerror=()=>phReplace(cim,'暂无封面 · 「出封面」按钮或渲染前自动生成');
+  cim.onerror=()=>phReplace(cim,t('cov.none'));
   cim.src=P.files.cover;
   renderBeats();
   updateSaveChip();
 }
 function srcOptions(cur){
   const opts=[];
-  (P.library.sources||[]).forEach(s=>{if(s.id)opts.push({id:s.id,label:s.id+' · 项目自有'});});
+  (P.library.sources||[]).forEach(s=>{if(s.id)opts.push({id:s.id,label:s.id+t('src.project.suffix')});});
   (P.pack_files||[]).forEach(f=>{opts.push({id:f.id,label:f.id+' · '+fmtD(f.duration)});});
-  return '<option value="">（项目自有切片）</option>'+opts.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.label)+'</option>').join('');
+  return '<option value="">'+esc(t('src.project'))+'</option>'+opts.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===cur?' selected':'')+'>'+esc(o.label)+'</option>').join('');
 }
 function renderBeats(){
   const bs=DRAFT.beats||[];
   // 金线加号：幕与幕之间（及首尾）各一枚圆形＋，点击在该位置插入一幕——加幕不再需要底部动作条
   let h='';
   bs.forEach((b,i)=>{
-    h+='<button class="beat-add" title="在此处插入一幕" onclick="addBeatAt('+i+')">+</button>';
+    h+='<button class="beat-add" title="'+esc(t('beat.add.t'))+'" onclick="addBeatAt('+i+')">+</button>';
     h+=beatCard(b,i);
   });
-  h+='<button class="beat-add" title="在末尾追加一幕" onclick="addBeatAt('+bs.length+')">+</button>';
+  h+='<button class="beat-add" title="'+esc(t('beat.append.t'))+'" onclick="addBeatAt('+bs.length+')">+</button>';
   $('beatcards').innerHTML=h;
+  applyLang($('beatcards'));
 }
 /* ═══ 字幕轨：按旁白模式分流（dub=台词可编辑 / original=原声转写只读 / none=静音）═══
    story 数据面保留：dub 台词源（pipeline 读它做 TTS+字幕）+ Agent 起草摘要存档（创作台可见） */
 function subModeHint(b){
   const m=((b.narration||{}).mode)||'original';
-  return m==='dub'?'配音台词 · TTS+卡拉OK':(m==='none'?'静音幕 · 无字幕':'原声转写 · 只读');
+  return m==='dub'?t('sub.dub'):(m==='none'?t('sub.none'):t('sub.orig'));
 }
 function subBody(b,i){
   const m=((b.narration||{}).mode)||'original';
   if(m==='dub')
-    return '<textarea oninput="DRAFT.beats['+i+'].story=this.value" title="dub 幕：这段文字就是配音台词=卡拉OK字幕（pipeline 按配音实测时长均分词轨）。按口语台词标准写；改后下次渲染生效">'+esc(b.story||'')+'</textarea>';
+    return '<textarea oninput="DRAFT.beats['+i+'].story=this.value" title="'+esc(t('sub.dub.t'))+'">'+esc(b.story||'')+'</textarea>';
   if(m==='none')
-    return '<div class="sub-read" style="color:var(--faint)">静音幕——无字幕。已有文本仅作语义摘要存档（创作台可见），不上画面。</div>';
+    return '<div class="sub-read" style="color:var(--faint)">'+esc(t('sub.none.body'))+'</div>';
   const ws=beatSubWords(b);
   if(!ws.length)
-    return '<div class="sub-read" style="color:var(--faint)">该素材窗口内暂无转写词轨——素材库跑转写后这里显示精确字幕</div>';
+    return '<div class="sub-read" style="color:var(--faint)">'+esc(t('sub.empty'))+'</div>';
   const A=(b.tracks||[]).find(t=>(t.role||'A')==='A')||{};
   return '<div class="sub-read">'+esc(ws.map(w=>w.text).join(''))+'</div>'+
-    '<div class="sub-meta">精确字幕 · 素材原声转写 · 窗口 '+esc(fmtT(nz(A.src_in,0)))+'–'+esc(fmtT(nz(A.src_in,0)+nz(A.duration,0)))+' · 只读（改内容=换素材或改入点/时长）</div>';
+    '<div class="sub-meta">'+esc(t('sub.meta',fmtT(nz(A.src_in,0)),fmtT(nz(A.src_in,0)+nz(A.duration,0))))+'</div>';
 }
 function beatSubWords(b){
   const A=(b.tracks||[]).find(t=>(t.role||'A')==='A')||{};
@@ -869,7 +1082,7 @@ function addBeatAt(i){
     tracks:[{role:'A',cut_index:0,src_in:0,duration:3,requirement:''}],
     music:{inherit:true},effects:{stickers:[],sfx:[]},subtitle:{},transition_out:null});
   DRAFT.beats.forEach((b,j)=>{b.no=j+1;if(!b.id||/^b\d+$/.test(b.id))b.id='b'+(j+1);});
-  renderBeats();beatIntoView(i);
+  renderBeats();beatIntoView(i);markDirty();  // 结构操作不冒泡 input/change，必须显式标脏（2026-10-15 体检：加/删幕曾不落盘，切线即丢）
 }
 function beatIntoView(i){
   const el=document.querySelectorAll('.beat')[i];
@@ -880,85 +1093,92 @@ function beatCard(b,i){
   const trks=(b.tracks||[]).map((t,k)=>{
     const isB=t.role==='B';
     const win0=+nz(t.src_in,0), win1=win0+(+nz(t.duration,3));  // 素材窗口起止（原始素材内的取段）
-    return '<div class="trow"><span class="role">'+(isB?'B 叠加':'A 主画')+'</span>'+
-      '<select title="素材来源" onchange="DRAFT.beats['+i+'].tracks['+k+'].source_id=this.value||null">'+srcOptions(t.source_id)+'</select>'+
-      '<span class="lbl">入点</span><input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="源入点秒：从素材第几秒开始取" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value;updWin('+i+','+k+')">'+
-      '<span class="lbl">时长</span><input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="时长秒：取多少秒（右侧即素材窗口起止）" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value;updWin('+i+','+k+')">'+
-      '<span class="win" id="win-'+i+'-'+k+'" title="本轨取用的素材窗口（原始素材内起止秒）">'+win0.toFixed(1)+'–'+win1.toFixed(1)+'s</span>'+
-      '<div class="req-line" title="选用理由/素材要求——Agent 起草时自述为什么选这条素材；点击可改为你的采购要求。纯档案字段，渲染不读" onclick="reqEdit('+i+','+k+',this)">'+
-        ((t.requirement||'')?'<span class="req-v">'+esc(t.requirement)+'</span>':'<span class="req-e">＋ 选材理由（点击填写）</span>')+'</div>'+
-      (isB?'<select title="画中画位置" onchange="DRAFT.beats['+i+'].tracks['+k+'].pos=this.value">'+optHtml(en.positions,t.pos||'top-right')+'</select>'+
-           '<input class="n" type="text" value="'+esc(nz(t.scale,0.3))+'" title="缩放" oninput="DRAFT.beats['+i+'].tracks['+k+'].scale=this.value">'+
-           '<button class="x" title="删轨" onclick="delTrack('+i+','+k+')">✕</button>':'')+
+    return '<div class="trow"><span class="role">'+(isB?t('beat.roleB'):t('beat.roleA'))+'</span>'+
+      '<select title="'+esc(t('beat.src.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].source_id=this.value||null">'+srcOptions(t.source_id)+'</select>'+
+      '<span class="lbl">'+esc(t('beat.in'))+'</span><input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="'+esc(t('beat.in.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value;updWin('+i+','+k+')">'+
+      '<span class="lbl">'+esc(t('beat.dur'))+'</span><input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="'+esc(t('beat.dur.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value;updWin('+i+','+k+')">'+
+      '<span class="win" id="win-'+i+'-'+k+'" title="'+esc(t('beat.win.t'))+'">'+win0.toFixed(1)+'–'+win1.toFixed(1)+'s</span>'+
+      '<div class="req-line" title="'+esc(t('beat.req.t'))+'" onclick="reqEdit('+i+','+k+',this)">'+
+        ((t.requirement||'')?'<span class="req-v">'+esc(t.requirement)+'</span>':'<span class="req-e">'+esc(t('beat.req.add'))+'</span>')+'</div>'+
+      (isB?'<select title="'+esc(t('beat.pos.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].pos=this.value">'+optHtml(en.positions,t.pos||'top-right')+'</select>'+
+           '<input class="n" type="text" value="'+esc(nz(t.scale,0.3))+'" title="'+esc(t('beat.scale.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].scale=this.value">'+
+           '<button class="x" title="'+esc(t('beat.deltrk.t'))+'" onclick="delTrack('+i+','+k+')">✕</button>':'')+
       '</div>';
   }).join('');
   const stks=((b.effects||{}).stickers||[]).map((s,k)=>
     '<div class="eff"><select onchange="upEff('+i+',\'stickers\','+k+',\'asset\',this.value)">'+optHtml(en.stickers,s.asset)+'</select>'+
-    '<span class="lbl">短语</span><input type="text" style="width:84px" maxlength="6" placeholder="≤6字" value="'+esc(s.text||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'text\',this.value)">'+
-    '<span class="lbl">词点</span><input type="text" style="width:64px" value="'+esc(s.at_word||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'at_word\',this.value)">'+
-    '<span class="lbl">时长</span><input type="text" value="'+esc(nz(s.duration,1.2))+'" onchange="upEff('+i+',\'stickers\','+k+',\'duration\',this.value)">'+
+    '<span class="lbl">'+esc(t('eff.text'))+'</span><input type="text" style="width:84px" maxlength="6" placeholder="'+esc(t('eff.text.ph'))+'" value="'+esc(s.text||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'text\',this.value)">'+
+    '<span class="lbl">'+esc(t('eff.atword'))+'</span><input type="text" style="width:64px" value="'+esc(s.at_word||'')+'" onchange="upEff('+i+',\'stickers\','+k+',\'at_word\',this.value)">'+
+    '<span class="lbl">'+esc(t('eff.dur'))+'</span><input type="text" value="'+esc(nz(s.duration,1.2))+'" onchange="upEff('+i+',\'stickers\','+k+',\'duration\',this.value)">'+
     '<select onchange="upEff('+i+',\'stickers\','+k+',\'pos\',this.value)">'+optHtml(en.positions,s.pos||'top-center')+'</select>'+
     '<button class="x" onclick="delEff('+i+',\'stickers\','+k+')">✕</button></div>').join('');
   const sfx=((b.effects||{}).sfx||[]).map((s,k)=>
     '<div class="eff"><select onchange="upEff('+i+',\'sfx\','+k+',\'asset\',this.value)">'+optHtml(en.sfx,s.asset)+'</select>'+
-    '<span class="lbl">时刻</span><input type="text" value="'+esc(nz(s.at,0))+'" onchange="upEff('+i+',\'sfx\','+k+',\'at\',this.value)">'+
-    '<span class="lbl">时长</span><input type="text" value="'+esc(nz(s.duration,0.4))+'" onchange="upEff('+i+',\'sfx\','+k+',\'duration\',this.value)">'+
+    '<span class="lbl">'+esc(t('eff.at'))+'</span><input type="text" value="'+esc(nz(s.at,0))+'" onchange="upEff('+i+',\'sfx\','+k+',\'at\',this.value)">'+
+    '<span class="lbl">'+esc(t('eff.dur'))+'</span><input type="text" value="'+esc(nz(s.duration,0.4))+'" onchange="upEff('+i+',\'sfx\','+k+',\'duration\',this.value)">'+
     '<button class="x" onclick="delEff('+i+',\'sfx\','+k+')">✕</button></div>').join('');
   // 八轨分区：每轨一个 lane，标签头 + 内容，区分明确
   const laneSub=(t,body,act)=>'<div class="lane"><div class="lane-t">'+t+(act||'')+'</div>'+body+'</div>';
+  const hint=k=>'<span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">'+esc(k)+'</span>';
   return '<div class="beat" style="animation-delay:'+Math.min(i*0.05,0.4)+'s">'+
     '<div class="bhead"><span class="bno">#'+nz(b.no,i+1)+'</span><span class="badge">'+esc(b.id||'')+'</span>'+
-    '<span class="sp"><button class="pvbtn" id="pvbtn-'+nz(b.no,i+1)+'" onclick="previewBeat('+nz(b.no,i+1)+')">▶ 幕预览</button>'+
-    '<button class="x" title="删幕" onclick="delBeat('+i+')">✕</button></span></div>'+
-    laneSub('幕预览 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">点框即渲 · 秒级低清</span>',
-      '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>幕预览</div></div>')+
-    laneSub('字幕轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">'+subModeHint(b)+'</span>',
+    '<span class="sp"><button class="pvbtn" id="pvbtn-'+nz(b.no,i+1)+'" onclick="previewBeat('+nz(b.no,i+1)+')">'+esc(t('beat.preview'))+'</button>'+
+    '<button class="x" title="'+esc(t('beat.del.t'))+'" onclick="delBeat('+i+')">✕</button></span></div>'+
+    laneSub(esc(t('lane.preview'))+' '+hint(t('lane.preview.hint')),
+      '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>'+esc(t('beat.preview').replace('▶ ',''))+'</div></div>')+
+    laneSub(esc(t('lane.sub'))+' '+hint(subModeHint(b)),
       subBody(b,i)+
-      '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="幕级字幕样式（注册表）；留空=继承全局">'+optHtml([{id:'',name:'（跟随全局）'}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
-    laneSub('视频轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">A 定时长 · B 叠加</span>',
-      trks,'<button class="act" onclick="addTrack('+i+')">＋ B 轨</button>')+
-    laneSub('旁白轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">本幕语音来源</span>',
-      '<div class="trow"><select onchange="DRAFT.beats['+i+'].narration.mode=this.value;renderBeats()" title="切换后字幕轨随之分流：dub=台词可编辑 / original=原声转写只读 / none=静音无字幕">'+optHtml(en.narration_modes,(b.narration||{}).mode||'original')+'</select></div>')+
-    laneSub('转场轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">本幕→下一幕</span>',
-      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">（无）</option>'+((P.transition_ids||[]).map(t=>{const tn=((P.registry||{}).transitions||{})[t];return '<option value="'+esc(t)+'"'+(t===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+t+'）':t)+'</option>';}).join(''))+'</select></div>')+
-    laneSub('贴纸轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">词点触发</span>',
-      (stks||'<div class="empty">无</div>'),'<button class="act" onclick="addEff('+i+',\'stickers\')">＋ 贴纸</button>')+
-    laneSub('音效轨 <span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">时刻触发</span>',
-      (sfx||'<div class="empty">无</div>'),'<button class="act" onclick="addEff('+i+',\'sfx\')">＋ 音效</button>')+
-    laneSub('音乐轨', musicRow(b,i))+
+      '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="'+esc(t('sub.style.t'))+'">'+optHtml([{id:'',name:t('beat.followglobal')}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
+    laneSub(esc(t('lane.video'))+' '+hint(t('lane.video.hint')),
+      trks,'<button class="act" onclick="addTrack('+i+')">'+esc(t('beat.addB'))+'</button>')+
+    laneSub(esc(t('lane.nar'))+' '+hint(t('lane.nar.hint')),
+      '<div class="trow"><select onchange="DRAFT.beats['+i+'].narration.mode=this.value;renderBeats()" title="'+esc(t('nar.mode.t'))+'">'+optHtml(en.narration_modes,(b.narration||{}).mode||'original')+'</select></div>')+
+    laneSub(esc(t('lane.trans'))+' '+hint(t('lane.trans.hint')),
+      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">'+esc(t('beat.norole'))+'</option>'+((P.transition_ids||[]).map(tt=>{const tn=((P.registry||{}).transitions||{})[tt];return '<option value="'+esc(tt)+'"'+(tt===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+tt+'）':tt)+'</option>';}).join(''))+'</select></div>')+
+    laneSub(esc(t('lane.sticker'))+' '+hint(t('lane.sticker.hint')),
+      (stks||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'stickers\')">'+esc(t('beat.addstk'))+'</button>')+
+    laneSub(esc(t('lane.sfx'))+' '+hint(t('lane.sfx.hint')),
+      (sfx||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'sfx\')">'+esc(t('beat.addsfx'))+'</button>')+
+    laneSub(esc(t('lane.music')), musicRow(b,i))+
     '</div>';
 }
-function delBeat(i){DRAFT.beats.splice(i,1);DRAFT.beats.forEach((b,j)=>b.no=j+1);renderBeats();}
+function delBeat(i){
+  if(!confirm(t('msg.delbeat.confirm',(DRAFT.beats[i].no||i+1))))return;
+  DRAFT.beats.splice(i,1);DRAFT.beats.forEach((b,j)=>b.no=j+1);renderBeats();markDirty();
+}
 function reqEdit(i,k,el){
   const v=(DRAFT.beats[i].tracks[k].requirement)||'';
-  el.outerHTML='<input class="req" id="req-'+i+'-'+k+'" type="text" value="'+esc(v)+'" placeholder="选材理由 / 采购要求（回车或失焦生效）" onblur="reqDone('+i+','+k+',this)" onkeydown="if(event.key===\'Enter\')this.blur()">';
+  el.outerHTML='<input class="req" id="req-'+i+'-'+k+'" type="text" value="'+esc(v)+'" placeholder="'+esc(t('beat.req.ph'))+'" onblur="reqDone('+i+','+k+',this)" onkeydown="if(event.key===\'Enter\')this.blur()">';
   const inp=document.getElementById('req-'+i+'-'+k);
   if(inp){inp.focus();inp.select();}
 }
 function reqDone(i,k,el){
   DRAFT.beats[i].tracks[k].requirement=el.value.trim()||null;markDirty();
   const v=el.value.trim();
-  el.outerHTML='<div class="req-line" title="选用理由/素材要求——Agent 起草时自述为什么选这条素材；点击可改为你的采购要求。纯档案字段，渲染不读" onclick="reqEdit('+i+','+k+',this)">'+
-    (v?'<span class="req-v">'+esc(v)+'</span>':'<span class="req-e">＋ 选材理由（点击填写）</span>')+'</div>';
+  el.outerHTML='<div class="req-line" title="'+esc(t('beat.req.t'))+'" onclick="reqEdit('+i+','+k+',this)">'+
+    (v?'<span class="req-v">'+esc(v)+'</span>':'<span class="req-e">'+esc(t('beat.req.add'))+'</span>')+'</div>';
 }
 function addTrack(i){
   const A=DRAFT.beats[i].tracks[0]||{};
   DRAFT.beats[i].tracks.push({role:'B',source_id:null,cut_index:0,src_in:0,duration:A.duration||3,op:'overlay-pip',pos:'top-right',scale:0.3,requirement:''});
-  renderBeats();
+  renderBeats();markDirty();
 }
 function updWin(i,k){  // 素材窗口标注联动：入点/时长编辑时实时刷新起止显示（2026-09-15 维护者：起止时间点要标清楚）
   const t=(DRAFT.beats[i].tracks||[])[k];const el=$('win-'+i+'-'+k);if(!t||!el)return;
   const a=+nz(t.src_in,0), b=a+(+nz(t.duration,3));
   el.textContent=(isNaN(a)?'?':a.toFixed(1))+'–'+(isNaN(b)?'?':b.toFixed(1))+'s';
 }
-function delTrack(i,k){DRAFT.beats[i].tracks.splice(k,1);renderBeats();}
+function delTrack(i,k){
+  if(!confirm(t('msg.deltrack.confirm')))return;
+  DRAFT.beats[i].tracks.splice(k,1);renderBeats();markDirty();
+}
 function addEff(i,kind){
   const e=DRAFT.beats[i].effects;
   e[kind].push(kind==='stickers'?{asset:(P.enums.stickers[0]||{}).id||'',at_word:'',duration:1.2,pos:'top-center'}
                                 :{asset:(P.enums.sfx[0]||{}).id||'',at:0,duration:0.4});
-  renderBeats();
+  renderBeats();markDirty();
 }
-function delEff(i,kind,k){DRAFT.beats[i].effects[kind].splice(k,1);renderBeats();}
+function delEff(i,kind,k){DRAFT.beats[i].effects[kind].splice(k,1);renderBeats();markDirty();}
 function upEff(i,kind,k,f,v){DRAFT.beats[i].effects[kind][k][f]=v;}
 
 function collectStory(){
@@ -992,67 +1212,78 @@ function collectStory(){
 }
 let FMTS={};
 function fmtOptions(cur){
-  const sel=$('wz-fmt');
+  const sel=$('wz-fmt');if(!sel)return;  // 新建卡展开后才在 DOM（loadConfig 渲染顺序）
   sel.innerHTML=Object.keys(FMTS).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(FMTS[k].name)+' '+FMTS[k].width+'×'+FMTS[k].height+'</option>').join('');
 }
 async function loadFormats(){
   try{FMTS=await(await fetch('/api/formats')).json();}catch(e){}
   if(Object.keys(FMTS).length)fmtOptions('vertical');
 }
+function wzToggle(){  // 新建项目幽灵卡：点开就地展开表单（2026-10-15 维护者：整行表单改卡片）
+  const c=$('wzcard');if(!c)return;
+  c.classList.add('open');
+  c.querySelector('.wz-collapsed').style.display='none';
+  const f=c.querySelector('.wz-form');f.style.display='flex';
+  if(!Object.keys(FMTS).length)loadFormats();else fmtOptions($('wz-fmt').value||'vertical');
+  const n=$('wz-name');if(n)n.focus();
+}
 async function wizardCreate(){
   const name=$('wz-name').value.trim(), title=$('wz-title').value.trim(), fmt=$('wz-fmt').value;
-  if(!name)return alert('先填项目名');
+  if(!name)return alert(t('msg.wizard.noname'));
+  if(!/^[A-Za-z0-9][A-Za-z0-9_.\-]{0,79}$/.test(name))return alert(t('msg.wizard.badname'));  // 前端先拦，不等服务端 400（2026-10-15 体检）
+  const btn=event.target;if(btn){btn.disabled=true;}
   try{
     const r=await(await fetch('/api/project-create/'+name,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({name,title,format:fmt})})).json();
-    if(r.ok){setStatus('✓ 项目已创建：'+name+'（'+fmt+'）');await loadConfig();}
-    else alert('创建失败：'+(r.err||''));
-  }catch(e){alert('创建失败：'+e);}
+    if(r.ok){setStatus(t('msg.wizard.done',name+'（'+fmt+'）'));await loadConfig();}
+    else alert(t('msg.createfail')+(r.err||''));
+  }catch(e){alert(t('msg.createfail')+e);}
+  if(btn){btn.disabled=false;}
 }
 async function packCreate(){
   const id=$('pk-id').value.trim(), name=$('pk-name').value.trim();
-  if(!id)return alert('先填包 id');
+  if(!id)return alert(t('msg.pk.noid'));
   try{
     const r=await(await fetch('/api/pack-create/',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name})})).json();
-    if(r.ok){$('pkstat').textContent='✓ 已建包 '+id;await refreshPackChoices();}
-    else alert('建包失败：'+(r.err||''));
-  }catch(e){alert('建包失败：'+e);}
+    if(r.ok){$('pkstat').textContent=t('msg.pk.created',id);await refreshPackChoices();}
+    else alert(t('msg.pk.fail')+(r.err||''));
+  }catch(e){alert(t('msg.pk.fail')+e);}
 }
 async function packMount(mount){
   const pid=$('pk-mount').value;
-  if(!pid)return alert('先选包');
+  if(!pid)return alert(t('msg.pk.nosel'));
   try{
     const r=await(await fetch('/api/pack-mount/'+VIEW.proj+'/'+pid+'/'+(mount?'mount':'unmount'),{method:'POST'})).json();
-    if(r.ok){$('pkstat').textContent='✓ '+(mount?'已挂载':'已卸载')+' '+pid;await openProj(VIEW.proj,VIEW.story,true);}
-    else alert('操作失败：'+(r.err||''));
-  }catch(e){alert('操作失败：'+e);}
+    if(r.ok){$('pkstat').textContent='✓ '+t(mount?'msg.pk.mountok':'msg.pk.unmountok')+' '+pid;await openProj(VIEW.proj,VIEW.story,true);}
+    else alert(t('msg.pk.fail2',t(mount?'msg.pk.mountok':'msg.pk.unmountok'),(r.err||'')));
+  }catch(e){alert(t('msg.pk.reqfail')+e);}
 }
 async function refreshPackChoices(){
   try{
     const all=await(await fetch('/api/packs')).json();
     const mounted=new Set((P.library&&P.library.packs)||[]);
     const sel=$('pk-mount');
-    sel.innerHTML='<option value="">— 选择包 —</option>'+all.map(pk=>
-      '<option value="'+esc(pk.id)+'">'+esc(pk.name||pk.id)+(mounted.has(pk.id)?'（已挂）':'')+'</option>').join('');
+    sel.innerHTML='<option value="">'+esc(t('pk.pick'))+'</option>'+all.map(pk=>
+      '<option value="'+esc(pk.id)+'">'+esc(pk.name||pk.id)+(mounted.has(pk.id)?t('pk.mounted'):'')+'</option>').join('');
   }catch(e){}
 }
 async function aiDraft(){
-  const intent=prompt('给 AI 一句起草意图：\n例：用开场钩子和空镜起一条 3 幕口播线，总长 40 秒','用开场钩子+空镜，起一条 3 幕口播线');
+  const intent=prompt(t('msg.draft.p'),t('msg.draft.d'));
   if(!intent)return;
-  const btn=$('draftbtn');btn.disabled=true;btn.textContent='✨ 起草中…（约1分钟）';
-  setStatus('AI 正在读素材档案起草故事线…');
+  const btn=$('draftbtn');btn.disabled=true;btn.textContent=t('msg.draft.busy');
+  setStatus(t('msg.draft.busy2'));
   try{
     const r=await(await fetch('/api/draft/'+P.name,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent})})).json();
-    if(r.ok){setStatus('✓ AI 草稿已落盘：'+r.sid+'（'+r.beats+' 幕 · '+String(r.title||'')+'）');
+    if(r.ok){setStatus(t('msg.draft.done',r.sid+'（'+r.beats+'）',String(r.title||'')));
       await openProj(P.name,r.sid);showTab('create');}
-    else alert('起草失败：'+(r.err||''));
-  }catch(e){alert('起草失败：'+e);}
-  btn.disabled=false;btn.textContent='✨ AI 起草';
+    else alert(t('msg.draft.fail')+(r.err||''));
+  }catch(e){alert(t('msg.draft.fail')+e);}
+  btn.disabled=false;btn.textContent=t('cr.draft');
 }
 async function saveStory(silent){
-  if(!silent)setStatus('保存中…');
+  if(!silent)setStatus(t('msg.saving'));
   try{
     const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
     const r=await(await fetch('/api/storyline/'+P.name+q,{method:'POST',
@@ -1064,40 +1295,43 @@ async function saveStory(silent){
       P.storyline=r.storyline;
       DIRTY=false;
       updateSaveChip();
-      if(!silent)setStatus('✓ 已保存 '+(VIEW.story||'main')+' · 人和 Agent 同一事实');
-    }else if(!silent)setStatus('✗ 保存失败：'+JSON.stringify(r));
-  }catch(e){if(!silent)setStatus('✗ '+e);}
+      if(!silent)setStatus(t('msg.saved',(VIEW.story||'main')));
+    }else setStatus(t('msg.save.fail',((r&&r.err)||t('msg.badresp'))),'bad');
+     // 自动保存（silent）失败也必须可见：原静默分支让芯片永远停"自动保存中"，丢了无人知（2026-10-15 体检）
+  }catch(e){setStatus(t('msg.save.fail',e),'bad');}
 }
 async function saveAndRender(){
   $('srbtn').disabled=true;
-  setStatus('保存中…');
+  setStatus(t('msg.saving'));
   await saveStory(true);
   const q=(VIEW.story?'&story='+encodeURIComponent(VIEW.story):'');
-  setStatus('渲染排队…');
+  setStatus(t('msg.render.queue'));
   try{
     const st=await(await fetch('/api/render-start/'+P.name+'?flash=0.6&grain=16&hold=1.0&duration=0.5'+q,{method:'POST'})).json();
-    if(!st.ok){setStatus('✗ '+(st.err||'任务启动失败'));$('srbtn').disabled=false;return;}
+    if(!st.ok){setStatus('✗ '+(st.err||t('msg.render.startfail')));$('srbtn').disabled=false;return;}
     const tag=VIEW.story||'main';
+    const t0=Date.now();  // 轮询上限 25 分钟：后端假死时按钮不再永远 disabled（2026-10-15 体检）
     while(true){
+      if(Date.now()-t0>25*60*1000){setStatus(t('msg.render.timeout'),'bad');break;}
       await new Promise(r2=>setTimeout(r2,1200));
       const pr=await(await fetch('/api/render-progress/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
       const j=pr.job||{};
-      if(j.running){setStatus('渲染中 ['+(j.stage||'')+'] '+j.pct+'%');continue;}
-      if(j.ok===false){setStatus('✗ 渲染失败：'+((j.tail||[]).slice(-1)[0]||''));break;}
+      if(j.running){setStatus(t('msg.render.ing',(j.stage||''),j.pct));continue;}
+      if(j.ok===false){setStatus(t('msg.render.fail')+((j.tail||[]).slice(-1)[0]||''),'bad');break;}
       // 完成：刷新监视器/封面
       const pf=await(await fetch('/api/project/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
       if(pf.ok!==false&&pf.files){P.files=pf.files;
-        setVideo('monwrap',P.files.out+'?t='+Date.now(),'暂无成片');
+        setVideo('monwrap',P.files.out+'?t='+Date.now(),t('view.noout'));
         const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();}
-      setStatus('✓ 渲染完成 '+tag+' · 监视器/封面已刷新');
+      setStatus(t('msg.render.done',tag));
       break;
     }
   }catch(e){setStatus('✗ '+e);}
   $('srbtn').disabled=false;
 }
 async function previewStory(){
-  if(!P.files||!P.files.out)return setStatus('还没有成片——先「保存并重渲」');
-  setVideo('monwrap',P.files.out+'?t='+Date.now(),'暂无成片');
+  if(!P.files||!P.files.out)return setStatus(t('msg.render.none'));
+  setVideo('monwrap',P.files.out+'?t='+Date.now(),t('view.noout'));
   const v=$('monwrap').querySelector('video');if(v)v.play().catch(()=>{});
 }
 async function uploadCover(inp){
@@ -1105,7 +1339,7 @@ async function uploadCover(inp){
   const buf=await f.arrayBuffer();
   try{
     const r=await(await fetch('/api/cover-upload/'+P.name,{method:'POST',body:buf})).json();
-    setStatus(r.ok?'✓ 封面已收口':'✗ 上传失败');
+    setStatus(r.ok?t('msg.cover.done'):t('msg.cover.upfail'));
     const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();
   }catch(e){setStatus('✗ '+e);}
 }
@@ -1113,56 +1347,57 @@ async function genCover(){
   // AI 试样（2026-09-18 新流程）：底图=当前封面配置的幕号/幕内秒（缺省首幕），prompt 必填；
   // 样张落 cover/sample.jpg 只供预览——正式封面=保存后「出封面」/渲染前闸门收口
   const p=(DRAFT.meta.cover.prompt||'').trim();
-  if(!p){setStatus('✗ 先填提示词（写法见提示框）');return;}
-  setStatus('✨ AI 试样中（image-01+底图，约 10-30s）…');
+  if(!p){setStatus(t('msg.cover.noprompt'),'bad');return;}
+  setStatus(t('msg.cover.genbusy'));
   try{
     const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
     const r=await(await fetch('/api/cover-gen/'+P.name+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:p,beat_no:DRAFT.meta.cover.beat_no||1,at:DRAFT.meta.cover.at||0})})).json();
     if(r.ok){
-      DRAFT.meta.cover.strategy='ai-generated';
-      setStatus('✓ 样张已出——满意后保存，再「出封面」正式收口');
+      DRAFT.meta.cover.strategy='ai-generated';markDirty();  // 程序化改写同样进脏标——否则自动落盘漏掉它，与状态文案「满意后保存」打架（2026-10-15 体检）
+      setStatus(t('msg.cover.sampledone'));
       const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=r.sample+'?t='+Date.now();
-    }else setStatus('✗ '+(r.err||'生成失败'));
+    }else setStatus('✗ '+(r.err||t('msg.cover.genfail')));
   }catch(e){setStatus('✗ '+e);}
 }
 async function makeCover(){
   // 正式出封面（渲染前闸门的人侧入口）：先保存故事线（封面配置要落盘）→ pipeline cover → 体检
-  setStatus('🖼 出封面中…');
+  setStatus(t('msg.cover.making'));
   try{
     await saveStory(true);
     const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
     const r=await(await fetch('/api/cover-make/'+P.name+q,{method:'POST'})).json();
     if(r.ok){
-      setStatus('✓ '+(r.line||'封面就绪'));
+      setStatus('✓ '+(r.line||t('msg.cover.ready')));
       const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();
-    }else setStatus('✗ '+(r.line||r.err||'封面失败'));
+    }else setStatus('✗ '+(r.line||r.err||t('msg.cover.fail')),'bad');
   }catch(e){setStatus('✗ '+e);}
 }
 async function previewBeat(no){
-  const btn=$('pvbtn-'+no);btn.disabled=true;btn.textContent='渲染中…';PV_BUSY=true;
+  const btn=$('pvbtn-'+no);btn.disabled=true;btn.textContent=t('beat.rendering');PV_BUSY=true;
   try{
     await saveStory(true);
     const q=VIEW.story?('?story='+encodeURIComponent(VIEW.story)):'';
     const r=await(await fetch('/api/beat/'+P.name+'/'+no+q,{method:'POST'})).json();
     if(r.ok){$('pvstrip-'+no).innerHTML='<video src="'+r.video+'" controls autoplay muted></video>';
-      setStatus('✓ 幕 #'+no+' 独立预览（'+esc(VIEW.story||'main')+'）');}
-    else setStatus('✗ 幕渲染失败：'+(r.log||''));
+      setStatus(t('msg.pv.done',no,VIEW.story||'main'));}
+    else{const tail=String(r.log||'').trim().split('\n').filter(Boolean).pop()||'';
+      setStatus(t('msg.pv.fail',tail.slice(-160)),'bad');}  // 只亮末行结论，不糊整段 log（2026-10-15 体检）
   }catch(e){setStatus('✗ '+e);}
   PV_BUSY=false;
-  btn.disabled=false;btn.textContent='▶ 幕预览';
+  btn.disabled=false;btn.textContent=t('beat.preview');
 }
 
 /* ═══ 素材库 ═══ */
 async function rebuildDigest(){
   if(!VIEW.proj)return;
-  const btn=event.target;btn.disabled=true;btn.textContent='⏳ 盘点中…（全包 LLM 调用，约 15-30s）';
+  const btn=event.target;btn.disabled=true;btn.textContent=t('msg.digest.busy');
   try{
     const st=await fetch('/api/digest/'+VIEW.proj,{method:'POST'});
     const d=await st.json();
-    if(d.ok){setStatus('📋 素材包盘点已更新：'+(d.digest.theme||'').slice(0,50));PULSE=null;}
-    else setStatus('盘点失败：'+(d.err||''),'bad');
-  }catch(e){setStatus('盘点请求失败：'+e,'bad');}
-  btn.disabled=false;btn.textContent='📋 重新盘点';
+    if(d.ok){setStatus(t('msg.digest.done',(d.digest.theme||'').slice(0,50)));PULSE=null;}
+    else setStatus(t('msg.digest.fail')+(d.err||''),'bad');
+  }catch(e){setStatus(t('msg.digest.reqfail')+e,'bad');}
+  btn.disabled=false;btn.textContent=t('pk.digest');
 }
 let PACKNAMES=null;
 async function loadPackNames(){
@@ -1179,11 +1414,13 @@ function renderPack(){
   const groups={};
   fs.forEach(f=>{(groups[f.pack]=groups[f.pack]||[]).push(f);});
   $('packgroups').innerHTML=Object.keys(groups).map(pk=>
-    '<div class="subsec">'+esc((PACKNAMES&&PACKNAMES[pk])||pk)+' · '+groups[pk].length+' 条</div><div class="libgrid">'+groups[pk].map(packCard).join('')+'</div>'
-  ).join('') || (q?'<div class="empty">无命中——台词搜索覆盖已转写素材</div>':'');
-  document.querySelectorAll('#packgroups video, #packgroups img, #packgroups audio').forEach(el=>{el.onerror=()=>phReplace(el,'素材文件缺失');});
+    '<div class="subsec">'+esc((PACKNAMES&&PACKNAMES[pk])||pk)+' · '+esc(t('msg.pk.count',groups[pk].length))+'</div><div class="libgrid">'+groups[pk].map(packCard).join('')+'</div>'
+  ).join('') || (q?'<div class="empty">'+esc(t('pk.nohit'))+'</div>'
+    :'<div class="empty" style="padding:18px">'+esc(t('pk.empty'))+'</div>');  // 空状态指路（2026-10-15 体检：新用户面对空白不知先建包还是先挂载）
+  document.querySelectorAll('#packgroups video, #packgroups img, #packgroups audio').forEach(el=>{el.onerror=()=>phReplace(el,t('pack.missing'));});
 }
 function packCard(f){
+  const t_=t;  // 本函数内 t 被 transcript 占用，i18n 走别名
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
   // 审核有实义化（2026-09-15 维护者 #3）：待审=该 kind 所需审计未齐（与 draft 门禁同判据）——
   // 审计齐即视同过审（transcribe/understand 下次跑时会回写 review 字段，旧数据此处兜齐）
@@ -1192,7 +1429,7 @@ function packCard(f){
   const audited=need.every(k=>{const v=(f.audit||{})[k];return v==='done'||v==='n/a';});
   const rev=((f.review||'pending-review')==='pending-review'&&!audited)?'pending-review':'reviewed';
   const kind=f.kind||'video';
-  const KLBL={video:'▶ 视频 · ASR+视觉',image:'🖼 图片 · 视觉+OCR',audio:'♪ 音频 · ASR'}[kind]||kind;
+  const KLBL=t('pack.kind.'+kind)||kind;  // 2026-10-15 去黑话：ASR→转写、视觉→识别
   const t=f.transcript;
   const pend=kind!=='image'&&((f.audit||{}).transcript!=='done');
   let media='';
@@ -1208,49 +1445,49 @@ function packCard(f){
     :(fmtT(f.duration)+' · '+f.size_mb+'MB');
   let trHtml='';
   if(t&&t.text){
-    trHtml='<textarea class="tedit" title="转写文本（'+esc(t.provider+'/'+t.tier)+'）· 可直接校对，失焦即落盘" placeholder="校对转写文本……" onblur="savePackText(\''+esc(f.id)+'\',this.value)">'+esc(t.text)+'</textarea>';
+    trHtml='<textarea class="tedit" title="'+esc(t_('pack.text.t',t.provider+'/'+t.tier))+'" placeholder="'+esc(t_('pack.text.ph'))+'" onblur="savePackText(\''+esc(f.id)+'\',this.value)">'+esc(t.text)+'</textarea>';
     if(q&&t.text.indexOf(q)>=0){
       const idx=t.text.indexOf(q);
       let atT=null,pos=0;
       for(const w of (t.words||[])){if(pos>=idx){atT=w.start;break;}pos+=(w.text||'').length;}
-      trHtml+='<div class="defect"><span class="tag hit">命中</span><span class="mono">'+(atT!==null?atT.toFixed(1)+'s':'—')+'</span><span>…'+esc(t.text.slice(Math.max(0,idx-10),idx+q.length+10))+'…</span></div>';
+      trHtml+='<div class="defect"><span class="tag hit">'+esc(t_('pack.hit'))+'</span><span class="mono">'+(atT!==null?atT.toFixed(1)+'s':'—')+'</span><span>…'+esc(t.text.slice(Math.max(0,idx-10),idx+q.length+10))+'…</span></div>';
     }
-  }else if(t&&!t.text&&kind!=='image'){trHtml='<div class="empty">（无有效语音 · 纯画面镜头）</div>';}
+  }else if(t&&!t.text&&kind!=='image'){trHtml='<div class="empty">'+esc(t_('pack.nospeech'))+'</div>';}
   const v=f.visual;
   let visHtml='';
   if(v){
     visHtml='<div class="visbox"><div class="vdesc">'+esc(v.desc||'')+'</div>'+
       ((v.ocr||[]).length?'<div class="ocrchips">'+v.ocr.map(o=>'<span class="ocrchip">『'+esc(o)+'』</span>').join('')+'</div>':'')+
-      (v.usage?'<div class="vusage">▸ 用途：'+esc(v.usage)+'</div>':'')+'</div>';
+      (v.usage?'<div class="vusage">'+esc(t_('pack.usage'))+esc(v.usage)+'</div>':'')+'</div>';
   }
-  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">人工·'+esc(d.type||'标记')+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
+  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(t_('pack.manual'))+esc(d.type||t_('pack.mark'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
   const ditems=((P._disp&&P._disp.materials&&P._disp.materials[f.id])||{}).items||[];
-  const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">台账·'+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':'标记')+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
+  const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">'+esc(t_('pack.log'))+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':t_('pack.mark'))+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
   const tags=(f.tags||[]).map(t2=>'<span class="packtag">'+esc(t2)+'</span>').join('');
   const vpend=kind!=='audio'&&((f.audit||{}).visual!=='done');
   return '<div class="mcard'+(f.usable?'':' usable-false')+'">'+
     '<div id="pv-'+esc(f.id)+'">'+media+'</div>'+
     '<div class="mhead2" style="margin-top:8px"><span class="mid">'+esc(f.id)+'</span>'+
     '<span class="mt">'+meta+'</span>'+tags+
-    '<span class="usebadge '+(f.usable?(rev==='pending-review'?'pending':'usable'):'waste')+'" title="点击切换拍摄层可用性" onclick="togglePackUsable(\''+esc(f.id)+'\')">'+
-    (f.usable?(rev==='pending-review'?'◌ 待审':'✓ 可用'):'✕ 拍摄废片')+'</span></div>'+
+    '<span class="usebadge '+(f.usable?(rev==='pending-review'?'pending':'usable'):'waste')+'" title="'+esc(t_('pack.usebadge.t'))+'" onclick="togglePackUsable(\''+esc(f.id)+'\')">'+
+    (f.usable?(rev==='pending-review'?t_('pack.pending'):t_('pack.usable')):t_('pack.waste'))+'</span></div>'+
     '<div class="ktag">'+esc(KLBL)+'</div>'+
     trHtml+visHtml+defs+dispHtml+
     '<div class="defadd" style="display:flex;gap:6px;margin-top:6px">'+
-    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">＋ 台账</button></div>'+
+    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">'+esc(t_('pack.adddefect'))+'</button></div>'+
     '<div class="audit">'+
-    (kind==='image'?'<span class="achip">转写 —</span>'
-      :'<span class="achip'+(pend?' act':' done')+'" '+(pend?'title="云端转写（供应商见 config/services.json）" onclick="transcribeOne(\''+esc(f.id)+'\',this)"':'')+'>'+(pend?'⟳ 转写':'转写 ✓')+'</span>')+
-    '<span class="achip'+(((f.audit||{}).proofread==='done')?' done':'')+'">文字校对 · '+((((f.audit||{}).proofread==='done'))?'✓':'可编辑')+'</span>'+
-    (kind==='audio'?'<span class="achip">视觉 —</span>'
-      :'<span class="achip'+(vpend?' act':' done')+'" '+(vpend?'title="采样帧+视觉模型（供应商见 config/services.json）" onclick="understandOne(\''+esc(f.id)+'\',this)"':'')+'>'+(vpend?'⟳ 画面识别':'识别 ✓')+'</span>')+
+    (kind==='image'?'<span class="achip">'+esc(t_('pack.tr.dash'))+'</span>'
+      :'<span class="achip'+(pend?' act':' done')+'" '+(pend?'title="'+esc(t_('pack.tr.t'))+'" onclick="transcribeOne(\''+esc(f.id)+'\',this)"':'')+'>'+(pend?t_('pack.tr.go'):t_('pack.tr.ok'))+'</span>')+
+    '<span class="achip'+(((f.audit||{}).proofread==='done')?' done':'')+'">'+esc(t_('pack.pf'))+((((f.audit||{}).proofread==='done'))?t_('pack.pf.ok'):t_('pack.pf.edit'))+'</span>'+
+    (kind==='audio'?'<span class="achip">'+esc(t_('pack.vi.dash'))+'</span>'
+      :'<span class="achip'+(vpend?' act':' done')+'" '+(vpend?'title="'+esc(t_('pack.vi.t'))+'" onclick="understandOne(\''+esc(f.id)+'\',this)"':'')+'>'+(vpend?t_('pack.vi.go'):t_('pack.vi.ok'))+'</span>')+
     '</div></div>';
 }
 async function savePackFile(f){
   const r=await(await fetch('/api/pack/'+f.pack+'/'+f.id+'/usable',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({usable:f.usable,defects:f.defects||[],review:f.review||'reviewed'})})).json();
-  if(!r.ok)setStatus('✗ 拍摄层保存失败');
+  if(!r.ok)setStatus(t('msg.pack.savefail'),'bad');
 }
 function findPack(mid){return (P.pack_files||[]).find(x=>x.id===mid);}
 async function togglePackUsable(mid){
@@ -1260,90 +1497,97 @@ async function togglePackUsable(mid){
 }
 async function addPackDefect(mid){
   const f=findPack(mid);if(!f)return;
-  const type=prompt('台账类型（说错 / 卡等 / 重复 / 气口 / 抖动 / 其他）','说错');if(!type)return;
-  const at=parseFloat(prompt('发生时刻（秒）','0'));if(isNaN(at))return;
-  const note=prompt('备注','')||'';
+  const type=prompt(t('def.type.p'),t('def.type.d'));if(!type)return;
+  const at=parseFloat(prompt(t('def.at.p'),'0'));if(isNaN(at))return;
+  const note=prompt(t('def.note.p'),'')||'';
   f.defects=(f.defects||[]).concat([{at:at,type:type,note:note}]);
   f.review='reviewed';
   await savePackFile(f);renderPack();
 }
 async function delPackDefect(mid,k){
   const f=findPack(mid);if(!f)return;
+  if(!confirm(t('msg.deldef.confirm',(f.defects[k].type||''),nz(f.defects[k].at,'?'))))return;
   f.defects.splice(k,1);await savePackFile(f);renderPack();
 }
 async function transcribeOne(mid,el){
-  if(el)el.textContent='⟳ 转写中…';
+  if(el)el.textContent=t('msg.tr.busy');
   const f=findPack(mid);
   try{
     const r=await(await fetch('/api/transcribe/'+(f?f.pack:'')+'/'+mid,{method:'POST'})).json();
-    if(r.ok){const i=P.pack_files.findIndex(x=>x.id===mid);if(i>=0)P.pack_files[i]=r.file;setStatus('✓ 转写完成 '+mid);}
-    else setStatus('✗ '+(r.err||'转写失败'));
+    if(r.ok){const i=P.pack_files.findIndex(x=>x.id===mid);if(i>=0)P.pack_files[i]=r.file;setStatus(t('msg.tr.done',mid));}
+    else setStatus('✗ '+(r.err||t('msg.tr.fail')),'bad');
   }catch(e){setStatus('✗ '+e);}
   renderPack();
 }
 async function understandOne(mid,el){
-  if(el)el.textContent='⟳ 识别中…';
+  if(el)el.textContent=t('msg.un.busy');
   const f=findPack(mid);
   try{
     const r=await(await fetch('/api/understand/'+(f?f.pack:'')+'/'+mid,{method:'POST'})).json();
-    if(r.ok){const i=P.pack_files.findIndex(x=>x.id===mid);if(i>=0)P.pack_files[i]=r.file;setStatus('✓ 画面识别完成 '+mid);}
-    else setStatus('✗ '+(r.err||'识别失败'));
+    if(r.ok){const i=P.pack_files.findIndex(x=>x.id===mid);if(i>=0)P.pack_files[i]=r.file;setStatus(t('msg.un.done',mid));}
+    else setStatus('✗ '+(r.err||t('msg.un.fail')),'bad');
   }catch(e){setStatus('✗ '+e);}
   renderPack();
 }
 async function understandAll(){
   const btn=$('uallbtn');btn.disabled=true;
   const pend=(P.pack_files||[]).filter(f=>f.kind!=='audio'&&((f.audit||{}).visual!=='done'));
-  if(!pend.length){$('tallstat').textContent='没有待识别素材';btn.disabled=false;return;}
-  let done=0;
+  if(!pend.length){$('tallstat').textContent=t('msg.un.none');btn.disabled=false;return;}
+  let done=0;const fails=[];
   for(const f of pend){
-    $('tallstat').textContent='识别 '+f.id+'（'+(done+1)+'/'+pend.length+'）…';
+    $('tallstat').textContent=t('msg.un.progress',f.id,(done+1)+'/'+pend.length);
     try{
       const r=await(await fetch('/api/understand/'+f.pack+'/'+f.id,{method:'POST'})).json();
       if(r.ok){const i=P.pack_files.findIndex(x=>x.id===f.id);if(i>=0)P.pack_files[i]=r.file;done++;}
-    }catch(e){}
+      else fails.push(f.id+'（'+(r.err||t('msg.unknown'))+'）');  // 失败明细不再静默（2026-10-15 体检）
+    }catch(e){fails.push(f.id+'（'+e+'）');}
   }
-  $('tallstat').textContent='✓ 本次识别 '+done+'/'+pend.length+' 条';
+  $('tallstat').textContent=t('msg.un.doneall',done+'/'+pend.length)+(fails.length?t('msg.un.failpart',fails.length,fails.slice(0,3).join('、')):'');
+  if(fails.length)setStatus('✗ '+fails.length+' ✗: '+fails.join('；'),'bad');
   btn.disabled=false;renderPack();
 }
 async function transcribeAll(){
   const btn=$('tallbtn');btn.disabled=true;
   const pend=(P.pack_files||[]).filter(f=>f.kind!=='image'&&((f.audit||{}).transcript!=='done'));
-  if(!pend.length){$('tallstat').textContent='没有待转写素材';btn.disabled=false;return;}
-  let done=0;
+  if(!pend.length){$('tallstat').textContent=t('msg.tr.none');btn.disabled=false;return;}
+  let done=0;const fails=[];
   for(const f of pend){
-    $('tallstat').textContent='转写 '+f.id+'（'+(done+1)+'/'+pend.length+'）…';
+    $('tallstat').textContent=t('msg.tr.progress',f.id,(done+1)+'/'+pend.length);
     try{
       const r=await(await fetch('/api/transcribe/'+f.pack+'/'+f.id,{method:'POST'})).json();
       if(r.ok){const i=P.pack_files.findIndex(x=>x.id===f.id);if(i>=0)P.pack_files[i]=r.file;done++;}
-    }catch(e){}
+      else fails.push(f.id+'（'+(r.err||t('msg.unknown'))+'）');
+    }catch(e){fails.push(f.id+'（'+e+'）');}
   }
-  $('tallstat').textContent='✓ 本次转写 '+done+'/'+pend.length+' 条';
+  $('tallstat').textContent=t('msg.tr.doneall',done+'/'+pend.length)+(fails.length?t('msg.tr.failpart',fails.length,fails.slice(0,3).join('、')):'');
+  if(fails.length)setStatus('✗ '+fails.length+' ✗: '+fails.join('；'),'bad');
   btn.disabled=false;renderPack();
 }
 function renderCuts(){
   const cuts=(P.library&&P.library.cuts)||[];
   $('cutgrid').innerHTML=cuts.map((c,i)=>{
-    const defs=(c.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(d.type||'废')+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delCutDefect('+i+','+k+')">✕</button></div>').join('');
+    const defs=(c.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(d.type||t('cut.waste'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delCutDefect('+i+','+k+')">✕</button></div>').join('');
     return '<div class="mcard'+(c.usable?'':' usable-false')+'" style="animation-delay:'+Math.min(i*0.03,0.3)+'s">'+
       '<div class="mhead2"><span class="mid">cut#'+esc(c.cut_index)+'</span>'+
       '<span class="mt">'+fmtT(nz(c.in,'?'))+' → '+fmtT(nz(c.out,'?'))+' · '+fmtD(c.duration)+'</span>'+
-      '<span class="usebadge '+(c.usable?'usable':'waste')+'" onclick="toggleCut('+i+')">'+(c.usable?'✓ 可用':'✕ 拍摄废片')+'</span></div>'+
-      '<textarea class="tedit" placeholder="校对台词（失焦即落盘）" onblur="saveCutText('+i+',this.value)">'+esc(c.text||'')+'</textarea>'+defs+
-      '<div class="audit"><span class="achip done">转写 ✓</span><span class="achip'+(((c.audit||{}).proofread==='done')?' done':'')+'">校对 · '+((((c.audit||{}).proofread==='done'))?'✓':'可编辑')+'</span><span class="achip" title="切片为源片窗口，不做独立画面识别">画面 —</span></div></div>';
-  }).join('')||'<div class="empty" style="grid-column:1/-1">尚无项目切片——渲染成片后由源片自动切出（窗口+权威词轨随切片落档）</div>';
+      '<span class="usebadge '+(c.usable?'usable':'waste')+'" onclick="toggleCut('+i+')">'+(c.usable?t('pack.usable'):t('pack.waste'))+'</span></div>'+
+      '<textarea class="tedit" placeholder="'+esc(t('cut.text.ph'))+'" onblur="saveCutText('+i+',this.value)">'+esc(c.text||'')+'</textarea>'+defs+
+      '<div class="audit"><span class="achip done">'+esc(t('pack.tr.ok'))+'</span><span class="achip'+(((c.audit||{}).proofread==='done')?' done':'')+'">'+esc(t('cut.pf'))+((((c.audit||{}).proofread==='done'))?'✓':t('pack.pf.edit'))+'</span><span class="achip" title="'+esc(t('cut.vi.t'))+'">'+esc(t('pack.vi.dash'))+'</span></div></div>';
+  }).join('')||'<div class="empty" style="grid-column:1/-1">'+esc(t('cut.empty'))+'</div>';
 }
 async function saveCut(c){
   const r=await(await fetch('/api/library/'+P.name+'/usable',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cut_index:c.cut_index,usable:c.usable,defects:c.defects||[]})})).json();
-  if(!r.ok)setStatus('✗ 切片档案保存失败');
+  if(!r.ok)setStatus(t('msg.cut.savefail'),'bad');
 }
 async function toggleCut(i){
   const c=P.library.cuts[i];c.usable=!c.usable;await saveCut(c);renderCuts();
 }
 async function delCutDefect(i,k){
-  const c=P.library.cuts[i];c.defects.splice(k,1);await saveCut(c);renderCuts();
+  const c=P.library.cuts[i];
+  if(!confirm(t('msg.delcutdef.confirm')))return;
+  c.defects.splice(k,1);await saveCut(c);renderCuts();
 }
 async function savePackText(mid,val){
   const f=findPack(mid);if(!f)return;
@@ -1351,8 +1595,8 @@ async function savePackText(mid,val){
   try{
     const r=await(await fetch('/api/proofread-pack/'+f.pack+'/'+mid,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({text:val})})).json();
-    if(r.ok){setStatus('✓ 校对已落盘 '+mid+'（文字校对 ✓）');renderPack();}
-    else setStatus('✗ 校对保存失败：'+(r.err||''));
+    if(r.ok){setStatus(t('msg.pf.done',mid));renderPack();}
+    else setStatus(t('msg.pf.fail')+(r.err||''),'bad');
   }catch(e){setStatus('✗ '+e);}
 }
 async function saveCutText(i,val){
@@ -1361,21 +1605,21 @@ async function saveCutText(i,val){
   try{
     const r=await(await fetch('/api/proofread-cut/'+P.name,{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({cut_index:c.cut_index,text:val})})).json();
-    if(r.ok){setStatus('✓ cut#'+c.cut_index+' 校对已落盘');renderCuts();}
-    else setStatus('✗ 校对保存失败：'+(r.err||''));
+    if(r.ok){setStatus(t('msg.pf.done2','cut#'+c.cut_index));renderCuts();}
+    else setStatus(t('msg.pf.fail')+(r.err||''),'bad');
   }catch(e){setStatus('✗ '+e);}
 }
 
 /* ═══ 创作台视图（监视器 + 元信息条；独立审计页退役 2026-09-15 维护者——工程对账已并入创作台各轨）═══ */
 function buildViews(){
   const pl=P.plan||{};
-  setVideo('monwrap',P.files.out,'暂无成片 · 点「保存并重渲」生成');
+  setVideo('monwrap',P.files.out,t('view.noout'));
   const st=P.story;
   const hasOut=((P.outs||[]).indexOf(st)>=0);
   $('vmeta').innerHTML='<span class="big">'+esc(pl.title||P.name)+(st?' <span style="color:var(--gold)">/ '+esc(st)+'</span>':'')+'</span>'+
-    '<span class="vstat">'+esc(pl.duration)+'s · '+pl.width+'×'+pl.height+' · '+((pl.words||[]).length)+' 词 · '+((pl.segments||[]).length)+' 幕 · '+(hasOut?'<span style="color:var(--ok)">✓ 已出片</span>':'<span style="color:var(--faint)">未出片</span>')+'</span>'+
-    '<span class="render-row"><button class="primary" id="srbtn" onclick="saveAndRender()" style="height:28px;padding:0 14px;font-size:12px">▶ 保存并重渲</button>'+
-    '<button class="ghost" onclick="previewStory()" style="height:28px;font-size:11px;padding:0 10px" title="成片已存在时在监视器重放">▷ 重放</button></span>';
+    '<span class="vstat">'+esc(pl.duration)+'s · '+pl.width+'×'+pl.height+' · '+((pl.words||[]).length)+t('view.words')+((pl.segments||[]).length)+t('view.beats2')(hasOut?'<span style="color:var(--ok)">'+esc(t('view.rendered'))+'</span>':'<span style="color:var(--faint)">'+esc(t('view.notrendered'))+'</span>')+'</span>'+
+    '<span class="render-row"><button class="primary" id="srbtn" onclick="saveAndRender()" style="height:28px;padding:0 14px;font-size:12px">'+esc(t('view.render'))+'</button>'+
+    '<button class="ghost" onclick="previewStory()" style="height:28px;font-size:11px;padding:0 10px" title="'+esc(t('view.replay.t'))+'">'+esc(t('view.replay'))+'</button></span>';
 }
 /* ═══ 双向同步（先落库，后读取）═══ */
 async function refreshPills(){
@@ -1393,8 +1637,8 @@ async function syncPoll(){
     if(SYNC){
       if(r.stories_mtime!==SYNC.stories_mtime)refreshPills();
       if(r.story_mtime>SYNC.story_mtime){
-        if(!DIRTY){setStatus('↻ 对方更新了 '+VIEW.story+'，自动载入');await openProj(VIEW.proj,VIEW.story,true);}
-        else if(confirm('对方（Agent）刚更新了「'+VIEW.story+'」，你的本地改动未保存。\n载入新版本（丢弃本地改动）？')){DIRTY=false;await openProj(VIEW.proj,VIEW.story,true);}
+        if(!DIRTY){setStatus(t('msg.sync.new',VIEW.story));await openProj(VIEW.proj,VIEW.story,true);}
+        else if(confirm(t('msg.sync.conflict',VIEW.story))){DIRTY=false;await openProj(VIEW.proj,VIEW.story,true);}
       }
     }
     SYNC=r;
@@ -1411,7 +1655,7 @@ async function pipePoll(){
   bar.style.display='flex';
   bar.innerHTML=r.pipe.steps.map(s=>
     '<span class="pstep '+s.status+'" title="'+esc(s.detail||'')+'">'+icon[s.status]+' '+esc(s.name)+'</span>').join('')
-    +(r.pipe.next?'<span class="pdet">下一动作: '+esc(r.pipe.next)+'</span>':'<span class="pdet" style="color:var(--ok)">全部就绪</span>');
+    +(r.pipe.next?'<span class="pdet">'+esc(t('pipe.next'))+esc(r.pipe.next)+'</span>':'<span class="pdet" style="color:var(--ok)">'+esc(t('pipe.alldone'))+'</span>');
 }
 async function pulsePoll(){
   if(document.hidden)return;
@@ -1425,27 +1669,27 @@ async function pulsePoll(){
     const j=myJob[1];
     if(j.running){
       CLI_RENDER_SHOWN=j.pct;
-      if(bar){bar.style.display='block';bar.innerHTML='<span class="mono">⚙ 渲染中（'+esc(myJob[0].split(':')[1]||'main')+'）['+esc(j.stage||'')+'] '+j.pct+'%——后台/命令行启动的渲染也能看到</span>';}
-      if(VIEW.page==='proj')setStatus('渲染中 ['+esc(j.stage||'')+'] '+j.pct+'%');
-      document.title='（渲染 '+j.pct+'%）auto-cut V3 · Studio';  // 标签页实时进度：切走也能看见
+      if(bar){bar.style.display='block';bar.innerHTML='<span class="mono">'+esc(t('pulse.rendering',myJob[0].split(':')[1]||'main',(j.stage||''),j.pct))+'</span>';}
+      if(VIEW.page==='proj')setStatus(t('msg.render.ing',(j.stage||''),j.pct));
+      document.title='['+j.pct+'%] AutoCut Studio';  // 标签页实时进度：切走也能看见
     }else if(j.ok===true&&CLI_RENDER_SHOWN!==null){
       CLI_RENDER_SHOWN=null;
       if(bar)bar.style.display='none';
-      notifyRender('✓ 渲染完成 · '+myJob[0].split(':')[0],'监视器已自动刷新，可回来验收');
-      if(document.hidden){document.title='✓ 渲染完成——auto-cut V3';flashTitle();}
-      else document.title='auto-cut V3 · Studio';
+      notifyRender(t('msg.nr.done',myJob[0].split(':')[0]),t('msg.nr.donebody'));
+      if(document.hidden){document.title=t('msg.nr.donetitle');flashTitle();}
+      else document.title='AutoCut Studio';
       if(VIEW.page==='proj'&&P&&P.name===VIEW.proj){
         try{const pf=await(await fetch('/api/project/'+P.name+'?story='+encodeURIComponent(VIEW.story||''))).json();
-          if(pf.ok!==false&&pf.files){P.files=pf.files;setVideo('monwrap',P.files.out+'?t='+Date.now(),'暂无成片');
+          if(pf.ok!==false&&pf.files){P.files=pf.files;setVideo('monwrap',P.files.out+'?t='+Date.now(),t('view.noout'));
             const ci=$('coverwrap');if(ci&&ci.querySelector('img'))ci.querySelector('img').src=P.files.cover+'?t='+Date.now();}}catch(e){}
-        setStatus('✓ 渲染完成（后台任务）· 监视器已刷新');
+        setStatus(t('msg.nr.donestatus'));
       }
       PULSE=null;  // 强制下轮全量对账（渲染产物变了）
     }else if(j.ok===false&&CLI_RENDER_SHOWN!==null){
       CLI_RENDER_SHOWN=null; if(bar)bar.style.display='none';
-      document.title='auto-cut V3 · Studio';
-      notifyRender('✗ 渲染失败 · '+myJob[0].split(':')[0],((j.tail||[]).join('')||'见终端/日志').slice(-120));
-      if(VIEW.page==='proj')setStatus('✗ 后台渲染失败（见终端/日志）');
+      document.title='AutoCut Studio';
+      notifyRender(t('msg.nr.fail',myJob[0].split(':')[0]),((j.tail||[]).join('')||t('msg.nr.failbody')).slice(-120));
+      if(VIEW.page==='proj')setStatus(t('msg.nr.failstatus'),'bad');
       PULSE=null;
     }
   }else if(bar){bar.style.display='none';CLI_RENDER_SHOWN=null;}
@@ -1462,7 +1706,7 @@ async function pulsePoll(){
       try{
         if(P.library!==undefined&&VIEW.tab==='library'){const lib=await(await fetch('/api/library/'+P.name)).json();P.library=lib;renderPack();renderCuts();}
         await refreshPills();
-        setStatus('↻ 检测到数据更新（Agent/后台），素材库与列表已同步');
+        setStatus(t('msg.sync.data'));
       }catch(e){}
     }
     PULSE=Object.assign(PULSE||{}, {projSigs:Object.assign({},(PULSE||{}).projSigs,{[P.name]:s})});
@@ -1486,8 +1730,8 @@ function flashTitle(){  // 切走期间渲染完成：标题闪三次引人回�
   let i=0;
   _flashT=setInterval(()=>{
     i++;
-    document.title=(i%2?'✨ ':'')+'✓ 渲染完成——auto-cut V3';
-    if(i>=6){clearInterval(_flashT);_flashT=null;document.title='auto-cut V3 · Studio';}
+    document.title=(i%2?'✨ ':'')+t('msg.nr.donetitle');
+    if(i>=6){clearInterval(_flashT);_flashT=null;document.title='AutoCut Studio';}
   },900);
 }
 document.addEventListener('pointerdown',function _np(){  // 通知权限必须出自用户手势：首次点击时顺手请求
@@ -1496,8 +1740,14 @@ document.addEventListener('pointerdown',function _np(){  // 通知权限必须�
 },{once:false});
 setInterval(syncPoll,5000);
 window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue='';}});
+document.addEventListener('keydown',e=>{  // 抽屉 Esc 关闭（2026-10-15 体检：原只认点击遮罩）
+  if(e.key!=='Escape')return;
+  if($('regmgr').style.display==='block')closeRegMgr();
+  if($('voicemgr').style.display==='block')closeVoiceMgr();
+});
 
 /* ═══ 启动 ═══ */
+applyLang();
 renderTabs();showTab('config');
 document.getElementById('s-create').addEventListener('input',()=>{markDirty();});
 document.getElementById('s-create').addEventListener('change',()=>{markDirty();});
