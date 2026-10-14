@@ -236,7 +236,8 @@ Every push to main runs the full e2e on GitHub Actions windows-latest + ubuntu-l
 ## Known limits
 
 - Local TTS (Audio8-TTS, Apache 2.0) voices are registered on demand (tts_audio8.py register); existing voices = `ls ~/.local/share/autocut3/audio8/voices/`
-- Dubbed cuts may run slightly quiet (R6 warns but doesn't block delivery; platforms normalize themselves; final review should check the mix ratio)
+- The subtitle/cover/sticker font LXGWWenKai is subsetted to the full GB2312 charset (7,545 glyphs, 24MB→3.3MB, 2026-10-15) — rare GBK-extension characters (喆/𰻝 class) render as tofu; restore the full font from git history if ever needed
+- Dubbed cuts are automatically loudnorm two-pass refined to the target loudness after render (default = platform anchor in qc_rules.json; storyline `audio.loudnorm` can disable (false) or set a custom value — same switch as the in-mix single-pass normalization). All-original cuts are untouched (platforms normalize themselves)
 
 ## More docs
 

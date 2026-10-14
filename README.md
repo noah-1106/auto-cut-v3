@@ -236,7 +236,8 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ## 已知边界
 
 - 本地 TTS（Audio8-TTS，Apache 2.0）音色按需注册（tts_audio8.py register），现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准
-- dub 配音成片响度可能偏轻（R6 warn 不拦交付，平台会自行归一，终审核对混音比例）
+- 字幕/封面/贴纸字体 LXGWWenKai 已子集化为 GB2312 全集（7545 字形，24MB→3.3MB，2026-10-15）——GBK 扩展生僻字（喆/𰻝 类）会显示豆腐块，真碰到从 git 历史回填全量字体
+- dub 配音成片渲染后自动 loudnorm 两遍精修到目标响度（默认=平台锚 qc_rules.json；storyline `audio.loudnorm` 可关(false)/改自定义值——与混音链单遍归一同一个开关）。全 original 成片不动（平台自行归一）
 
 ## 更多文档
 
