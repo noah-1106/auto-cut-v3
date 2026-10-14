@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """auto-cut v3 代码审计器（2026-09-14 质量整顿）
-七个维度：路由安全 / 并发写点 / JS 函数对照 / 数据引用完整性 / Python 卫生 / 文档时效 / git 卫生
+八个维度：路由安全 / 并发写点 / JS 函数对照 / 数据引用完整性 / Python 卫生 / 文档时效 / git 卫生 / i18n 一致性
 用法：python3 tests/audit.py   输出：分级报告（P1 必修 / P2 应修 / P3 记录）
 """
 import ast, json, os, re, subprocess, sys
@@ -263,6 +263,22 @@ missing_doc = [name for name, ok in [
 if missing_doc:
     add("P1", "F2 README 完整性", "缺少关键章节关键词: %s（陌生人检验存疑）" % "/".join(missing_doc))
 
+# F3. 中英 README 结构同步（2026-10-15 英文版落地后加）：手工翻译必然漂移——
+# 章节标题数量不一致即提醒同步（标题文字因语言不同不可比，只比结构）
+_enp = os.path.join(ROOT, "README.en.md")
+if not os.path.exists(_enp):
+    add("P2", "F3 英文README", "README.en.md 缺失（README.md 顶部有链接指向它）")
+else:
+    _enr = open(_enp, encoding="utf-8").read()
+    for _lv in ("## ", "### "):
+        _zc, _ec = len(re.findall(r"^%s" % re.escape(_lv), readme, re.M)), len(re.findall(r"^%s" % re.escape(_lv), _enr, re.M))
+        if _zc != _ec:
+            add("P2", "F3 英文README", "README.en.md 与中文版 %s级标题数不一致（%d vs %d）——中文版改过，英文版需同步" % (_lv.strip(), _zc, _ec))
+            break
+    else:
+        print("  ✓ README.en.md 章节结构与中文版一致")
+
+
 # ═══════════ G. git 卫生 ═══════════
 sec("G. git 卫生")
 r = subprocess.run(["git", "ls-files"], capture_output=True, text=True, cwd=ROOT)
@@ -278,6 +294,57 @@ if big:
 else:
     print("  ✓ 无 5MB+ 文件被 track")
 print("  ✓ track 文件 %d 个" % len(tracked))
+
+# ═══════════ H. i18n 一致性 ═══════════
+# 由来（2026-10-15 双语化后）：词典 parity / 引用完整性此前靠手工脚本抽查，
+# 推送前终审曾实锤抓到 t('view.beats2') 拼接错误——此类漂移必须自动化拦截。
+sec("H. i18n 一致性（studio/index.html）")
+_i18n_lines = html.split("\n")
+_zh0 = next((i for i, l in enumerate(_i18n_lines) if l.strip() == "zh:{"), None)
+_en0 = next((i for i, l in enumerate(_i18n_lines) if l.strip() == "en:{"), None)
+_en1 = next((i for i, l in enumerate(_i18n_lines) if l.strip() == "}};"), None)
+if _zh0 is None or _en0 is None or _en1 is None:
+    add("P1", "H1 i18n结构", "I18N 词典块结构无法定位（zh:{/en:{/}};）——词典被重构后本检查需跟随更新")
+else:
+    # 键提取不锚行首（词典多个键挤一行是常态）；理论误报=值内出现转义引号+'xx':形态，
+    # 当前词典实测 347/347 与人工计数一致，可接受
+    _key_re = re.compile(r"'([\w.]+)':")
+    zh_keys = [k for l in _i18n_lines[_zh0:_en0] for k in _key_re.findall(l)]
+    en_keys = [k for l in _i18n_lines[_en0:_en1] for k in _key_re.findall(l)]
+    # H1. zh/en 键集合 parity
+    if set(zh_keys) != set(en_keys):
+        add("P2", "H1 词典parity", "zh/en 键不一致——zh 独有: %s；en 独有: %s"
+            % (sorted(set(zh_keys) - set(en_keys))[:5], sorted(set(en_keys) - set(zh_keys))[:5]))
+    elif len(zh_keys) != len(set(zh_keys)):
+        add("P2", "H1 词典重复键", "词典内存在重复键（后者静默覆盖前者）")
+    else:
+        print("  ✓ 词典 parity：zh/en 各 %d 键完全一致" % len(zh_keys))
+    # H2. 引用完整性：data-i18n* 属性 + t()/t_() 调用 + 键形态字符串（REGS/REGFILE 等间接引用）
+    #     全命中词典；'pack.kind.' 是动态前缀（t('pack.kind.'+kind)），单独核对三个后缀
+    _ref_re = re.compile(r"'((?:chip|tab|st|pipe|cfg|reg|dlg|voice|cr|meta|cov|beat|eff|lane|sub|nar|mus|lib|pk|pack|cut|view|pulse|msg|def|src)\.[\w.]+)'")
+    refs = {m.group(1) for m in _ref_re.finditer(html)}
+    refs |= set(re.findall(r'data-i18n(?:-html|-ph|-t)?=\\?"([\w.]+)', html))
+    dyn = {r for r in refs if r.endswith(".")}
+    missing = sorted(r for r in refs - set(zh_keys) if r not in dyn)
+    if missing:
+        add("P2", "H2 引用缺失", "%d 个 i18n 引用不在词典: %s" % (len(missing), missing[:8]))
+    else:
+        print("  ✓ 引用完整性：%d 个静态引用全部命中词典" % len(refs))
+    for sfx in ("image", "audio", "video"):
+        if "pack.kind." + sfx not in zh_keys:
+            add("P2", "H2 动态键", "pack.kind.%s 缺失（packCard 动态拼接 t('pack.kind.'+kind) 依赖）" % sfx)
+    # H3. en 词典残留中文（漏翻）——值为中文句子的 key 列出来人工判
+    _val_re = re.compile(r"'([\w.]+)':\s*'((?:[^'\\]|\\.)*)'")
+    _cjk_left = []
+    for l in _i18n_lines[_en0:_en1]:
+        for m in _val_re.finditer(l):
+            if re.search(r"[一-鿿]", m.group(2)):
+                _cjk_left.append(m.group(1))
+    if _cjk_left:
+        add("P3", "H3 en残留中文", "en 词典 %d 个值含中文（漏翻或有意保留？）: %s" % (len(_cjk_left), _cjk_left[:6]))
+    else:
+        print("  ✓ en 词典无中文残留")
+
 
 # ═══════════ 汇总 ═══════════
 sec("汇总")
