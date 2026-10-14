@@ -14,7 +14,8 @@ assets/preview/
 docs/poc/
 docs/ab-vision-*/
 docs/00-萃取范围界定.md
-docs/archive/   # 2026-10-15 归位：上述三类考古件并入 archive/，维持不入 git
+# 2026-10-15 归位：上述三类考古件并入 archive/，维持不入 git
+docs/archive/
 autocut3/_attic/
 # 素材库（任意层级的 materials 目录——根目录 packs 与项目内都在内）
 materials/
