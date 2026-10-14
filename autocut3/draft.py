@@ -213,6 +213,8 @@ def build_prompt(dossier, intent, transitions):
    不超过 6 个字**（"横厅布局""得房率高"这种；照抄整句/超过 6 字=稀释成字幕，validate 硬剔除）
 
 [输出] 只输出合法 JSON（无 markdown 代码块、无解释）：
+格式铁律（2026-10-14 空正文实锤后立）：思考（think）里只做分析，**不要在思考里起草 JSON**；
+思考结束后正文独立、一次性写完完整 JSON——第一个字符就是 {，最后一个字符就是 }。
 {"title":"故事线标题","outline":"这条线在讲什么（2-3句）",
 "beats":[{"story":"该幕口播台词（可直接念的第一人称口语）",
 "tracks":[{"role":"A","source_id":"素材id","src_in":起点秒,"duration":时长秒,"requirement":"选用理由一句话"},
@@ -241,15 +243,22 @@ def chat_llm(messages):
     key = asr.resolve_key(be)
     if not key:
         raise RuntimeError("未找到 llm key：env %s 或 api_key_file" % be.get("api_key_env", "?"))
-    # M3 是思考型模型：think 可能吃掉全部 token 导致正文为空——大 max_tokens + 空回答重试一次
+    # Noah 裁定（2026-10-14）：M3 上下文 1M，思考长度不设限——cap 直接进深水区。
+    # 实测：API 上限 524288（超了 HTTP 400）；wangyalun 9014 字档案 think 吃 12-16k token
+    # 才出正文，旧阶梯 8192→24576 顶档仍空/截断实锤。超时随 cap 走（非流式=服务端攒整包，
+    # ~50tok/s → 32768 档要约 11 分钟，300s 必断）。
     last_err = None
-    for attempt, cap in enumerate((8192, 12288, 16384, 24576)):  # M3 think 额度阶梯（minimax-av 教训：think 吃满=空正文，加档不封顶思维）
+    for cap in (32768, 131072, 524288):
         payload = {"model": be["model"], "messages": messages, "max_tokens": cap}
         req = urllib.request.Request(
             be["base_url"].rstrip("/") + "/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
-        resp = json.loads(urllib.request.urlopen(req, timeout=be.get("timeout_s", 300)).read())
+        try:
+            resp = json.loads(urllib.request.urlopen(req, timeout=min(3600, max(600, cap // 50))).read())
+        except Exception as e:  # 传输层（RemoteDisconnected/超时/5xx）不炸穿阶梯——记档升档重试
+            last_err = "传输错误（cap=%d）：%s" % (cap, str(e)[:100])
+            continue
         ch = (resp.get("choices") or [{}])[0]
         msg = ch.get("message", {}) or {}
         text = re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip()
