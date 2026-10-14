@@ -139,7 +139,7 @@ def build(pid):
         has_window = any(it.get("t") for it in items)
         materials[mid] = {"verdict": "avoid" if has_window else "flag", "items": items}
         n_avoid += has_window
-        n_flag += 1
+        n_flag += 0 if has_window else 1  # 2026-10-15：flag 计数对齐 verdict=="flag"（原把 avoid 也算进，summary 口径打架）
     report = {
         "project": pid, "schema": 1,
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),

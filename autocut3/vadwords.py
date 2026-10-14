@@ -90,6 +90,8 @@ def main():
     ap.add_argument("project"); ap.add_argument("--story", default=None)
     a = ap.parse_args()
     pdir = os.path.join("projects", a.project)
+    if not os.path.isdir(pdir):  # 2026-10-15：cwd 没有该项目再回落仓根——e2e 在夹具 cwd 跑同名项目，生产 orchestrate 以仓根为 cwd
+        pdir = os.path.join(asr.ROOT, "projects", a.project)
     sfile = os.path.join(pdir, "storylines", "%s.json" % a.story) if a.story else os.path.join(pdir, "storyline.json")
     sl = json.load(open(sfile, encoding="utf-8"))
     report = []

@@ -13,14 +13,14 @@
     "provider": str, "at": iso, "schema": 2|1, "flags": [...]
   }
 
-v2 变更（2026-09-12，A/B 实测背书 docs/ab-vision-20260912/）：
+v2 变更（2026-09-12，A/B 实测背书 docs/archive/ab-vision-20260912/）：
   视频：3帧采样 → 原生视频理解（video_url；720p 转码前置 crf23 防细节色偏，≤100MB）
   提示词：缺陷清单式 → 结构化契约（summary/content_type/moments/ocr坐标/defects/usage[]）
   词轨先验：说话区间+要点注入（A/B 实测：延迟 -39%，content_type 判对 3/3，OCR 召回↑）
   铁律入提示词：只描述确实看到的/不确定写不确定/时间不越界
   降级：v2 失败 → 自动回退 3帧旧路径（schema=1，frames=帧数，如实标注）
   v2.1 通用化（2026-09-14，维护者 质询"只考虑了装修素材？"）：去题材预设/镜头语言入 moments/
-  usage 不限题材。JSON 契约零改动。生效批次前 A/B 对比 docs/ab-vision-20260912/（旧基线）
+  usage 不限题材。JSON 契约零改动。生效批次前 A/B 对比 docs/archive/ab-vision-20260912/（旧基线）
 """
 import base64, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
 

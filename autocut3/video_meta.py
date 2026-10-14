@@ -5,25 +5,9 @@
 教训（2026-09-11 苏炜首单实锤）：手机素材普遍"编码 1920x1080 + rotation=-90"，
 播放/滤镜看到的是 1080x1920 竖版画面。只读编码宽高 → 项目画幅定错 → 全片压扁。
 判定：源显示 H > W（竖版内容）→ 竖版项目；源显示 W > H → 横版项目。"""
-import json, os, shutil, subprocess
+import json, os, subprocess
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def ffprobe_path():
-    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
-              os.path.join(ROOT, "bin", "ffprobe.exe")):
-        if c and os.path.exists(c):
-            return c
-    return shutil.which("ffprobe")
-
-
-def ffmpeg_path():
-    for c in (os.environ.get("FFMPEG"), os.path.join(ROOT, "bin", "ffmpeg"),
-              os.path.join(ROOT, "bin", "ffmpeg.exe")):
-        if c and os.path.exists(c):
-            return c
-    return shutil.which("ffmpeg")
+from asr import ffprobe_path, ffmpeg_path  # 解析链单一事实源（2026-10-15 整顿：五处重复收敛到 asr）
 
 
 def read_rotation(s):

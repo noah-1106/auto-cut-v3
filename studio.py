@@ -31,17 +31,11 @@ def _safe_id(s):
 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
 import flock  # write_json 原子落盘（Agent 轮询故事线与人保存并发，读者不读半截）
+from asr import ffmpeg_path as _ffmpeg_path  # 解析链单一事实源（2026-10-15 整顿：原五处重复收敛到 asr）
 PIPE = os.path.join(ROOT, "autocut3", "pipeline.py")
 RENDER_JOBS = {}  # "name:sid" → {running,stage,pct,tail,ok}（R2 渲染进度：pipeline 以 PCT/STAGE 行协议输出）
 def _resolve_ff():
-    # 跨平台 ffmpeg 定位：环境变量 → 仓内二进制（mac 无后缀 / win .exe）→ 系统 PATH
-    import shutil
-    for c in (os.environ.get("FFMPEG"),
-              os.path.join(ROOT, "bin", "ffmpeg"),
-              os.path.join(ROOT, "bin", "ffmpeg.exe")):
-        if c and os.path.exists(c):
-            return c
-    return shutil.which("ffmpeg") or "ffmpeg"
+    return _ffmpeg_path() or "ffmpeg"  # 裸名兜底：交给 exec 时 PATH 解析，报错信息不变
 
 FF = _resolve_ff()
 MIME = {"mp4": "video/mp4", "png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
@@ -86,6 +80,8 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif u.path.startswith("/api/library/"):
+            # v1 切片层（2026-10-15 注）：创作台「项目素材」区在读（cuts/sources 展示）；
+            # ensure_thumbs 对纯包项目是空转——v1 缩略帧机制，cuts.json 缺 thumb 才补
             name = u.path.split("/")[3]
             if not _safe(name):
                 return self._json({"err": "bad id"}, 400)
@@ -181,7 +177,9 @@ class H(BaseHTTPRequestHandler):
             for d in sorted(os.listdir(pdir)) if os.path.isdir(pdir) else []:  # CLI 渲染的落盘状态也进脉搏
                 rs = jload(f"{pdir}/{d}/render.status", None)
                 if rs and time.time() - os.path.getmtime(f"{pdir}/{d}/render.status") < 300:
-                    jobs[f"{d}:{'main'}"] = rs if d not in {k.split(':')[0] for k in jobs} else jobs.get(f"{d}:main", rs)
+                    k = f"{d}:main"  # 2026-10-15 体检：f"{d}:{'main'}" 丑写法化简；内存 job 优先于磁盘快照
+                    if k not in jobs:
+                        jobs[k] = rs
             packs = []
             pk_root = f"{ROOT}/materials/packs"
             for d in sorted(os.listdir(pk_root)) if os.path.isdir(pk_root) else []:
@@ -242,11 +240,11 @@ class H(BaseHTTPRequestHandler):
             sfx = f"-{sid}" if sid else ""
             sp = (f"{sdir}/{sid}.json" if sid and os.path.exists(f"{sdir}/{sid}.json")
                   else (f"{p}/storyline.json" if not sids_all else f"{sdir}/{sids_all[0]}.json"))
-            grid_dir = f"{ROOT}/docs/poc/studio-grid"
-            gvs = sorted(f"/files/docs/poc/studio-grid/{f}" for f in os.listdir(grid_dir)
+            grid_dir = f"{ROOT}/docs/archive/poc/studio-grid"  # 2026-10-15 归位：docs/poc → docs/archive/poc
+            gvs = sorted(f"/files/docs/archive/poc/studio-grid/{f}" for f in os.listdir(grid_dir)
                          if f.endswith(".mp4")) if os.path.isdir(grid_dir) else []
             imgs = [f"/files/{rel}" for rel in
-                    ("docs/poc/studio-grid.png", "docs/poc/v3-loop-v2.png", "docs/poc/v3-loop-verify.png")
+                    ("docs/archive/poc/studio-grid.png", "docs/archive/poc/v3-loop-v2.png", "docs/archive/poc/v3-loop-verify.png")
                     if os.path.exists(os.path.join(ROOT, rel))]
             mlt = f"/files/projects/{name}/manual/{name}.mlt"
             enums = jload(f"{ROOT}/registry/enums.json", {})
@@ -493,6 +491,7 @@ class H(BaseHTTPRequestHandler):
             lines = [l for l in (r.stdout or "").strip().splitlines() if l.startswith(("COVER OK", "COVER FAIL"))]
             return self._json({"ok": r.returncode == 0, "line": lines[-1] if lines else "无输出"})
         if u.path.startswith("/api/library/") and "/clip/" in u.path:
+            # v1 切片层（2026-10-15 注）：cuts 预览视频切片用，创作台「项目素材」区仍在用
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）
             if not (_safe(name) and ci.isdigit()):
@@ -610,6 +609,10 @@ class H(BaseHTTPRequestHandler):
             job = RENDER_JOBS.get(key)
             if job and job.get("running"):
                 return self._json({"ok": False, "err": "该故事线已有渲染在进行"}, 409)
+            # 上限防胀（2026-10-15 体检）：长跑实例里已完成任务只留最近 20 条
+            done_keys = [k for k, j in RENDER_JOBS.items() if not j.get("running")]
+            for k in done_keys[:-20]:
+                del RENDER_JOBS[k]
             RENDER_JOBS[key] = {"running": True, "stage": "plan", "pct": 0, "tail": [], "ok": None, "t0": time.time()}
             def _run(job=RENDER_JOBS[key]):
                 try:
@@ -870,7 +873,7 @@ class H(BaseHTTPRequestHandler):
                         return self._json({"ok": True, "file": f})
                 return self._json({"err": "no such material"}, 404)
         if u.path.startswith("/api/proofread-cut/"):
-            # n001 切片台词的人工校对
+            # v1 切片层（2026-10-15 注）：n001 切片台词人工校对，创作台「项目素材」区在用
             name = u.path.split("/")[3]
             if not _safe(name):
                 return self._json({"err": "bad id"}, 400)
@@ -1050,6 +1053,7 @@ class H(BaseHTTPRequestHandler):
             tgt = next((f for f in pj2["files"] if f.get("id") == fid), None)
             return self._json({"ok": True, "file": tgt})
         if u.path.startswith("/api/library/") and u.path.endswith("/usable"):
+            # v1 切片层（2026-10-15 注）：创作台「项目素材」区切换切片 usable 在用
             # 拍摄层废片决策：usable 只评拍摄层（说错/卡等/重复/气口），不评创作取用
             name = u.path.split("/")[3]
             if not _safe(name):
@@ -1131,13 +1135,6 @@ class H(BaseHTTPRequestHandler):
                 story["beats"] = body["beats"]  # 幕序列整体替换（编号幕，编辑器持有全文）
             flock.write_json(sp, story)  # 多故事线=storylines/<sid>.json，旧版=storyline.json
             return self._json({"ok": True, "storyline": story})
-        if u.path.startswith("/api/render/"):
-            name = u.path.split("/")[3]
-            if not _safe(name):
-                return self._json({"err": "bad id"}, 400)
-            p = f"{ROOT}/projects/{name}"
-            if not os.path.isdir(p):
-                return self._json({"err": "no such project"}, 404)
         if u.path.startswith("/api/registry-save/"):
             # 注册表整体保存（前端管理面板编辑后 PUT）：白名单五件套，enums/formats 语义枚举不开放
             rname = u.path.split("/")[3]
@@ -1225,6 +1222,13 @@ class H(BaseHTTPRequestHandler):
                 f.write(self.rfile.read(n))
             return self._json({"ok": True, "path": f"cover/upload.jpg ({n}B)"})
         if u.path.startswith("/api/render/"):
+            # 同步渲染（600s 阻塞）——前端走 render-start/progress 任务模型，此端点供 e2e/脚本用
+            name = u.path.split("/")[3]
+            if not _safe(name):
+                return self._json({"err": "bad id"}, 400)
+            p = f"{ROOT}/projects/{name}"
+            if not os.path.isdir(p):
+                return self._json({"err": "no such project"}, 404)
             qs = parse_qs(u.query)
             sid = (qs.get("story") or [None])[0]
             params = {}

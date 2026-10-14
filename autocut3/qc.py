@@ -209,7 +209,7 @@ def check_windows(sl, files, rules, tmap=None):
                 if len(gram) < n:
                     continue
                 for j in range(i + n, min(i + n + 8, len(texts) - n + 1)):
-                    if "".join(texts[j:j + n]) == gram and (j - i) * 1 <= rules["R9_repeat_gap"]:
+                    if "".join(texts[j:j + n]) == gram and (j - i) <= rules["R9_repeat_gap"]:
                         out.append(_V("R9", "warn", "suggest",
                                       {"material": mid, "beat": b.get("no"),
                                        "gram": gram,

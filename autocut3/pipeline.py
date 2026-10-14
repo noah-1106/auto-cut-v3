@@ -17,40 +17,14 @@ import asr  # noqa: E402  speech_tail（转场预留的词尾判定，D1 单一�
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def _resolve_ff():
-    # 跨平台 ffmpeg 定位：环境变量 → 仓内二进制（mac 无后缀 / win .exe）→ 系统 PATH
-    for c in (os.environ.get("FFMPEG"),
-              os.path.join(ROOT, "bin", "ffmpeg"),
-              os.path.join(ROOT, "bin", "ffmpeg.exe")):
-        if c and os.path.exists(c):
-            return c
-    import shutil
-    return shutil.which("ffmpeg") or "ffmpeg"
+    # 解析链收敛到 asr（2026-10-15 整顿：五处重复 → 单一事实源）；裸名兜底留给 exec 时 PATH
+    return asr.ffmpeg_path() or "ffmpeg"
 
 FF = _resolve_ff()
 
 
 def _media_duration(path):
-    if not path or not os.path.exists(path):
-        return 0.0
-    for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
-              os.path.join(ROOT, "bin", "ffprobe.exe")):
-        if c and os.path.exists(c):
-            r = subprocess.run([c, "-v", "error", "-show_entries", "format=duration",
-                                "-of", "csv=p=0", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
-            try:
-                return float(r.stdout.strip())
-            except ValueError:
-                return 0.0
-    import shutil
-    fp = shutil.which("ffprobe")
-    if not fp:
-        return 0.0
-    r = subprocess.run([fp, "-v", "error", "-show_entries", "format=duration",
-                        "-of", "csv=p=0", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    try:
-        return float(r.stdout.strip())
-    except ValueError:
-        return 0.0
+    return asr.media_duration(path)  # 2026-10-15 整顿：重复实现删除，归一到 asr
 
 
 _ENC_CACHE = {}
@@ -1206,9 +1180,7 @@ def cover_check(img, plan_wh=None):
     kb = os.path.getsize(img) // 1024
     if kb < 20:
         return False, "封面过小 %dKB（疑似损坏）" % kb
-    fp = next((c for c in (os.environ.get("FFPROBE"), os.path.join(ROOT, "bin", "ffprobe"),
-                           os.path.join(ROOT, "bin", "ffprobe.exe")) if c and os.path.exists(c)),
-              None) or shutil.which("ffprobe")
+    fp = asr.ffprobe_path()  # 2026-10-15 整顿：解析链归一
     orient = "竖版" if not plan_wh or plan_wh[1] >= plan_wh[0] else "横版"
     if fp:
         r = subprocess.run([fp, "-v", "error", "-select_streams", "v:0", "-show_entries",

@@ -78,7 +78,7 @@ def _latest_story(pdir):
 def _step_mount(pdir):
     packs = _packs(pdir)
     return ("done" if packs else "pending",
-            f"{len(packs)} 个包" if packs else "先挂载素材包（CLI: library.py / Studio 素材库）")
+            f"{len(packs)} 个包" if packs else "先挂载素材包（Studio 素材库 · /api/pack-mount——挂载是创作决策，无 CLI）")
 
 
 def _step_transcribe(pdir):

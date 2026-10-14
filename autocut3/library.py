@@ -3,6 +3,10 @@
 """
 素材库：原始素材的权威解读落盘（素材事实的 SSOT）。
 
+模块定位（2026-10-15 注）：这是 v1 切片时代的遗产层——cuts.json/src.mp4/faster-whisper 播种
+均属 v1 机制；v3 主流是 materials/packs/ 包素材。现存唯一消费方是 studio 的
+GET /api/library/<name>（ensure_thumbs 对纯包项目为空转）。勿在此基础上加新功能。
+
 原则（维护者，2026-09-10）：
 - library.json 只记录【素材本身的事实】与【拍摄层质量决策】（usable：说错/卡等/重复/气口）；
 - "这段素材在某部片里怎么用"（A-roll/B-roll、取哪一段）是创作决策，住在 storyline.json。
