@@ -1,0 +1,33 @@
+{
+ "_doc": "发布平台档案（2026-10-15 从 enums.json 提升 + 吸收 qc_rules.json 的 platforms 段）：qc R6 响度判定与 pipeline 渲染后 loudnorm 精修都读【故事线 meta.platform】→ 本表锚点（此前 qc 读 config 全局，故事线标了视频号也按抖音判——已修）。锚点口径 EBU R128/平台通行标准；缺平台回退 qc_rules.json，再回退 -16。人走 Studio 抽屉维护，Agent 直接改本 JSON。",
+ "douyin": {
+  "name": "抖音",
+  "desc": "竖版短视频主场",
+  "lufs_target": -16,
+  "lufs_tol": 3.0
+ },
+ "shipinhao": {
+  "name": "视频号",
+  "desc": "微信生态，响度锚偏响",
+  "lufs_target": -14,
+  "lufs_tol": 3.0
+ },
+ "xhs": {
+  "name": "小红书",
+  "desc": "图文视频混流，锚取通行短视值（可调）",
+  "lufs_target": -16,
+  "lufs_tol": 3.0
+ },
+ "bilibili": {
+  "name": "B站",
+  "desc": "中长视频兼容，锚取通行值（可调）",
+  "lufs_target": -16,
+  "lufs_tol": 3.0
+ },
+ "broadcast": {
+  "name": "广播电视",
+  "desc": "广播级响度（自 qc_rules 迁入）",
+  "lufs_target": -23,
+  "lufs_tol": 2.0
+ }
+}

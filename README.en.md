@@ -119,7 +119,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 6 | Word track | vadwords.py | per-beat word track (tier=word measured values taken directly, else VAD spreading) | subtitles / karaoke |
 | 7 | Cover | pipeline.py (build_cover/cover_check) | cover/cover-*.jpg | render gate / publishing |
 | 8 | Render | pipeline.py | out-*.mp4 + subtitle.ass | gates / delivery |
-| 9 | Gates | qc (R1-R10) + dubgate + G1/G2t | qc-report + gate reports | delivery verdict |
+| 9 | Gates | qc (R1-R11) + dubgate + G1/G2t | qc-report + gate reports | delivery verdict |
 | 10 | Delivery | loudnorm + release naming | release cut | human final review |
 
 Above is the conceptual 10-stage map; the machine-checkable stage-status source of truth is the orchestrator's `STEPS` in `orchestrate.py` (15 steps — the extra granularity is audit and reserved slots like mount/digest/proofread/dossier/aigen). All automatic. Hardware encoders preferred (mac=videotoolbox / win=nvenc·qsv, fallback libx264); dub fitting runs "envelope locate → trim head/tail → ASR closed loop", and a dubgate failure means no render; **cover generation + check run BEFORE render** (2026-09-18 ruling: a failed cover exits 1 without burning a render; output-frame is the only post-render strategy = frame from the finished cut). Five strategies: first-frame (default) / beat-frame (beat no. + seconds) / ai-generated (representative frame as base + prompt via image-01 preserving subject; **a base image with a real face is always blocked by platform review (error 1026)** — the only fidelity route for people covers = frame grab + locally composited title_text) / output-frame / upload. Titles are always deterministic local drawtext (AI-drawn CJK = fake glyphs). Covers are normalized to the project format (landscape-shot vertical-crop footage auto-conforms). Standalone cover: `python3 autocut3/pipeline.py cover <proj> <story>`; the Studio "Build cover" button is the same path.
@@ -152,7 +152,7 @@ studio.py            # all backend routes (equal-rights HTTP for human/agent)
 studio/index.html    # single-page frontend (pipeline bar / registry drawers / live render progress + notifications)
 autocut3/            # pipeline modules: orchestrate(orchestrator) process(material pipeline·ingest first choice) asr(provider adapter + word-track normalization)
                      #   transcribe(ASR) understand(vision) digest(pack digest) draft(AI drafting) disposition(defect log)
-                     #   pipeline(cover/render) qc(QC R1-R10) proofread(proofreading) vadwords(VAD word track)
+                     #   pipeline(cover/render) qc(QC R1-R11) proofread(proofreading) vadwords(VAD word track)
                      #   dubfit(dub fitting) dubgate(dub gate) dossier(material dossier) tts(dub synthesis) tts_audio8(local TTS runtime)
                      #   video_meta(geometry probe) flock(cross-platform lock) video_gen/image_gen(AI-gen reserved) library(v1 cuts legacy layer)
 registry/            # registries: single source of truth for the effect system (*.json pure data)

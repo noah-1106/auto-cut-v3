@@ -176,7 +176,44 @@ def _effect_catalog():
             % ("、".join(subs) or "（无）", "、".join(stks) or "（无）", "、".join(sfxs) or "（无）"))
 
 
-def build_prompt(dossier, intent, transitions):
+def vtype_profile(vtype):
+    """视频类型档案（registry/video_types.json，2026-10-15 档案化）：draft_prompt/defaults
+    进起草提示词，qc.duration_range 供 R11 消费。未知 id 返回 None（提示词退化为通用——
+    类型是创作引导不是闸门，不因维护失误炸起草）。"""
+    if not vtype:
+        return None
+    import os
+    f = os.path.join(ROOT, "registry", "video_types.json")
+    try:
+        with open(f, encoding="utf-8") as fh:
+            reg = json.load(fh)
+        p = reg.get(vtype)
+        return p if isinstance(p, dict) else None
+    except Exception:
+        return None
+
+
+def _vtype_section(profile):
+    """类型档案 → 提示词段落（无档案返回空串，prompt 零漂移）。"""
+    if not profile:
+        return ""
+    d = profile.get("defaults") or {}
+    hints = []
+    if d.get("transition"):
+        hints.append("默认转场倾向 %s（可按幕内容偏离）" % d["transition"])
+    if d.get("narration_mode"):
+        hints.append("默认旁白模式 %s" % d["narration_mode"])
+    if d.get("subtitle"):
+        hints.append("默认字幕样式 %s" % d["subtitle"])
+    return ("\n[视频类型档案]（本条故事线按此类型剪辑——结构要求高于通用引导）\n"
+            "类型：%s（%s）：%s\n"
+            "类型起草要求：%s\n%s\n"
+            % (profile.get("name", "?"), profile.get("rhythm", ""), profile.get("desc", ""),
+               profile.get("draft_prompt") or "（档案未写起草要求——按通用引导）",
+               ("；".join(hints)) if hints else ""))
+
+
+def build_prompt(dossier, intent, transitions, profile=None):
     return """你是装修口播短视频的故事线起草师。基于素材档案起草一条新故事线。
 
 [素材档案]（台词以人工校对为准；标【拍摄废片——禁用】的素材绝对不可使用）
@@ -184,7 +221,7 @@ def build_prompt(dossier, intent, transitions):
 
 [用户意图]
 %s
-
+%s
 %s
 
 [硬约束]
@@ -223,7 +260,7 @@ def build_prompt(dossier, intent, transitions):
 "subtitle":{"style":"字幕样式id 或省略"},
 "effects":{"stickers":[{"asset":"贴纸样式id","text":"≤6字强调短语","at_word":"触发词","duration":1.2,"pos":"top-center"}],
 "sfx":[{"asset":"音效id","at":0.0,"duration":0.4}]}}],
-"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
+"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _vtype_section(profile), _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
     ", ".join("%s(%s：%s)" % (k, v.get("name", ""), (v.get("desc") or "")[:24]) for k, v in _bgm_reg().items() if not k.startswith("_")) or "（无 BGM 注册，bgm_id 填 null）")
 
 
@@ -401,7 +438,7 @@ def validate(draft, mats, transitions):
     return beats
 
 
-def save_storyline(pid, draft, beats):
+def save_storyline(pid, draft, beats, vtype=None):
     pdir = os.path.join(ROOT, "projects", pid)
     sl = {}
     sp = os.path.join(pdir, "storylines")
@@ -425,13 +462,16 @@ def save_storyline(pid, draft, beats):
     _au = draft.get("audio") or {}
     if isinstance(_au, dict) and _au.get("bgm_id"):
         sl.setdefault("meta", {}).setdefault("audio", {})["bgm_id"] = str(_au["bgm_id"])
+    if vtype:  # 显式指定类型压过继承（Studio/CLI --type 传入；qc R11 与渲染默认值都读它）
+        sl.setdefault("meta", {})["type"] = vtype
     # 原子落盘（实证 2026-09-17：超时幸存进程 + Agent 重跑并存，非原子 dump 会交错写坏故事线）
     flock.write_json(os.path.join(sp, sid + ".json"), sl)
     return sid
 
 
-def run(project, intent, packs=None, save=True):
-    """主入口（Studio 与 CLI 共用）。返回 (sid or None, draft, beats)。"""
+def run(project, intent, packs=None, save=True, vtype=None):
+    """主入口（Studio 与 CLI 共用）。返回 (sid or None, draft, beats)。
+    vtype：视频类型档案 id（registry/video_types.json）——注入起草提示词 + 落盘 meta.type。"""
     packs = packs or project_packs(project)
     if not packs:
         raise RuntimeError("项目未挂载任何素材包")
@@ -448,7 +488,12 @@ def run(project, intent, packs=None, save=True):
         dossier = dossier + "\n\n" + disp
     tr = os.path.join(ROOT, "registry", "transitions.json")
     transitions = list(json.load(open(tr, encoding="utf-8")).keys()) if os.path.exists(tr) else []
-    messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions)}]
+    profile = vtype_profile(vtype)
+    if vtype and not profile:
+        print("  ⚠ 未知视频类型 %r（registry/video_types.json 无此档案）——提示词退化为通用" % vtype, flush=True)
+    if profile:
+        print("  视频类型档案：%s（%s）" % (profile.get("name"), profile.get("rhythm")), flush=True)
+    messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions, profile)}]
     # nohup 重定向=全缓冲：不刷这句，后台跑全程日志 0 字节，Agent 只能瞎轮询（2026-09-18 张亮翔快线实锤）
     print("  档案 %d 字 → LLM 起草中（1-3 分钟无输出属正常）…" % len(dossier), flush=True)
     text = None
@@ -465,7 +510,7 @@ def run(project, intent, packs=None, save=True):
     beats = validate(draft, mats, transitions)
     if not beats:
         raise RuntimeError("草稿校验后无有效幕（素材 id 都对不上？）")
-    sid = save_storyline(project, draft, beats) if save else None
+    sid = save_storyline(project, draft, beats, vtype=vtype) if save else None
     return sid, draft, beats
 
 
@@ -476,8 +521,9 @@ def main():
     ap.add_argument("--packs", help="逗号分隔素材包范围（默认全部挂载包）")
     ap.add_argument("--save", action="store_true", help="落盘为新故事线（不加则只打印草稿）")
     ap.add_argument("--dub", action="store_true", help="逐幕 AI 配音（TTS，narration.mode=dub）")
+    ap.add_argument("--type", help="视频类型档案 id（registry/video_types.json——结构化节奏引导）")
     a = ap.parse_args()
-    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save)
+    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save, vtype=a.type)
     if a.dub and sid and beats:
         # R3：逐幕配音（story=口播词）→ narration.mode=dub + audio 路径写回故事线
         import tts

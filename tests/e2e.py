@@ -2958,6 +2958,7 @@ def main():
     t60_material_pipeline()
     t61_advance_dynamic_reestimate()
     t62_structural_pagination()
+    t63_type_platform_profiles()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -2965,6 +2966,71 @@ def main():
         print("失败项：" + ", ".join(FAIL))
         sys.exit(1)
     print("E2E ALL GREEN")
+
+
+# ---------------------------------------------------------------- T63 视频类型/平台档案化（2026-10-15）
+def t63_type_platform_profiles():
+    # 锚：类型/平台从"换标签"升为"剪辑方法参数包"——draft 提示词注入、渲染默认值回退、
+    # qc R11 时长域、平台锚跟随故事线、/api/enums 派生、档案注册表写闭环。全离线。
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+        import draft, qc, pipeline
+
+        # ① draft 提示词注入：类型档案的 rhythm/draft_prompt/默认转场进提示词；无类型零漂移
+        p = draft.vtype_profile("knowledge-koubo")
+        ok1a = bool(p) and p.get("rhythm") == "钩子先行，信息密度高"
+        pr = draft.build_prompt("[档案]", "测", ["crossDissolve"], p)
+        ok1b = "[视频类型档案]" in pr and "首幕必须开场钩子" in pr and "默认转场倾向 fadewhite" in pr
+        pr2 = draft.build_prompt("[档案]", "测", ["crossDissolve"], None)
+        ok1c = "[视频类型档案]" not in pr2
+        ok1d = draft.vtype_profile("no-such") is None  # 未知 id 退化通用不炸
+
+        # ② pipeline 渲染默认值：档案 defaults 只补未显式设置字段（显式选择赢）
+        vd = pipeline._vtype_defaults({"type": "vlog"})
+        ok2a = vd.get("subtitle") == "plain-quiet" and vd.get("cover_strategy") == "first-frame"
+        ok2b = pipeline._vtype_defaults({}) == {} and pipeline._vtype_defaults({"type": "no-such"}) == {}
+
+        # ③ 平台锚跟随：qc.load_rules(platform) 查 registry/platforms.json（旧 qc_rules 段兜底）
+        r1 = qc.load_rules("shipinhao"); r2 = qc.load_rules("broadcast"); r3 = qc.load_rules("no-such")
+        ok3 = (r1["_lufs_target"] == -14 and r1["_platform"] == "shipinhao"
+               and r2["_lufs_target"] == -23 and r3["_lufs_target"] == -16)
+
+        # ④ R11 时长域：口播类型（20-120s）超界 warn / 在界静默 / 无类型跳过
+        sl = {"meta": {"type": "knowledge-koubo"}, "beats": [
+            {"tracks": [{"role": "A", "src_in": 0, "duration": 80.0}]},
+            {"tracks": [{"role": "A", "src_in": 0, "duration": 70.0}]}]}
+        v = qc.check_duration_domain(sl, {})
+        ok4a = len(v) == 1 and v[0]["rule"] == "R11" and "超类型" in v[0]["note"]
+        ok4b = qc.check_duration_domain({"meta": {"type": "vlog"},
+                                         "beats": [{"tracks": [{"role": "A", "src_in": 0, "duration": 60.0}]}]}, {}) == []
+        ok4c = qc.check_duration_domain({"meta": {}, "beats": sl["beats"]}, {}) == []
+
+        # ⑤ /api/enums 派生：video_types/platforms 从档案注册表来（含 rhythm），enums.json 不再持有
+        code5, e5 = api("/api/enums")
+        ok5 = (code5 == 200 and len(e5.get("video_types") or []) == 6
+               and any(x.get("id") == "knowledge-koubo" and x.get("rhythm") for x in e5["video_types"])
+               and len(e5.get("platforms") or []) == 5
+               and not json.load(open(os.path.join(ROOT, "registry", "enums.json"), encoding="utf-8")).get("video_types"))
+
+        # ⑥ 档案注册表写闭环：save video_types（白名单已放行）→ 读回 → 还原
+        vtp = os.path.join(ROOT, "registry", "video_types.json")
+        old = open(vtp, encoding="utf-8").read()
+        try:
+            reg = json.loads(old)
+            reg["knowledge-koubo"]["rhythm"] = "T63-临时改"
+            code6a, _ = api("/api/registry-save/video_types", method="POST", body=reg)
+            back = json.load(open(vtp, encoding="utf-8"))["knowledge-koubo"]["rhythm"] == "T63-临时改"
+        finally:
+            open(vtp, "w", encoding="utf-8").write(old)  # 原样还原（不动格式细节）
+
+        check("T63 类型/平台档案化（draft注入/渲染默认值/平台锚/R11/enums派生/写闭环）",
+              ok1a and ok1b and ok1c and ok1d and ok2a and ok2b and ok3
+              and ok4a and ok4b and ok4c and ok5 and code6a == 200 and back,
+              "draft=%s/%s/%s/%s defaults=%s/%s 锚=%s R11=%s/%s/%s enums=%s save=%s读回=%s"
+              % (ok1a, ok1b, ok1c, ok1d, ok2a, ok2b, ok3, ok4a, ok4b, ok4c, ok5, code6a, back))
+    except Exception as e:
+        check("T63 类型/平台档案化（draft注入/渲染默认值/平台锚/R11/enums派生/写闭环）", False, str(e)[:160])
+
 
 
 if __name__ == "__main__":

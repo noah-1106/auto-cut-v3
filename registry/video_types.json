@@ -1,0 +1,111 @@
+{
+ "_doc": "视频类型档案（2026-10-15 从 enums.json 提升）：不只名称——每个类型是剪辑方法参数包。消费方：draft.py 起草提示词（rhythm/draft_prompt/defaults.transition/defaults.narration_mode）、pipeline.build_plan 渲染默认值（defaults.subtitle/defaults.cover_strategy）、qc.py R11 时长域（qc.duration_range）、Studio meta 面板（rhythm 提示+默认值联动）。人走 Studio 注册表抽屉维护，Agent 直接改本 JSON——同一注册表范式。",
+ "knowledge-koubo": {
+  "name": "知识口播",
+  "desc": "专业人设分享干货，建立信任、引导关注",
+  "rhythm": "钩子先行，信息密度高",
+  "draft_prompt": "首幕必须开场钩子（提问/反常识结论/痛点直击），不得用环境空镜开场；信息按「痛点→方法→证据→行动建议」推进；结尾幕给明确的关注理由；每幕口播词信息密度高，删掉铺垫客套",
+  "defaults": {
+   "subtitle": "karaoke-gold",
+   "transition": "fadewhite",
+   "narration_mode": "original",
+   "cover_strategy": "beat-frame"
+  },
+  "qc": {
+   "duration_range": [
+    20,
+    120
+   ]
+  }
+ },
+ "story-narrative": {
+  "name": "剧情叙事",
+  "desc": "有起承转合的故事线，情绪驱动",
+  "rhythm": "铺垫-冲突-反转",
+  "draft_prompt": "按起承转合结构排幕：铺垫幕建立人物/场景，冲突幕推进张力，反转幕制造意外，收尾幕留情绪余韵；允许 1 幕纯空镜（narration=none）做情绪呼吸；转场选柔和叠化系，不用闪白",
+  "defaults": {
+   "subtitle": "kaiti-warm",
+   "transition": "crossDissolve",
+   "narration_mode": "original",
+   "cover_strategy": "first-frame"
+  },
+  "qc": {
+   "duration_range": [
+    30,
+    180
+   ]
+  }
+ },
+ "tutorial": {
+  "name": "教程演示",
+  "desc": "步骤化教学，重操作演示",
+  "rhythm": "步骤递进",
+  "draft_prompt": "步骤幕严格按操作顺序递进，每幕开头一句步骤预告（「第一步…」「接下来…」）；操作画面优先全幅 A 轨演示，讲解人脸不得作 B 轨；关键参数/结果用贴纸强调词点触发；结尾幕给成果展示+总结",
+  "defaults": {
+   "subtitle": "plain-white",
+   "transition": "slideLeft",
+   "narration_mode": "original",
+   "cover_strategy": "beat-frame"
+  },
+  "qc": {
+   "duration_range": [
+    40,
+    300
+   ]
+  }
+ },
+ "product-show": {
+  "name": "产品展示",
+  "desc": "卖点+场景+促转化",
+  "rhythm": "卖点循环",
+  "draft_prompt": "结构走「痛点场景→产品入镜→卖点逐条（场景化演示）→行动召唤」；每个卖点亮出时配贴纸强调词；产品特写幕允许 narration=none 纯画面+BGM；结尾必须行动召唤幕（怎么买/怎么约）",
+  "defaults": {
+   "subtitle": "highlight-yellow",
+   "transition": "zoomIn",
+   "narration_mode": "original",
+   "cover_strategy": "output-frame"
+  },
+  "qc": {
+   "duration_range": [
+    20,
+    90
+   ]
+  }
+ },
+ "vlog": {
+  "name": "日常 Vlog",
+  "desc": "轻记录，人设养号",
+  "rhythm": "松弛跟随",
+  "draft_prompt": "节奏松弛，多用空镜幕（narration=none）和环境原声幕做段落呼吸；口播幕像聊天不像宣讲（口语化、允许语气词）；转场用柔和系；不强行钩子，靠生活细节和人物魅力留人",
+  "defaults": {
+   "subtitle": "plain-quiet",
+   "transition": "dissolve",
+   "narration_mode": "original",
+   "cover_strategy": "first-frame"
+  },
+  "qc": {
+   "duration_range": [
+    40,
+    300
+   ]
+  }
+ },
+ "interview-cut": {
+  "name": "访谈切片",
+  "desc": "长访谈切金句",
+  "rhythm": "金句独立成幕",
+  "draft_prompt": "每幕一条完整金句观点（首尾干净，不截半句）；金句之间可用 1-2 秒空镜幕分隔换气；开头用最反常识的金句做钩子；不要自己写串词幕，素材说什么就是什么",
+  "defaults": {
+   "subtitle": "band-bold",
+   "transition": "crossDissolve",
+   "narration_mode": "original",
+   "cover_strategy": "beat-frame"
+  },
+  "qc": {
+   "duration_range": [
+    15,
+    90
+   ]
+  }
+ }
+}

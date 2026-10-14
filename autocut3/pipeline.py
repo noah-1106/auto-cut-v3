@@ -385,6 +385,20 @@ def _edge_silences(b, m, sid, dub_f, nb, packpool, cuts, mat_end):
         head_avail = (first - _prev_word_end(nwords, nin)) if first is not None else 99.0
     return max(0.0, tail_avail), max(0.0, head_avail), nmode
 
+def _vtype_defaults(meta):
+    """视频类型档案默认值（registry/video_types.json，2026-10-15 档案化）：只作未显式
+    设置字段的回退——用户/Agent 显式选择永远赢。档案缺失/无类型返回 {}（零漂移）。"""
+    vt = (meta or {}).get("type")
+    if not vt:
+        return {}
+    try:
+        d = json.load(open(os.path.join(ROOT, "registry", "video_types.json"),
+                           encoding="utf-8"))[vt]
+        return d.get("defaults") or {}
+    except Exception:
+        return {}
+
+
 def build_plan(project_dir, sid=None):
     spath, real_sid = story_file(project_dir, sid)
     story = load(spath)
@@ -604,6 +618,7 @@ def build_plan(project_dir, sid=None):
     if os.path.exists(pjf):
         fmt_id = (load(pjf) or {}).get("format")
     fmt_id = (story.get("meta", {}) or {}).get("format") or fmt_id or "vertical"
+    _vd = _vtype_defaults(story.get("meta", {}) or {})  # 类型档案默认值（显式选择赢）
     fmt = (load(f"{ROOT}/registry/formats.json").get(fmt_id)
            or {"width": 1080, "height": 1920})
     plan = {
@@ -617,7 +632,7 @@ def build_plan(project_dir, sid=None):
         "media": f"{project_dir}/materials/src.mp4",
         "segments": segs, "words": words, "word_drops": word_drops,
         "subtitle_style": story.get("meta", {}).get("style", {}).get("subtitle",
-                                story.get("subtitle_style", "karaoke-gold")),
+                                story.get("subtitle_style", _vd.get("subtitle", "karaoke-gold"))),
         "transitions": {s["id"]: s.get("transition") for s in segs if s.get("transition")},
         "flash_peak": ov.get("flash"),
         "tconf": trans,
@@ -1322,7 +1337,7 @@ def _loudnorm_out(plan, out, _status=None):
         return
     try:
         import qc
-        rules = qc.load_rules()
+        rules = qc.load_rules((plan.get("meta") or {}).get("platform") or None)  # 锚跟随故事线（2026-10-15）
     except Exception:
         rules = {}
     tgt = float(rules.get("_lufs_target", -16)) if _ln is True else float(_ln)
@@ -1402,7 +1417,8 @@ def render(plan, project_dir, sid=None):
     sfx, real_sid = art_suffix(project_dir, sid)  # P2#7：原引用未定义的 real_sid，直接 import render() 会 NameError
     # 封面闸门（2026-09-18 Noah 裁定：封面生成+检查在渲染前——人先验封面再耗渲染；
     # output-frame 例外：成片抽帧天然后置，渲染后收口）
-    _cov_strategy = ((plan.get("meta") or {}).get("cover") or {}).get("strategy", "first-frame")
+    _cov_strategy = ((plan.get("meta") or {}).get("cover") or {}).get(
+        "strategy", _vtype_defaults(plan.get("meta") or {}).get("cover_strategy", "first-frame"))
     print("STAGE cover", flush=True)
     _status(stage="cover", pct=1)
     cover = None

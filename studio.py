@@ -50,6 +50,19 @@ def jload(p, default=None):
     except Exception:
         return default
 
+def _enums():
+    """语义枚举 + 派生域（2026-10-15 类型/平台档案化）：video_types/platforms 从注册表档案
+    （registry/video_types.json、registry/platforms.json——Studio 抽屉可维护）派生成旧列表
+    形态（id/name/desc/rhythm），enums.json 不再持有这两域——前端/Agent 消费形状零改。"""
+    e = jload(f"{ROOT}/registry/enums.json", {})
+    def _lst(fn, extra):
+        return [{"id": k, **{kk: vv for kk, vv in v.items() if kk in extra}}
+                for k, v in (jload(f"{ROOT}/registry/{fn}.json", {}) or {}).items()
+                if not k.startswith("_") and isinstance(v, dict)]
+    e["video_types"] = _lst("video_types", ("name", "desc", "rhythm"))
+    e["platforms"] = _lst("platforms", ("name", "desc"))
+    return e
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -95,7 +108,7 @@ class H(BaseHTTPRequestHandler):
                 pass
             self._json(jload(f"{pd}/materials/library.json", {}))
         elif u.path == "/api/enums":
-            self._json(jload(f"{ROOT}/registry/enums.json", {}))
+            self._json(_enums())
         elif u.path.startswith("/api/registry/"):
             # 注册表读接口（2026-09-14）：/api/registry/bgm → registry/bgm.json。人/Agent 同权。
             rname = u.path[len("/api/registry/"):]
@@ -247,7 +260,7 @@ class H(BaseHTTPRequestHandler):
                     ("docs/archive/poc/studio-grid.png", "docs/archive/poc/v3-loop-v2.png", "docs/archive/poc/v3-loop-verify.png")
                     if os.path.exists(os.path.join(ROOT, rel))]
             mlt = f"/files/projects/{name}/manual/{name}.mlt"
-            enums = jload(f"{ROOT}/registry/enums.json", {})
+            enums = _enums()  # video_types/platforms 从档案注册表派生（2026-10-15）
             transition_ids = list((jload(f"{ROOT}/registry/transitions.json", {}) or {}).keys())
             enums["stickers"] = [{"id": k, **{kk: vv for kk, vv in v.items() if kk in ("desc", "pos", "duration")}}
                                  for k, v in (jload(f"{ROOT}/registry/stickers.json", {}) or {}).items()]
@@ -946,7 +959,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
                 import draft as D
-                sid, draft, beats = D.run(name, intent, save=True)
+                sid, draft, beats = D.run(name, intent, save=True, vtype=str(body.get("type") or "").strip() or None)
             except SystemExit as e:
                 return self._json({"err": "起草前置缺失（LLM key 未配置？）：%s" % (str(e.code) if e.code else "")[:180]}, 500)  # sys.exit 在 HTTP 线程里会打穿请求（Claude P2-②）
             except Exception as e:
@@ -1138,7 +1151,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/registry-save/"):
             # 注册表整体保存（前端管理面板编辑后 PUT）：白名单五件套，enums/formats 语义枚举不开放
             rname = u.path.split("/")[3]
-            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers"):
+            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers", "video_types", "platforms"):
                 return self._json({"err": "registry 不可编辑: " + rname}, 400)
             n = int(self.headers.get("Content-Length", 0))
             if n <= 0 or n > 2 << 20:
@@ -1162,7 +1175,7 @@ class H(BaseHTTPRequestHandler):
             parts = u.path.split("/")
             rname = parts[3]
             rid = parts[4] if len(parts) > 4 else ""
-            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers") or not _safe_id(rid):
+            if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers", "video_types", "platforms") or not _safe_id(rid):
                 return self._json({"err": "bad registry/id（id 支持中文）"}, 400)
             regp = f"{ROOT}/registry/{rname}.json"
             reg = jload(regp, {})

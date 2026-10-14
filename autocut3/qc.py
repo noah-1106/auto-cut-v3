@@ -16,6 +16,7 @@
   R8 填充词    词轨命中填充词表            info   human(标记，剪否由人/Agent 定)
   R9 重说      窗口内相邻 n-gram 重复      warn   suggest(剪重复段)
   R10 页同步   ASS 页时刻 vs plan 词轨重放页 中位偏移>shift  warn suggest（G2t 入列——确定性同函数重放，非 ASR 参照）
+  R11 时长域   A 轨合计时长出类型档案 qc.duration_range   warn   suggest(补幕/砍幕；区间在 registry/video_types.json 维护)
 
 用法：
   python3 autocut3/qc.py <project> [--story aidraft] [--no-deep]
@@ -31,13 +32,24 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PUNCT = "，。！？、"
 
 
-def load_rules():
+def load_rules(platform=None):
+    """platform（2026-10-15 平台档案化）：显式传参=故事线 meta.platform（优先）；
+    None=config 全局兜底。锚点查找序：registry/platforms.json 档案 > qc_rules.platforms
+    旧段 > 默认——一处维护，两处兼容。"""
     p = os.path.join(ROOT, "config", "qc_rules.json")
     cfg = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
-    plat = cfg.get("platform", "douyin")
+    plat = platform or cfg.get("platform", "douyin")
+    regp = os.path.join(ROOT, "registry", "platforms.json")
+    preg = {}
+    if os.path.exists(regp):
+        try:
+            preg = json.load(open(regp, encoding="utf-8")).get(plat) or {}
+        except Exception:
+            preg = {}
+    legacy = cfg.get("platforms", {}).get(plat, {})
     r = dict(cfg.get("rules", {}))
-    r["_lufs_target"] = cfg.get("platforms", {}).get(plat, {}).get("lufs_target", -16)
-    r["_lufs_tol"] = cfg.get("platforms", {}).get(plat, {}).get("lufs_tol", 3.0)
+    r["_lufs_target"] = preg.get("lufs_target", legacy.get("lufs_target", -16))
+    r["_lufs_tol"] = preg.get("lufs_tol", legacy.get("lufs_tol", 3.0))
     r["_platform"] = plat
     return r
 
@@ -252,6 +264,41 @@ def check_ass(ass_path, rules):
     return out
 
 
+# ---------- R11：时长域（视频类型档案消费，2026-10-15）----------
+def check_duration_domain(sl, rules):
+    """故事线 meta.type → registry/video_types.json 的 qc.duration_range；
+    A 轨时长合计出界 → warn suggest。无类型/档案无区间=跳过（零噪声）。"""
+    vt = (sl.get("meta") or {}).get("type")
+    if not vt:
+        return []
+    try:
+        reg = json.load(open(os.path.join(ROOT, "registry", "video_types.json"), encoding="utf-8"))
+    except Exception:
+        return []
+    rng = ((reg.get(vt) or {}).get("qc") or {}).get("duration_range")
+    if not isinstance(rng, list) or len(rng) != 2:
+        return []
+    tot = 0.0
+    for b in sl.get("beats", []):
+        trks = b.get("tracks") or []
+        A = next((x for x in trks if x.get("role", "A") == "A"), trks[0] if trks else None)
+        if A and A.get("duration"):
+            tot += float(A["duration"])
+    if tot <= 0:
+        return []
+    if tot < float(rng[0]):
+        return [_V("R11", "warn", "suggest", {"duration": round(tot, 1), "range": rng,
+                                              "video_type": vt},
+                   note="时长 %.0fs 低于类型「%s」期望区间 %s-%ss" % (tot, vt, rng[0], rng[1]),
+                   fix="补幕（或换更短素材段）至区间内；确属例外可改档案 qc.duration_range")]
+    if tot > float(rng[1]):
+        return [_V("R11", "warn", "suggest", {"duration": round(tot, 1), "range": rng,
+                                              "video_type": vt},
+                   note="时长 %.0fs 超类型「%s」期望区间 %s-%ss" % (tot, vt, rng[0], rng[1]),
+                   fix="砍幕/收紧幕时长至区间内；确属例外可改档案 qc.duration_range")]
+    return []
+
+
 # ---------- R6：响度（EBU R128，ffmpeg ebur128）----------
 def check_lufs(video, rules):
     if not video or not os.path.exists(video):
@@ -424,7 +471,6 @@ def check_page_sync(pdir, sid, rules):
 # ---------- 主入口 ----------
 def run(pid, story=None, deep=True, write=True):
     pdir = os.path.join(ROOT, "projects", pid)
-    rules = load_rules()
     sid = story
     sl_path = None
     if sid:
@@ -440,6 +486,9 @@ def run(pid, story=None, deep=True, write=True):
         sid = cands[0][:-5]
         sl_path = os.path.join(pdir, "storylines", cands[0])
     sl = json.load(open(sl_path, encoding="utf-8"))
+    # 平台锚跟随故事线（2026-10-15 档案化）：meta.platform 优先，无则 config 全局——
+    # 此前恒按全局判（标了视频号也按抖音锚），漂移已修
+    rules = load_rules((sl.get("meta") or {}).get("platform") or None)
 
     files = {}
     lib = os.path.join(pdir, "materials", "library.json")
@@ -456,6 +505,10 @@ def run(pid, story=None, deep=True, write=True):
         violations += check_windows(sl, files, rules, _eff_trans_map(sl, pdir))
     except Exception as e:
         violations.append(_V("R1-R9", "warn", "human", {}, note="词轨检查异常: %s" % str(e)[:80]))
+    try:
+        violations += check_duration_domain(sl, rules)
+    except Exception as e:
+        violations.append(_V("R11", "warn", "human", {}, note="时长域检查异常: %s" % str(e)[:80]))
     try:
         violations += check_ass(os.path.join(pdir, "subtitle-%s.ass" % sid), rules)
     except Exception as e:

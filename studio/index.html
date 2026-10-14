@@ -415,7 +415,7 @@ zh:{
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
 'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。',
 'cfg.registry':'全盘注册表','cfg.regnote':'创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。',
-'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹',
+'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','reg.defaults':'默认值 JSON','reg.qcjson':'QC 区间 JSON','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）','msg.type.badjson':'JSON 解析失败——未保存',
 'reg.manage':'管理 →','reg.empty':'空','reg.noruntime':'未装运行时','reg.single':'单故事线','reg.mgr':'注册表管理',
 'reg.add':'＋ 新增条目','reg.import':'⬆ 导入素材文件','dlg.close':'✕ 关闭',
 'reg.fmtnote':'文件格式：%s · 注册表是人与 Agent 共用的选材事实源——改完保存即生效，下一次渲染使用新值',
@@ -506,7 +506,7 @@ en:{
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
 'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials). Click a card to open; deletion always <b class="k">archives to _attic</b> — recoverable.',
 'cfg.registry':'Global registries','cfg.regnote':'Every dropdown in Creator reads from here — <b class="k">click a card to manage</b> (add/edit/delete/import). Saved changes apply to the next render.',
-'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices',
+'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','reg.defaults':'Defaults JSON','reg.qcjson':'QC range JSON','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)','msg.type.badjson':'Invalid JSON — not saved',
 'reg.manage':'Manage →','reg.empty':'empty','reg.noruntime':'runtime not installed','reg.single':'single storyline','reg.mgr':'Registry manager',
 'reg.add':'＋ Add entry','reg.import':'⬆ Import asset file','dlg.close':'✕ Close',
 'reg.fmtnote':'File: %s · Registries are the shared source of truth for humans and agents — saved changes apply to the next render',
@@ -723,7 +723,7 @@ async function loadConfig(){
     '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag" data-i18n="reg.single">单故事线</span>')+'</div>'+
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
-  const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers']];
+  const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers'],['video_types','reg.vtypes'],['platforms','reg.plats']];
   P={registry:{}};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）
   const _regs=await Promise.all(REGS.map(([rn])=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发取五件套（原串行 5 个 RTT，2026-10-15 体检）
   REGS.forEach(([rn],i)=>P.registry[rn]=_regs[i]);
@@ -733,13 +733,11 @@ async function loadConfig(){
   const vlist=(P._voices.voices||[]);
   const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
-    [['reg.video_types',(en.video_types||[]).length,names(en.video_types||[])&&((en.video_types||[]).map(x=>x.name).join(' · '))],
-     ['reg.cover_strategies',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
+         [['reg.cover_strategies',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
      ['reg.narration_modes',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
-     ['reg.platforms',(en.platforms||[]).length,(en.platforms||[]).map(x=>x.name).join(' · ')]
     ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5 data-i18n="'+r[0]+'">'+esc(t(r[0]))+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
-    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(4*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+'</div></div>'+
-    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+5)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
+    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(2*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+'</div></div>'+
+    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+3)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
   applyLang();
 }
 /* ═══ 项目操作页 ═══ */
@@ -757,7 +755,7 @@ async function openProj(name,story,silent){
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
   P.registry={};
-  const _rn=['bgm','subtitles','transitions','sfx','stickers'];
+  const _rn=['bgm','subtitles','transitions','sfx','stickers','video_types','platforms'];
   const _rv=await Promise.all(_rn.map(rn=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发（openProj 关键路径原串行白多 4 个 RTT）
   _rn.forEach((rn,i)=>P.registry[rn]=_rv[i]);
   go('proj');renderTabs();buildCreator();buildViews();
@@ -861,7 +859,27 @@ async function voiceDel(name){
 
 /* ═══ 注册表管理抽屉：五件套（bgm/subtitles/transitions/sfx/stickers）增删改+素材导入 ═══ */
 let REGCUR=null;
-const REGFILE={bgm:'reg.file.bgm',sfx:'reg.file.sfx',stickers:'reg.file.stickers',subtitles:'reg.file.subtitles',transitions:'reg.file.transitions'};  // 值=i18n key
+const REGFILE={bgm:'reg.file.bgm',sfx:'reg.file.sfx',stickers:'reg.file.stickers',subtitles:'reg.file.subtitles',transitions:'reg.file.transitions',video_types:'reg.file.video_types',platforms:'reg.file.platforms'};  // 值=i18n key
+const REGEXTRA={  // 档案域专属字段（2026-10-15 类型/平台档案化）：input 直存 / json 先校验后存对象
+  video_types:[['rhythm','input','reg.rhythm'],['draft_prompt','textarea','reg.draftprompt'],['defaults','json','reg.defaults'],['qc','json','reg.qcjson']],
+  platforms:[['lufs_target','input','reg.lufs'],['lufs_tol','input','reg.lufstol']]
+};
+function regExtraRows(id,e){
+  const spec=REGEXTRA[REGCUR];if(!spec)return '';
+  return '<div style="display:grid;grid-template-columns:90px 1fr;gap:6px 10px;align-items:start;margin-top:10px">'+
+    spec.map(([k,kind,lbl])=>{
+      const v=e[k];
+      const shown=(kind==='json')?JSON.stringify(v==null?(k==='defaults'?{}:{}) :v,null,1):String(v==null?'':v);
+      if(kind==='input')return '<span style="font-size:10px;color:var(--faint)">'+esc(t(lbl))+'</span>'+
+        '<input style="width:100%" value="'+esc(shown)+'" onchange="regSet(\''+id+'\',\''+k+'\',this.value)">';
+      return '<span style="font-size:10px;color:var(--faint)">'+esc(t(lbl))+'</span>'+
+        '<textarea rows="'+(kind==='json'?3:2)+'" style="width:100%;font:11px var(--mono)" onchange="regSetJson(\''+id+'\',\''+k+'\',this)">'+esc(shown)+'</textarea>';
+    }).join('')+'</div>';
+}
+function regSetJson(id,k,el){  // JSON 字段：解析失败不保存并标红（档案是管线消费的，坏 JSON 不能落盘）
+  let v;try{v=JSON.parse(el.value)}catch(e){el.style.borderColor='var(--bad)';alert(t('msg.type.badjson'));return}
+  el.style.borderColor='';regSet(id,k,v);
+}
 function openRegMgr(rn,titleKey){
   REGCUR=rn;
   $('regmgr-title').textContent=t(titleKey)+' · '+t('reg.mgr');
@@ -897,7 +915,7 @@ async function renderRegMgr(){
       '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="'+esc(t('reg.desc.ph'))+'" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
       (needFile?'<span style="font:10px var(--mono);color:var(--faint)">'+esc(e.file||'')+'</span>':'')+
       '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">'+esc(t('reg.del'))+'</button>'+
-      '</div></div>';}).join('')||'<div class="empty">'+esc(t('reg.emptylist'))+'</div>';
+      '</div>'+regExtraRows(id,e)+'</div>';}).join('')||'<div class="empty">'+esc(t('reg.emptylist'))+'</div>';
   // 字幕样式样张：先请后端按需生成（/api/sub-preview 返回 {ok,url}），再挂图
   document.querySelectorAll('#regmgr-body img[data-subpv]').forEach(async img=>{
     try{const r=await(await fetch('/api/sub-preview/'+encodeURIComponent(img.dataset.subpv))).json();if(r.ok)img.src=r.url;else img.remove();}
@@ -997,13 +1015,30 @@ function musicRow(b,i){
     '<div class="trow"><span style="font-size:10px;color:var(--faint)">'+esc(t('mus.seg'))+'</span>'+segSelectHtml(bgmTrackId(b),mu.segment||'',i)+
     '<label style="font-size:11px;color:var(--dim);display:flex;gap:5px;align-items:center"><input type="checkbox" style="width:auto;height:auto" '+((mu.loop!==false)?'checked':'')+' onchange="DRAFT.beats['+i+'].music.loop=this.checked;markDirty()" title="'+esc(t('mus.loop.t'))+'"> '+esc(t('mus.loop'))+'</label></div>';
 }
+function vtypeHint(v){const p=(P.enums.video_types||[]).find(x=>x.id===v);return p?[p.name,p.rhythm].filter(Boolean).join(' · '):''}
+function platformHint(v){const p=(P.registry.platforms||{})[v];if(!p)return '';return (p.lufs_target!=null)?('LUFS '+p.lufs_target+' ± '+(p.lufs_tol!=null?p.lufs_tol:3)):''}
+function onTypeChange(v){  // 类型档案联动（2026-10-15）：亮出节奏提示；默认值只补未显式设置的字段（用户选择赢）
+  DRAFT.meta.type=v;
+  const p=(P.enums.video_types||[]).find(x=>x.id===v)||{};
+  const h=$('vtype-hint');if(h)h.textContent=vtypeHint(v);
+  const dd=((P.registry.video_types||{})[v]||{}).defaults||{};
+  const applied=[];
+  DRAFT.meta.style=DRAFT.meta.style||{};
+  if(dd.subtitle&&!DRAFT.meta.style.subtitle){DRAFT.meta.style.subtitle=dd.subtitle;applied.push(t('meta.subtitle'))}
+  if(dd.cover_strategy&&!((DRAFT.meta.cover||{}).strategy)){DRAFT.meta.cover=Object.assign({},DRAFT.meta.cover,{strategy:dd.cover_strategy});applied.push(t('cov.strategy'))}
+  if(applied.length){markDirty();buildCreator();setStatus(t('msg.type.applied',applied.join(' / ')))}
+}
+function onPlatformChange(v){  // 平台锚提示：qc R6 与渲染后 loudnorm 精修都按这个锚判
+  DRAFT.meta.platform=v;
+  const h=$('plat-hint');if(h)h.textContent=platformHint(v);
+}
 function buildCreator(){
   const m=DRAFT.meta,en=P.enums||{};
   $('outline').value=DRAFT.outline||'';
   $('metabar').innerHTML=
-    '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="DRAFT.meta.type=this.value">'+optHtml(en.video_types,m.type)+'</select></div>'+
+    '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="onTypeChange(this.value)">'+optHtml(en.video_types,m.type)+'</select><span id="vtype-hint" style="font-size:10px;color:var(--faint)">'+esc(vtypeHint(m.type))+'</span></div>'+
     '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
-    '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="DRAFT.meta.platform=this.value">'+optHtml(en.platforms,m.platform)+'</select></div>'+
+    '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="onPlatformChange(this.value)">'+optHtml(en.platforms,m.platform)+'</select><span id="plat-hint" style="font-size:10px;color:var(--faint)">'+esc(platformHint(m.platform))+'</span></div>'+
     '<div class="mf"><label data-i18n="meta.subtitle">'+esc(t('meta.subtitle'))+'</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
     '<div class="mf"><label data-i18n="meta.bgm">'+esc(t('meta.bgm'))+'</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="'+esc(t('meta.bgm.t'))+'">'+optHtml([{id:'',name:t('meta.nobgm')}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
     (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmseg">'+esc(t('meta.bgmseg'))+'</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="'+esc(t('meta.bgmseg.t'))+'">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
@@ -1277,7 +1312,7 @@ async function aiDraft(){
   setStatus(t('msg.draft.busy2'));
   try{
     const r=await(await fetch('/api/draft/'+P.name,{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent})})).json();
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent,type:(DRAFT.meta||{}).type||null})})).json();
     if(r.ok){setStatus(t('msg.draft.done',r.sid+'（'+r.beats+'）',String(r.title||'')));
       await openProj(P.name,r.sid);showTab('create');}
     else alert(t('msg.draft.fail')+(r.err||''));

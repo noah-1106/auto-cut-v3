@@ -243,7 +243,11 @@ python3 autocut3/qc.py <pid> --story <sid>
 ```
 - 产物 `qc-report.json`，verdict 三档：`deliverable`（可交付）/ `fix-then-deliver`
   （有 blocker 但可修——改故事线重渲）/ `blocked`（人/unfixable，必须人介入）。
-- R1–R10 规则速查（config/qc_rules.json）：R1 死尾巴≤0.8s / R2 尾音≥0.25s /
+- R1–R11 规则速查（config/qc_rules.json）：R1 死尾巴≤0.8s / R2 尾音≥0.25s /
+- **视频类型/平台档案（registry/video_types.json、registry/platforms.json，2026-10-15）**：
+  类型=剪辑方法参数包（rhythm/draft_prompt 进起草提示词、defaults 作渲染回退、qc.duration_range 供 R11）；
+  平台=响度锚（qc R6 与渲染后 loudnorm 精修都按故事线 meta.platform 查）。Studio 抽屉或直接改 JSON 维护，
+  起草传类型：`draft.py --type knowledge-koubo` / POST /api/draft body 加 "type"。
   R3 静音洞≤0.8s / R4 冻结帧<2s / R5 字幕页≥0.5s / R6 响度锚 -16±3 LUFS /
   R7 听觉（洞>1.5s、相邻段差>8dB）/ R8 填充词 7 个+呃嗯 / R9 重说（4 字 ngram×12s 窗）/
   R10 页同步偏移≤0.5s。**warn 不拦交付但要在交付说明里如实列出**。

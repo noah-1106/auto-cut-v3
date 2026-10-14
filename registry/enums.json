@@ -1,42 +1,5 @@
 {
- "video_types": [
-  {
-   "id": "knowledge-koubo",
-   "name": "知识口播",
-   "desc": "专业人设分享干货，建立信任、引导关注",
-   "rhythm": "钩子先行，信息密度高"
-  },
-  {
-   "id": "story-narrative",
-   "name": "剧情叙事",
-   "desc": "有起承转合的故事线，情绪驱动",
-   "rhythm": "铺垫-冲突-反转"
-  },
-  {
-   "id": "tutorial",
-   "name": "教程演示",
-   "desc": "步骤化教学，重操作演示",
-   "rhythm": "步骤递进"
-  },
-  {
-   "id": "product-show",
-   "name": "产品展示",
-   "desc": "卖点+场景+促转化",
-   "rhythm": "卖点循环"
-  },
-  {
-   "id": "vlog",
-   "name": "日常 Vlog",
-   "desc": "轻记录，人设养号",
-   "rhythm": "松弛跟随"
-  },
-  {
-   "id": "interview-cut",
-   "name": "访谈切片",
-   "desc": "长访谈切金句",
-   "rhythm": "金句独立成幕"
-  }
- ],
+ "_doc": "纯语义枚举（只读）。video_types/platforms 已于 2026-10-15 提升为注册表档案（registry/video_types.json、registry/platforms.json——Studio 抽屉可维护，管线消费），/api/enums 对这两域自动派生，本文件不再持有。",
  "cover_strategies": [
   {
    "id": "first-frame",
@@ -83,24 +46,6 @@
    "id": "none",
    "name": "无旁白",
    "desc": "纯画面 + BGM + 字幕卡，适合氛围幕"
-  }
- ],
- "platforms": [
-  {
-   "id": "douyin",
-   "name": "抖音"
-  },
-  {
-   "id": "xhs",
-   "name": "小红书"
-  },
-  {
-   "id": "shipinhao",
-   "name": "视频号"
-  },
-  {
-   "id": "bilibili",
-   "name": "B站"
   }
  ],
  "positions": [

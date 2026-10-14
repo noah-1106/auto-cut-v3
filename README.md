@@ -119,7 +119,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 6 | 词轨 | vadwords.py | 幕词轨（tier=word 实测直取，否则 VAD 铺轨） | 字幕/卡拉OK |
 | 7 | 封面 | pipeline.py（build_cover/cover_check） | cover/cover-*.jpg | 渲染闸门/发布 |
 | 8 | 渲染 | pipeline.py | out-*.mp4 + subtitle.ass | 门禁/交付 |
-| 9 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
+| 9 | 门禁 | qc(R1-R11) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
 | 10 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 |
 
 下方是 10 个概念环节的地图；机器可核对的环节状态口径=编排器 `orchestrate.py` 的 `STEPS`（15 环节，多出的粒度=mount/digest/proofread/dossier/aigen 等审计与预留槽位）。全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
@@ -152,11 +152,12 @@ studio.py            # 后端全部路由（人/Agent 同权 HTTP）
 studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
 autocut3/            # 流水线模块：orchestrate(编排器) process(素材级流水线·入库首选) asr(供应商适配+词轨归一)
                      #   transcribe(转写) understand(画面识别) digest(包级盘点) draft(AI起草) disposition(缺陷台账)
-                     #   pipeline(封面/成片渲染) qc(质检R1-R10) proofread(校对) vadwords(VAD词轨)
+                     #   pipeline(封面/成片渲染) qc(质检R1-R11) proofread(校对) vadwords(VAD词轨)
                      #   dubfit(配音裁剪) dubgate(配音门禁) dossier(素材档案) tts(配音合成) tts_audio8(本地TTS运行时)
                      #   video_meta(几何探针) flock(跨平台锁) video_gen/image_gen(AI生成预留口) library(v1切片遗产层)
 registry/            # 注册表：效果系统的单一事实源（*.json 纯数据）
-                     #   bgm/subtitles/transitions/sfx/stickers=效果；enums/formats=语义枚举(只读)
+                     #   bgm/subtitles/transitions/sfx/stickers=效果；video_types/platforms=剪辑方法档案
+                     #   （类型→起草提示词+渲染默认值+R11时长域；平台→响度锚——Studio 抽屉可维护）；enums/formats=语义枚举(只读)
 assets/              # 效果素材本体（registry 的 file 字段指向这里）
 materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
