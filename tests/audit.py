@@ -36,7 +36,9 @@ for i, ln in param_lines:
         continue
     window = "\n".join(lines[i:i+6])
     if var.startswith("_") and var.endswith("_"): continue
-    EXEMPT = {"sid_render_progress", "kind"}  # 已人工复核：kind 在 KIND 白名单内 / sid 仅入内存 job key
+    EXEMPT = {"sid_render_progress", "kind",  # 已人工复核：kind 在 KIND 白名单内 / sid 仅入内存 job key
+              "text"}  # 已人工复核（2026-10-14）：/api/voice-test 的 text 只作 TTS 文本进 JSON body，输出路径由 _safe_id 校验过的 name 派生，无注入面
+    if var in EXEMPT: continue  # 2026-10-14 修：EXEMPT 集合定义后从未被消费（装饰性豁免），接上
     if not re.search(r'_safe\(|_safe_id\(|_filename\(|isdigit\(\)|in \("|\.(lower\(\))', window):
         if var == "kind" and "KIND" in "\n".join(lines[i:i+12]):
             continue
@@ -195,7 +197,8 @@ for proj in sorted(os.listdir(os.path.join(ROOT, "projects"))):
 print("  ✓ D4 效果引用核查完成")
 
 # D5. assets 孤儿（有文件但注册表没引用）——递归查文件（2026-09-18 修：原 listdir 不递归，
-# assets/sfx/viral/ 这层目录名本身被当孤儿=恒误报）；许可/来源清单是合规存档，不算孤儿
+# assets/sfx/viral/ 这层目录名本身被当孤儿=恒误报）；许可/来源清单是合规存档，不算孤儿；
+# .DS_Store 是 Finder 元垃圾（已 gitignore，碰过目录即再生），跳过否则恒误报（2026-10-14）
 for sub in ["music", "sfx", "stickers"]:
     adir = os.path.join(ROOT, "assets", sub)
     if not os.path.isdir(adir): continue
@@ -206,7 +209,7 @@ for sub in ["music", "sfx", "stickers"]:
             if isinstance(v, dict) and v.get("file"): refd.add(os.path.basename(v["file"]))
     for dirpath, _, fns in os.walk(adir):
         for fn in fns:
-            if fn.startswith("LICENSE") or "manifest" in fn.lower():
+            if fn.startswith("LICENSE") or "manifest" in fn.lower() or fn == ".DS_Store":
                 continue
             if fn not in refd:
                 add("P3", "D5 assets孤儿", "%s 未被注册表引用"
