@@ -317,7 +317,8 @@ def status(project):
 
 def _run(cmd, label):
     print(f"  ▸ {label}: {' '.join(os.path.basename(c) for c in cmd[:3])} …", flush=True)
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       cwd=ROOT)  # cwd 锚定仓根：vadwords/dubfit/dubgate 内部用 projects/ 相对路径，从他目录起编排不再炸
     tail = (r.stdout or "")[-300:]
     if r.returncode != 0:
         raise RuntimeError(f"{label} 失败（exit {r.returncode}）: {(r.stderr or '')[-300:]}")

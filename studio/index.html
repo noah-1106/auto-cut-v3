@@ -542,7 +542,6 @@ async function openProj(name,story,silent){
   P.name=name;P.projTitle=(P.storyline&&P.storyline.title)||name;
   VIEW.proj=name;VIEW.story=P.story||((P.stories||[])[0]||null);
   DRAFT=JSON.parse(JSON.stringify(P.storyline||{}));
-  DRAFT.__meta=JSON.parse(JSON.stringify((P.storyline&&P.storyline.meta)||{}));  // meta 快照：保存时保真未编辑的 meta 键（2026-09-14 序列化保真）
   DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
   (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
@@ -987,13 +986,9 @@ function collectStory(){
       subtitle:(b.subtitle&&b.subtitle.style)?{style:b.subtitle.style}:{},
       transition_out:b.transition_out||null
     }))
+    /* meta 直通即保真：DRAFT 整体是 storyline 深拷贝（openProj/保存回写均全量），
+       meta 未编辑键随 DRAFT.meta 原样返回，无需快照合并（2026-10-13 删 return 后死代码） */
   };
-  /* meta 级保真：audio（贯穿 BGM）/cover（封面策略）等 meta 字段 UI 不全编辑，保存时保留未编辑键 */
-  const curMeta=(DRAFT.__meta)||null;
-  if(curMeta){out.meta=Object.assign({},curMeta,out.meta||{});
-    if(curMeta.audio&&!out.meta.audio)out.meta.audio=curMeta.audio;
-    if(curMeta.cover&&!out.meta.cover)out.meta.cover=curMeta.cover;}
-  return out;
 }
 let FMTS={};
 function fmtOptions(cur){
@@ -1064,7 +1059,6 @@ async function saveStory(silent){
       headers:{'Content-Type':'application/json'},body:JSON.stringify(collectStory())})).json();
     if(r.ok){
       DRAFT=JSON.parse(JSON.stringify(r.storyline));
-      DRAFT.__meta=JSON.parse(JSON.stringify((r.storyline&&r.storyline.meta)||{}));
       DRAFT.meta=DRAFT.meta||{};DRAFT.meta.style=DRAFT.meta.style||{};DRAFT.meta.audio=DRAFT.meta.audio||{};DRAFT.meta.cover=DRAFT.meta.cover||{};
       (DRAFT.beats||[]).forEach(b=>{b.tracks=b.tracks||b.materials||[];b.effects=b.effects||{};b.effects.stickers=b.effects.stickers||[];b.effects.sfx=b.effects.sfx||[];b.music=b.music||{};});
       P.storyline=r.storyline;

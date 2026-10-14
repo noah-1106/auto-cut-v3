@@ -106,22 +106,6 @@ class H(BaseHTTPRequestHandler):
             if not _safe(rname):
                 return self._json({"err": "bad registry name"}, 400)
             return self._json(jload(f"{ROOT}/registry/{rname}.json", {}))
-        elif u.path.startswith("/api/cover/"):
-            name = u.path.split("/")[3]
-            if not _safe(name):
-                return self._json({"err": "bad id"}, 400)
-            cover_dir = f"{ROOT}/projects/{name}/cover"
-            os.makedirs(cover_dir, exist_ok=True)
-            fp = f"{cover_dir}/cover.jpg"
-            if os.path.isfile(fp):
-                self.send_response(200)
-                self.send_header("Content-Type", "image/jpeg")
-                self.send_header("Content-Length", str(os.path.getsize(fp)))
-                self.end_headers()
-                with open(fp, "rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                self._json({"err": "cover 未生成"}, 404)
         if u.path.startswith("/api/sync/"):
             # 双向同步探针：先落库，后读取——Studio 每 5s 轮询这里，看见 Agent 的落库
             name = u.path.split("/")[3]
@@ -737,13 +721,13 @@ class H(BaseHTTPRequestHandler):
             if kind != "audio":
                 try:
                     os.makedirs(f"{pk_dir}/thumbs", exist_ok=True)
+                    thumb = f"_t{__import__('hashlib').md5((pid + fname).encode()).hexdigest()[:10]}.jpg"  # 暂存名：锁内定稿 id 后归一为 {mid}.jpg
                     subprocess.run([FF, "-y", "-loglevel", "error",
                                     "-ss", ("1" if kind == "video" else "0"), "-i", dest,
                                     "-vframes", "1", "-vf", "scale=480:-2",
-                                    f"{pk_dir}/thumbs/_t{__import__('hashlib').md5((pid + fname).encode()).hexdigest()[:10]}.jpg"], capture_output=True, timeout=30)
-                    thumb = f"/files/materials/packs/{pid}/thumbs/_t{__import__('hashlib').md5((pid + fname).encode()).hexdigest()[:10]}.jpg"
+                                    f"{pk_dir}/thumbs/{thumb}"], capture_output=True, timeout=30)
                 except Exception:
-                    pass
+                    thumb = None
             entry = {"id": mid, "file": fname, "kind": kind,
                      **({"duration": duration} if kind != "image" else {}),
                      **({"width": width, "height": height} if width else {}),
@@ -771,18 +755,17 @@ class H(BaseHTTPRequestHandler):
                     k += 1
                 if mid != base:
                     entry["id"] = mid
-                    if thumb:  # 缩略图按预检 mid 命名——id 撞号改名后同步改名，防错位
-                        try:
-                            os.rename(f"{pk_dir}/thumbs/{base}.jpg", f"{pk_dir}/thumbs/{mid}.jpg")
-                        except Exception:
-                            pass
-                        thumb = f"/files/materials/packs/{pid}/thumbs/{mid}.jpg"
+                if thumb:  # 缩略图归一定稿 id（暂存 _t<hash> → {mid}.jpg，无条件——/api/project 按 {id}.jpg 重建 URL）
+                    try:
+                        os.rename(f"{pk_dir}/thumbs/{thumb}", f"{pk_dir}/thumbs/{mid}.jpg")
+                        entry["thumb"] = f"/files/materials/packs/{pid}/thumbs/{mid}.jpg"  # dump 前落 entry：持久化+响应同源
+                    except Exception:
+                        pass
                 pk2.setdefault("files", []).append(entry)
                 json.dump(pk2, open(f"{pk_dir}/pack.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             finally:
                 fcntl.flock(_lf, fcntl.LOCK_UN); _lf.close()
             entry["url"] = f"/files/materials/packs/{pid}/{urllib.parse.quote(fname)}"  # quote：# 等特殊字符进 src 不截断（与 /api/project 同口径）
-            entry["thumb"] = thumb
             return self._json({"ok": True, "entry": entry})
         if u.path.startswith("/api/storyline-delete/"):
             # 删除故事线 = 归档到 projects/_attic/<pid>/<时间戳>/（可手工找回），至少保留一条

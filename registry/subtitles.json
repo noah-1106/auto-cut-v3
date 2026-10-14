@@ -69,7 +69,8 @@
   "marginv": 190,
   "karaoke": true,
   "name": "快乐体活泼",
-  "desc": "圆润活泼，轻科普/轻松话题"
+  "desc": "圆润活泼，轻科普/轻松话题 ｜2026-09-20 分页根修配套：显式 max_chars 14（实测安全式 14×0.872×70+2×(4+2)=867px ≤ 920px 安全区；原为空→代码兜底 12）",
+  "max_chars": 14
  },
  "plain-quiet": {
   "font": "Smiley Sans",

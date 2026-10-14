@@ -1,5 +1,5 @@
 {
- "_comment": "音效注册表（2026-09-14 M5 整换）：12 槽位=社交媒体爆款语义，全部来自 Mixkit 免费商用库（许可见 assets/sfx/viral/LICENSE-mixkit.txt，来源清单 sources-manifest.json）。已统一响度归一到 -16 LUFS / TP -1.5，ffmpeg 波形质检无削波。导入：PUT /api/registry-upload/sfx/<id>。",
+ "_comment": "音效注册表（2026-09-14 M5 整换；后策展收敛至当前槽位）：社交媒体爆款语义，全部来自 Mixkit 免费商用库（许可见 assets/sfx/viral/LICENSE-mixkit.txt，来源清单 sources-manifest.json）。已统一响度归一到 -16 LUFS / TP -1.5，ffmpeg 波形质检无削波。导入：PUT /api/registry-upload/sfx/<id>。",
  "ding": {
   "name": "提示·叮",
   "desc": "信息点/正确答案提示音（correct answer tone，清脆不刺耳）",

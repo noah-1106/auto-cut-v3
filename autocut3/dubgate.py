@@ -25,6 +25,11 @@ def main():
         if nar.get("mode") != "dub":
             continue
         df = nar.get("audio")
+        if not df:  # mode=dub 但 audio 缺失（手编线常见）：记 FAIL 不崩——isabs(None)=TypeError
+            print("幕%s ✗ FAIL | narration.audio 缺失" % b.get("no"), flush=True)
+            fails.append(b.get("no"))
+            report.append({"no": b.get("no"), "ok": False, "d1": False, "d2": False, "d3": 0.0})
+            continue
         if not os.path.isabs(df): df = os.path.join(pdir, df)
         story = re.sub(r"\s", "", b.get("story") or "")
         r = asr.transcribe(df, cache_dir=cache)

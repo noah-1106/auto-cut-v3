@@ -115,7 +115,7 @@ def vad_speech_spans(wav, ff=None, noise="-35dB", min_silence=0.25, min_span=0.1
         if m and cur is not None:
             sil.append((cur, float(m.group(1))))
             cur = None
-    dur = media_duration(wav, ) if os.environ.get("FFPROBE") else _wav_dur_ffmpeg(wav, ff)
+    dur = media_duration(wav)  # 统一时长口径：ffprobe（ffprobe_path 自带 bin/→PATH 回退），不再随 FFPROBE 环境变量换源
     spans, pos = [], 0.0
     for s, e in sil:
         if s - pos >= min_span:
@@ -124,15 +124,6 @@ def vad_speech_spans(wav, ff=None, noise="-35dB", min_silence=0.25, min_span=0.1
     if dur - pos >= min_span:
         spans.append((pos, dur))
     return spans
-
-
-def _wav_dur_ffmpeg(wav, ff):
-    r = subprocess.run([ff, "-i", wav], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    m = re.findall(r"Duration: (\d+):(\d+):([\d.]+)", r.stderr or "")
-    if m:
-        h, mi, s = m[0]
-        return int(h) * 3600 + int(mi) * 60 + float(s)
-    return 0.0
 
 
 def distribute(chars, spans):
