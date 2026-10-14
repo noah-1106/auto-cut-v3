@@ -447,7 +447,7 @@ Studio 路由（http://127.0.0.1:8765）：
   `POST /api/proofread-pack/<pack>/<fid>`（人工校对单条转写）
 - AI 起草：`POST /api/draft/<proj>` body `{"intent": "..."}`
 - 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`
-- 项目/包：`POST /api/project-create/`、`POST /api/pack-mount/<proj>/<pid>/mount|unmount`、
+- 项目/包：`POST /api/project-create/`、`POST /api/pack-mount/<pid>/<pack>/mount|unmount`、
   `POST /api/pack-upload/<pack>?filename=`、`POST /api/pack-create/`
 - 文件：`GET /files/projects/<proj>/out-<sid>.mp4` 等（Range 流，可拖进度）
 

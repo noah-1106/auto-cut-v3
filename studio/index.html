@@ -433,6 +433,7 @@ zh:{
 'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','meta.grade.natural':'自然','mus.bgm.t':'幕级换曲（注册表）','meta.grade.warm':'暖调','meta.grade.cool':'冷调','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
 'cov.strategy':'封面策略','cov.title':'封面标题','cov.beat':'底图幕号','cov.at':'幕内秒','cov.prompt':'提示词',
 'cov.prompt.ph':'保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白',
+'cov.prompt.hint':'提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截——含人封面请改用「首帧/指定幕帧」+标题',
 'cov.gen':'✨ AI 试样（出样张）','cov.make':'🖼 出封面（保存→生成→体检）','cov.upload':'⬆ 上传封面','cov.none':'暂无封面 · 「出封面」按钮或渲染前自动生成',
 'beat.add.t':'在此处插入一幕','beat.append.t':'在末尾追加一幕','beat.del.t':'删幕','beat.preview':'▶ 幕预览','beat.rendering':'渲染中…',
 'beat.roleA':'A 主画','beat.roleB':'B 叠加','beat.src.t':'素材来源','beat.in':'入点','beat.dur':'时长','beat.win.t':'本轨取用的素材窗口（原始素材内起止秒）',
@@ -523,6 +524,7 @@ en:{
 'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'beat-frame = representative material frame (only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','meta.grade.natural':'Natural','mus.bgm.t':'Beat-level track override (registry)','meta.grade.warm':'Warm','meta.grade.cool':'Cool','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
 'cov.strategy':'Cover strategy','cov.title':'Cover title','cov.beat':'Base beat','cov.at':'Offset (s)','cov.prompt':'Prompt',
 'cov.prompt.ph':'Keep the reference scene unchanged, warm natural light, slight background blur, leave the top empty',
+'cov.prompt.hint':'Prompt rules: ① start with "keep the reference subject/scene unchanged" ② describe style only (tone/light/mood/composition), ≤1500 chars ③ state "leave the upper area empty" (the title is composited locally by the pipeline) ④ <b>never ask for text/titles in the image</b> — AI renders fake glyphs ⑤ real faces in the base image get blocked by platform review — for people covers use "first frame / beat frame" + title instead',
 'cov.gen':'✨ AI sample','cov.make':'🖼 Build cover (save→generate→check)','cov.upload':'⬆ Upload cover','cov.none':'No cover yet · use "Build cover" or it is generated before render',
 'beat.add.t':'Insert a beat here','beat.append.t':'Append a beat','beat.del.t':'Delete beat','beat.preview':'▶ Preview','beat.rendering':'Rendering…',
 'beat.roleA':'A main','beat.roleB':'B overlay','beat.src.t':'Source material','beat.in':'In','beat.dur':'Dur','beat.win.t':'Source window used by this track (start–end seconds in the original)',
@@ -1016,7 +1018,7 @@ function buildCreator(){
       '<div class="mf"><label data-i18n="cov.at">'+esc(t('cov.at'))+'</label><input type="text" style="width:56px" value="'+esc(String(m.cover.at||0))+'" onchange="DRAFT.meta.cover.at=parseFloat(this.value)||0"></div>':'')+
     ((m.cover.strategy==='ai-generated')?
       '<div class="mf"><label data-i18n="cov.prompt">'+esc(t('cov.prompt'))+'</label><textarea rows="3" style="width:100%" oninput="DRAFT.meta.cover.prompt=this.value" placeholder="'+esc(t('cov.prompt.ph'))+'">'+esc(m.cover.prompt||'')+'</textarea></div>'+
-      '<div style="font-size:11px;color:var(--dim);line-height:1.6;border-left:2px solid var(--line);padding-left:8px">提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截——含人封面请改用「首帧/指定幕帧」+标题</div>'+
+      '<div style="font-size:11px;color:var(--dim);line-height:1.6;border-left:2px solid var(--line);padding-left:8px" data-i18n-html="cov.prompt.hint">'+t('cov.prompt.hint')+'</div>'+
       '<div><button class="ghost" onclick="genCover()" data-i18n="cov.gen">'+esc(t('cov.gen'))+'</button></div>':'')+
     '<div><button class="ghost" onclick="makeCover()" data-i18n="cov.make">'+esc(t('cov.make'))+'</button></div>'+
     '<div><button class="ghost" onclick="$(\'covfile\').click()" data-i18n="cov.upload">'+esc(t('cov.upload'))+'</button><input type="file" id="covfile" accept="image/*" style="display:none" onchange="uploadCover(this)"></div>';
@@ -1617,7 +1619,7 @@ function buildViews(){
   const st=P.story;
   const hasOut=((P.outs||[]).indexOf(st)>=0);
   $('vmeta').innerHTML='<span class="big">'+esc(pl.title||P.name)+(st?' <span style="color:var(--gold)">/ '+esc(st)+'</span>':'')+'</span>'+
-    '<span class="vstat">'+esc(pl.duration)+'s · '+pl.width+'×'+pl.height+' · '+((pl.words||[]).length)+t('view.words')+((pl.segments||[]).length)+t('view.beats2')(hasOut?'<span style="color:var(--ok)">'+esc(t('view.rendered'))+'</span>':'<span style="color:var(--faint)">'+esc(t('view.notrendered'))+'</span>')+'</span>'+
+    '<span class="vstat">'+esc(pl.duration)+'s · '+pl.width+'×'+pl.height+' · '+((pl.words||[]).length)+t('view.words')+((pl.segments||[]).length)+t('view.beats2')+(hasOut?'<span style="color:var(--ok)">'+esc(t('view.rendered'))+'</span>':'<span style="color:var(--faint)">'+esc(t('view.notrendered'))+'</span>')+'</span>'+
     '<span class="render-row"><button class="primary" id="srbtn" onclick="saveAndRender()" style="height:28px;padding:0 14px;font-size:12px">'+esc(t('view.render'))+'</button>'+
     '<button class="ghost" onclick="previewStory()" style="height:28px;font-size:11px;padding:0 10px" title="'+esc(t('view.replay.t'))+'">'+esc(t('view.replay'))+'</button></span>';
 }
