@@ -15,6 +15,7 @@
   "height": 1080,
   "sticker_w": 560,
   "sticker_h": 156,
+  "sticker_top": 80,
   "sub_clear": 200
  },
  "square": {
@@ -23,6 +24,7 @@
   "height": 1080,
   "sticker_w": 460,
   "sticker_h": 129,
+  "sticker_top": 80,
   "sub_clear": 220
  }
 }

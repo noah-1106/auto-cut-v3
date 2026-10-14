@@ -1272,7 +1272,7 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
             fc.append(f"[{cur}][st{k}]overlay={x}:{y}:enable='between(t,{t0:.2f},{t0+sd:.2f})'[bs{k}]")
         cur = f"bs{k}"
     fc.append(f"[{cur}]{_ass_spec(ass_path)}[vout]")
-    fc.append(f"[vout]scale=540:960[voutp]")  # 幕预览降质（2026-09-15 体验提速）：参考样张无需全分辨率，编码+传输双加速
+    fc.append(f"[vout]scale=540:-2[voutp]")  # 幕预览降质（2026-09-15 体验提速）：宽锁 540 高等比——竖版=540×960 不变；横/方版不再被强塞 9:16 压扁（2026-10-14 Noah 实测方版预览贴纸压扁实锤）
     fc.append(f"[{a_idx}:a]atrim=0:{dur},asetpts=PTS-STARTPTS[vc]")
     mix = "[vc]"; n_in = 1
     for k, sfx in enumerate((seg.get("effects") or {}).get("sfx") or []):
