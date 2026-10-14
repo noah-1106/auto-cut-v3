@@ -1305,6 +1305,73 @@ def _overlap_d(plan, prev_seg):
     return 0.0 if tcfg.get("type") == "flash" else float(tcfg.get("duration") or 0.4)
 
 
+def _loudnorm_out(plan, out, _status=None):
+    """dub 成片响度两遍精修（2026-10-15，吸收 README 已知边界「dub 配音成片响度偏轻」）：
+    混音链内的 loudnorm 是单遍 dynamic（T46），轻/短素材实测打不到锚（偏轻的根因）——
+    这里对任一幕实际播 dub 配音（seg["dub"] 非空）的成片补两遍法精修到锚。
+    目标值口径：plan["loudnorm"]（混音链同一开关）——False=用户明确关归一，尊重不动；
+    True=平台锚（qc.load_rules()，与 R6 判定同一 config 源）；数字=自定义 I。
+    全 original 成片不动。定位=优化不是闸门：任一步失败保留原片，QC R6 warn 兜底。"""
+    _ln = plan.get("loudnorm", True)
+    if _ln is False:
+        return
+    if not any(s.get("dub") for s in plan.get("segments", [])):
+        return
+    ff = asr.ffmpeg_path()
+    if not ff:
+        return
+    try:
+        import qc
+        rules = qc.load_rules()
+    except Exception:
+        rules = {}
+    tgt = float(rules.get("_lufs_target", -16)) if _ln is True else float(_ln)
+    _ln_src = ("%s 锚" % rules.get("_platform", "-")) if _ln is True else "自定义目标"
+    tol = float(rules.get("_lufs_tol", 3.0))
+    print("STAGE loudnorm", flush=True)
+    if _status:
+        _status(stage="loudnorm", pct=99)
+    try:
+        p = subprocess.run([ff, "-hide_banner", "-nostats", "-i", out,
+                            "-af", "loudnorm=I=%s:TP=-1.5:LRA=11:print_format=json" % tgt,
+                            "-f", "null", "-"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        blocks = re.findall(r"\{[^{}]*\}", p.stderr or "")
+        meas = json.loads(blocks[-1]) if blocks else {}
+        i_lufs = float(meas["input_i"])
+    except Exception as e:
+        print("  · 响度归一跳过（探测失败: %s）" % str(e)[:80], flush=True)
+        return
+    if i_lufs <= float(rules.get("R6_lufs_skip_below", -60)):
+        return  # 近静音（gate floor 陷阱，同 R6 豁免口径）
+    if abs(i_lufs - tgt) <= tol:
+        print("  · 响度 %.1f LUFS 已在目标容差内（%s %.0f±%.1f），不归一" % (i_lufs, _ln_src, tgt, tol), flush=True)
+        return
+    af0 = ("loudnorm=I=%s:TP=-1.5:LRA=11:measured_I=%s:measured_TP=%s:measured_LRA=%s:"
+           "measured_thresh=%s:offset=%s" % (tgt, meas["input_i"], meas["input_tp"],
+                                             meas["input_lra"], meas["input_thresh"],
+                                             meas.get("offset", "0.0")))
+    tmp = "%s.ln%d.mp4" % (out, os.getpid())
+    r = None
+    for mode in (":linear=true", ""):  # linear 保动态优先；不适用（增益会削峰）回退 dynamic，仍好过不归一
+        r = subprocess.run([ff, "-y", "-hide_banner", "-nostats", "-i", out, "-c:v", "copy",
+                            "-af", af0 + mode, "-ar", "48000", "-c:a", "aac", "-b:a", "128k",
+                            "-movflags", "+faststart", tmp],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=600, cwd=ROOT)
+        if r.returncode == 0:
+            break
+    if r.returncode == 0 and os.path.getsize(tmp) > 0:
+        os.replace(tmp, out)
+        print("  · 响度归一：%.1f → %.0f LUFS（%s，loudnorm 两遍）" % (i_lufs, tgt, _ln_src), flush=True)
+    else:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        print("  · 响度归一失败（保留原片，QC R6 仍会 warn）: %s" % (r.stderr or "")[-160:], flush=True)
+
+
 def render(plan, project_dir, sid=None):
     """整线渲染。进度协议（Studio 的渲染任务线程逐行消费）：
        STAGE <名> —— 阶段切换；PCT <0-99> —— ffmpeg out_time/总时长；RENDER OK/FAIL 收尾。
@@ -1392,6 +1459,7 @@ def render(plan, project_dir, sid=None):
         print("RENDER FAIL:", "".join(errbuf)[-800:], flush=True)
         sys.exit(1)
     os.replace(out_tmp, out)
+    _loudnorm_out(plan, out, _status)  # dub 成片响度归一（先于 QC——让 R6 量的是归一后的成片）
     if _cov_strategy == "output-frame":
         cover = build_cover(plan, project_dir, sfx)  # 成片抽帧特例：渲染后才存在 out{sfx}.mp4
     # QC 审片层（delivery gate）：渲染后自动体检，结论并入渲染尾行与 status.tail——QC 自身异常不阻塞渲染结果
