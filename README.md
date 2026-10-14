@@ -1,5 +1,7 @@
 # auto-cut v3 · 口播短视频自动剪辑流水线
 
+[English](README.en.md)
+
 [![CI](https://github.com/noah-1106/auto-cut-v3/actions/workflows/ci.yml/badge.svg)](https://github.com/noah-1106/auto-cut-v3/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org)
@@ -18,7 +20,7 @@
 
 1. **Agent 可编辑**——LLM 起草和修改的是结构化的幕序列 JSON，不是时间轴工程文件；每一幕可独立渲染低清样张自检（秒级），"全片过 ≠ 单幕过"逐幕验证
 2. **人可终审**——创作台呈现的是"这条片讲了什么"的一列卡片，不是一坨波形；点任意一幕秒级预览，改动停顿 1 秒自动落盘
-3. **管线可自动**——十环节（转写→理解→缺陷台账→AI 起草→配音裁剪→VAD 词轨→封面→渲染→三域门禁→交付）全自动，换一批新素材包冷启动零人工急救
+3. **管线可自动**——编排器 15 环节（挂载→转写→识别→盘点→校对→档案→台账→起草→VAD 词轨→配音裁剪→配音门禁→封面→渲染→QC→预留 aigen）全自动，换一批新素材包冷启动零人工急救
 
 **设计哲学**：Agent 全自动从原始素材到成片；人是规则制定者（改 config 阈值/策略）+ 成片终审，不进流水线当卡点。
 
@@ -120,7 +122,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 9 | 门禁 | qc(R1-R10) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
 | 10 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 |
 
-十个环节全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
+下方是 10 个概念环节的地图；机器可核对的环节状态口径=编排器 `orchestrate.py` 的 `STEPS`（15 环节，多出的粒度=mount/digest/proofread/dossier/aigen 等审计与预留槽位）。全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
 
 **管线编排器**：`autocut3/orchestrate.py` 从文件推导全部环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
 ```bash
@@ -148,10 +150,11 @@ AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）�
 ```
 studio.py            # 后端全部路由（人/Agent 同权 HTTP）
 studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
-autocut3/            # 流水线模块：orchestrate(编排器) transcribe(转写) understand(画面)
-                     #   draft(AI起草) disposition(缺陷台账) pipeline(成片) video_gen(AI生成口)
-                     #   qc(质检R1-R10) proofread(校对) vadwords(VAD词轨) dubfit(配音裁剪) dubgate(配音门禁)
-                     #   dossier(素材档案) flock(跨平台锁) tts(配音合成)
+autocut3/            # 流水线模块：orchestrate(编排器) process(素材级流水线·入库首选) asr(供应商适配+词轨归一)
+                     #   transcribe(转写) understand(画面识别) digest(包级盘点) draft(AI起草) disposition(缺陷台账)
+                     #   pipeline(封面/成片渲染) qc(质检R1-R10) proofread(校对) vadwords(VAD词轨)
+                     #   dubfit(配音裁剪) dubgate(配音门禁) dossier(素材档案) tts(配音合成) tts_audio8(本地TTS运行时)
+                     #   video_meta(几何探针) flock(跨平台锁) video_gen/image_gen(AI生成预留口) library(v1切片遗产层)
 registry/            # 注册表：效果系统的单一事实源（*.json 纯数据）
                      #   bgm/subtitles/transitions/sfx/stickers=效果；enums/formats=语义枚举(只读)
 assets/              # 效果素材本体（registry 的 file 字段指向这里）
@@ -159,7 +162,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
-tests/               # e2e.py(50项全量) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -176,7 +179,7 @@ python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动�
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
 python3 autocut3/pipeline.py    myproj beat 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
-python3 tests/e2e.py                                       # 50 项全量回归
+python3 tests/e2e.py                                       # 全量回归（项数以输出尾部计数为准）
 python3 tests/audit.py                                     # 代码审计器
 ```
 
@@ -200,8 +203,8 @@ python3 tests/audit.py                                     # 代码审计器
 ## 测试与质量
 
 ```bash
-python3 tests/e2e.py      # 54 项端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
-                          # 加 --fast 跳过 LLM/ASR/TTS 真实计费项（52 项离线，日常回归用这个）
+python3 tests/e2e.py      # 端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
+                          # 项数以输出尾部「N 通过 / M 失败」为准；--fast 跳过 LLM/ASR/TTS 真实计费项，日常回归用这个
 python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
@@ -232,7 +235,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 已知边界
 
-- 本地 TTS（Audio8-TTS，Apache 2.0）音色库按需扩充（默认 narrator_default 一个）
+- 本地 TTS（Audio8-TTS，Apache 2.0）音色按需注册（tts_audio8.py register），现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准
 - dub 配音成片响度可能偏轻（R6 warn 不拦交付，平台会自行归一，终审核对混音比例）
 
 ## 更多文档
@@ -243,4 +246,4 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 ## 贡献
 
-欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（54 项离线回归）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。
+欢迎 Issue 和 PR。提交前请跑 `python3 tests/e2e.py --fast`（离线回归，项数以输出为准）确保全绿；涉及渲染链的改动请在 macOS 和 Windows 双侧验证（或依赖 CI 双端矩阵）。

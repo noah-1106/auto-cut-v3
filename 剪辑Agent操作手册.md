@@ -7,7 +7,7 @@
 > **零容忍纪律**（违反即事故）：
 > 1. **授权闸门**：雇主已建好的 job/工作流 = 唯一执行通道。禁止自建平行 job，禁止"先跑起来再说"。
 > 2. **崩溃必须留痕**：任何一步 error，续作第一件事是写事故记录（时间点/最后产物/最后动作），不允许 error+null 裸奔。
-> 3. **源素材零写入**：`materials/packs/<pid>/` 里的 MP4/JPG 原片禁止任何写操作（管线自身审计字段除外）。
+> 3. **源素材零写入**：`materials/packs/<pack>/` 里的 MP4/JPG 原片禁止任何写操作（管线自身审计字段除外）。
 > 4. **说"done"必附证据**：状态声明必须引用文件/命令输出，不接受"应该好了"。
 
 ---
@@ -17,7 +17,9 @@
 ```
 素材包 pack          项目 project              故事线 storyline
 materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.json
-  <pid>/pack.json      materials/library.json    beats[] = 幕
+  <pack>/pack.json     materials/library.json    beats[] = 幕
+
+> 记法：`<pid>`=项目 id，`<pack>`=素材包 id，`<sid>`=故事线 id，`<fid>`=包内素材 id——勿混。
   19 条 MP4+元数据     dossier.json 素材档案       每幕 = 口播词 + 画面轨 + 转场 + 效果
   （转写/视觉/digest）  disposition.json 缺陷台账    plan → ASS 字幕 → 成片 out-<sid>.mp4
 ```
@@ -67,7 +69,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 
 ---
 
-## 2. 全流程地图：13 环节与 done 判据
+## 2. 全流程地图：15 环节与 done 判据
 
 编排器 `autocut3/orchestrate.py <project>` 从文件推导状态，人机同一判据。**先跑
 `python3 autocut3/orchestrate.py <pid>` 看状态表，再决定干什么**；`--advance` 自动推进
@@ -87,8 +89,12 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 | 9 | vadwords | 当前故事线每幕 `narration.words` 在场（mode=none 除外） | `vadwords.py` |
 | 10 | dubfit | 无 dub 幕=na；有则每幕 `narration.dubfit` 在场且 `dubfit-report.json passed==true` | `dubfit.py` |
 | 11 | dubgate | `dubgate-report.json passed==true`（D1 首词/D2 末词/D3 相似≥0.9） | `dubgate.py` |
-| 12 | render | `out-<sid>.mp4` 存在且新于故事线（或 render.status 在跑） | `pipeline.py render` |
-| 13 | qc | `qc-report.json` 存在且 `verdict != "blocked"` | `qc.py`（渲染成功自动跑） |
+| 12 | cover | 当前故事线封面在盘、新于故事线、体检过（竖版/非空白）；output-frame 策略=na | `pipeline.py cover`（渲染前闸门） |
+| 13 | render | `out-<sid>.mp4` 存在且新于故事线（或 render.status 在跑） | `pipeline.py render` |
+| 14 | qc | `qc-report.json` 存在且 `verdict != "blocked"` | `qc.py`（渲染成功自动跑） |
+| 15 | aigen | 预留槽位（AI 生成素材 video_gen 口），默认 na | 接活时在 orchestrate 登记判据 |
+
+环节数以 `orchestrate.py` 的 `STEPS` 列表为唯一事实源——改动环节先改它，本表跟随。
 
 ---
 
@@ -97,7 +103,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 ### 阶段 1 · 接料立项（mount）
 - 确认项目存在：`projects/<pid>/project.json`；没有则先建（Studio `POST /api/project-create/`）。
 - 确认挂载：`projects/<pid>/materials/library.json` 的 `packs[]` 就是**唯一事实源**。
-  挂包/卸包走 Studio `POST /api/pack-mount/<proj>/<pid>/mount|unmount`——**不要手编 library.json**。
+  挂包/卸包走 Studio `POST /api/pack-mount/<pid>/<pack>/mount|unmount`——**不要手编 library.json**。
 - **核对任务书指定的包名**（挂错包=白转写一轮，还得两包逐字节对账）：挂载前确认包 id
   与任务书一致，发现预建项目挂错包先卸载重挂再开工。
 - 清点：`pack.json.files[]` 数量与源目录一致；每条 MP4 大小与源一致；**源目录 mtime 前后各记一次**（零写入签字）。
@@ -108,10 +114,12 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 - **放行判据**：挂载 done + 清点一致 + 兜底假设（画幅/平台/时长/风格）已登记并注明依据。
 
 ### 阶段 2 · 素材审核（transcribe → understand → digest → proofread → dossier/disposition）
-依次跑，每步核对 done 判据：
+首选 `process.py` 一条流水线跑完前两步（每条素材 ASR 完立即链发视觉，§6 模块表有参数），
+分步重跑/排障才用单模块。依次跑，每步核对 done 判据：
 ```bash
-python3 autocut3/transcribe.py <pid>            # ASR 词轨+文本 → pack.json transcript
-python3 autocut3/understand.py <pid>            # 视觉理解 → pack.json visual + digest
+python3 autocut3/process.py <pid>               # 首选：转写+画面识别流水线（ASR 完一条即链发视觉）
+python3 autocut3/transcribe.py <pid>            # 分步：ASR 词轨+文本 → pack.json transcript
+python3 autocut3/understand.py <pid>            # 分步：视觉理解 → pack.json visual + digest
 python3 autocut3/proofread.py <pid>            # 参数=项目名（与 transcribe 同构）；队列必落 projects/<pid>/
 python3 autocut3/dossier.py <pid>               # 素材档案（LLM 读全量转写+视觉合成）
 python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/音量跳变等）
@@ -120,7 +128,7 @@ python3 autocut3/disposition.py <pid>           # 缺陷台账（重说/黑区/�
   `asr.extract_audio(src, wav)` 现成（管线内转写自动做，asr.py；手工直送原始 MP4 = ASR 服务端拒/慢）。
 - **素材"过审"的自动规则**：该素材 kind 所需审计全 done → `files[].review` 自动
   `"pending-review"→"reviewed"`。draft 只会用过审素材；人保留废片否决权
-  （Studio `POST /api/pack/<pid>/<fid>/usable`，body 可置 `usable:false`/`review`）。
+  （Studio `POST /api/pack/<pack>/<fid>/usable`，body 可置 `usable:false`/`review`）。
 - **proofread 两道门**：① `audit.proofread` 只有 `done`/`auto-done` 算过，
   `pending`（上传初值）一律是**没校对**，编排器现在严格判定（T47）；② 语义存疑的修正进
   `projects/<pid>/review-queue.json`（`status:"pending"`），**有人复核改状态前环节不推进**（T43）。
@@ -138,11 +146,13 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
   手写线同样吃 vadwords→dubfit→渲染全链。大纲/意图想结构化传给 LLM 的目前只有
   `--intent` 一句话自由文本一条通道（outline 是 LLM 输出字段，不是输入）。
 - **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
-  （本地 audio8 默认注册音色 `narrator_default`）。换音色=先注册参考音色再改配置：
+  （本地 audio8 音色按需注册，现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准）。
+  换音色=先注册参考音色再改配置：
   `python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"`——
   **硬契约：参考音频 0.5–30s 且逐字稿一字不差**，否则克隆出来的是哑嗓子；
   注册后 `tts.py synth --text "..." --voice <名字>` 验证音色可用再跑 draft --dub。
   云端 minimax 同理走 `tts` 段 provider 切换。
+- **耗时预期**：起草是一次长上下文 LLM 调用，实测约 4–11 分钟属正常区间——不要中途判死重跑。
 - 产物：`storylines/aidraft.json`（beats[]）。**LLM 可能截断**（finish_reason=length）——
   落盘后必须逐幕核对结构完整（每幕有 no/story/tracks/narration），缺=重跑，不许带伤前进。
 - **后台跑（nohup/超时后台执行）判完成看文件，不看进程、不看日志空满**：
@@ -289,7 +299,7 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 > **首选 `process.py`（素材级流水线）**：每条素材 ASR 一完成立即链发该素材的画面识别（词轨随行），
 > ASR 池 3 线程 + 视觉池 3 线程双端点并发（2026-09-18 实测 MiniMax 3+3 无 429）——墙钟
 > ≈max(转写总量,视觉总量) 而非两段求和。`orchestrate --advance` 的转写步内部就走它。
-> **同一包两步别各起进程同时跑**：两步共持 `packs/<pid>/.lock` 整程独占，同起=后起方
+> **同一包两步别各起进程同时跑**：两步共持 `packs/<pack>/.lock` 整程独占，同起=后起方
 > 阻塞在锁上干等，零提速白挂进程。**"同时开跑"只对不同包有意义**（不同包不同锁）。
 > transcribe.py / understand.py 保留作分步重试（--force / --material 单条），限流自动退避
 > （429 等 2/4s 重试，不是卡死）。
@@ -321,7 +331,7 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 
 ### 4.4 编排器
 ```bash
-python3 autocut3/orchestrate.py <pid>                 # 状态表（13 环节 done/pending/failed/na）
+python3 autocut3/orchestrate.py <pid>                 # 状态表（15 环节 done/pending/failed/na）
 python3 autocut3/orchestrate.py <pid> --json          # JSON 版（程序消费）
 python3 autocut3/orchestrate.py <pid> --advance       # 自动推进（storyline 门：--intent AI 起草 / 手写落盘过门）
 python3 autocut3/orchestrate.py <pid> --advance --intent "..." --story <sid>
@@ -427,18 +437,18 @@ Studio 路由（http://127.0.0.1:8765）：
 
 启动：`python3 studio.py [port]`（默认 8765，只绑 127.0.0.1）。**改 studio.py 后必须重启进程**。
 
-- 状态：`GET /api/status/<proj>`（13 环节，与 orchestrate 同源）、`GET /api/pulse`（全项目签名）
+- 状态：`GET /api/status/<proj>`（15 环节，与 orchestrate 同源）、`GET /api/pulse`（全项目签名）
 - 创作台数据：`GET /api/project/<proj>?story=<sid>`（故事线/plan/素材/参数全量）
 - 写故事线：`POST /api/storyline/<proj>?story=<sid>`（title/outline/meta/beats 整体替换）
 - 渲染：`POST /api/render-start/<proj>?story=<sid>`（异步）或 `POST /api/render/<proj>?story=<sid>`（同步 600s）
 - 幕试渲：`GET /api/beat/<proj>/<beat_no>?story=<sid>`（同步 300s）
-- 素材：`POST /api/transcribe/<pid>?material=&force=`、`POST /api/understand/<pid>?...`、
-  `POST /api/digest/<pid>`、`POST /api/usable...`（废片/复核切换）、
-  `POST /api/proofread-pack/<pid>/<fid>`（人工校对单条转写）
+- 素材：`POST /api/transcribe/<pack>/<fid>`、`POST /api/understand/<pack>/<fid>`、
+  `POST /api/digest/<pid>`（项目级盘点）、
+  `POST /api/proofread-pack/<pack>/<fid>`（人工校对单条转写）
 - AI 起草：`POST /api/draft/<proj>` body `{"intent": "..."}`
 - 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`
 - 项目/包：`POST /api/project-create/`、`POST /api/pack-mount/<proj>/<pid>/mount|unmount`、
-  `POST /api/pack-upload/<pid>?filename=`、`POST /api/pack-create/`
+  `POST /api/pack-upload/<pack>?filename=`、`POST /api/pack-create/`
 - 文件：`GET /files/projects/<proj>/out-<sid>.mp4` 等（Range 流，可拖进度）
 
 ---
@@ -478,7 +488,7 @@ Studio 路由（http://127.0.0.1:8765）：
 
 ## 9. 交付前最终清单（逐项打勾，附证据路径）
 
-- [ ] `orchestrate.py <pid>` 13 环节全 done/na
+- [ ] `orchestrate.py <pid>` 15 环节全 done/na
 - [ ] review-queue.json 无 pending；proofread 19/19（或 N/N）done/auto-done
 - [ ] 故事线逐幕审核记录（重点幕 beat preview 看过）
 - [ ] vadwords 已重跑（改稿后）
@@ -496,8 +506,8 @@ Studio 路由（http://127.0.0.1:8765）：
 |---|---|---|
 | `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 只允许字母数字下划线中划线；**`projects/<name>/` 目录已存在（含手工残件）=409「项目已存在」**——确认是残件后删目录再走本 API 重建，不要手工 mkdir 冒充创建 |
 | `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
-| `POST /api/pack-upload/<pid>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
-| `POST /api/pack-mount/<proj>/<pid>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
+| `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
+| `POST /api/pack-mount/<pid>/<pack>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
 | `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
 | `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。改 beats 后记得重跑 vadwords |
 | `POST /api/storyline-delete/<proj>?story=<sid>` | 无 body | 删线 |
