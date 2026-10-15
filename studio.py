@@ -64,7 +64,7 @@ def _enums():
     return e
 
 class H(BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
+    def log_message(self, *a): pass  # 访问日志默认关（诊断期临时打开过，2026-10-15 声纹排查已撤）
 
     def _json(self, obj, code=200):
         d = json.dumps(obj, ensure_ascii=False).encode()
@@ -397,8 +397,11 @@ class H(BaseHTTPRequestHandler):
         # 声纹管理（2026-09-14 双通道：人工=Studio 界面，AI=tts.py voiceclone，同一注册实现）
         import tts_audio8
         if u.path == "/api/voices":
+            # sleeping=TTS 服务闲置自停（voices() 设计为不副作用启动）——前端据此显示「休眠中+唤醒」而非误报"暂无音色"（2026-10-15 用户实锤：以为声纹被清空）
+            if (parse_qs(u.query).get("wake") or ["0"])[0] == "1":
+                tts_audio8.ensure_server()  # 显式唤醒（本地模型加载需数秒）
             return self._json({"ok": True, "installed": tts_audio8.installed(),
-                               "provider": "local-audio8",
+                               "provider": "local-audio8", "sleeping": not tts_audio8._health(),
                                "voices": tts_audio8.voices()})
         _q = parse_qs(u.query)
         if u.path.startswith("/api/voice-register"):

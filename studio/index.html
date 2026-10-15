@@ -442,6 +442,7 @@ zh:{
 'voice.title':'声纹管理 · 本地 TTS','voice.hint':'零样本克隆：参考音频 0.5-30s + 逐字稿一字不差',
 'voice.test':'试听','voice.del':'删除','voice.none':'暂无已注册音色','voice.name.ph':'音色名（英文/数字）','voice.pick':'选参考音频…','voice.nofile':'未选择','voice.text.ph':'参考音频逐字稿（一字不差，硬契约）','voice.register':'注册音色',
 'voice.notinstalled':'⚠ Audio8 运行时未安装——按 README「本地 TTS」装 ~/.local/share/autocut3/audio8 后重开',
+'voice.sleeping':'声纹服务休眠中（闲置自动停，音色都在）——','voice.wake':'唤醒服务','voice.waking':'唤醒中（本地模型加载，需数秒）…','voice.sleep':'服务休眠中',
 'cr.final':'成片','cr.outline':'故事线大纲 · 贯穿元素','cr.outline.hint':'手写 / Agent 审计 / 脚本分幕','cr.draft':'✨ AI 起草','cr.draft.t':'AI 读取素材理解档案，起草一条新故事线（不碰现有线）',
 'cr.outline.ph':'这条故事线在讲什么——人和 Agent 共同的创作参考',
 'cr.beats':'幕序列 · 每幕是多轨上的一刀',
@@ -533,6 +534,7 @@ en:{
 'voice.title':'Voice manager · Local TTS','voice.hint':'Zero-shot cloning: 0.5–30s reference audio + exact transcript',
 'voice.test':'Listen','voice.del':'Delete','voice.none':'No voices registered yet','voice.name.ph':'Voice name (letters/digits)','voice.pick':'Pick reference audio…','voice.nofile':'None','voice.text.ph':'Exact transcript of the reference audio (word-for-word)','voice.register':'Register voice',
 'voice.notinstalled':'⚠ Audio8 runtime not installed — see README "Local TTS" to install ~/.local/share/autocut3/audio8, then reopen',
+'voice.sleeping':'Voice service idle (auto-stops when unused; voices are safe) — ','voice.wake':'Wake service','voice.waking':'Waking (local model load, may take seconds)…','voice.sleep':'service idle',
 'cr.final':'Final cut','cr.outline':'Storyline outline · recurring elements','cr.outline.hint':'manual / agent audit / scripted beats','cr.draft':'✨ AI draft','cr.draft.t':'AI reads the material dossier and drafts a new storyline (existing lines untouched)',
 'cr.outline.ph':'What this storyline is about — shared reference for human and agent',
 'cr.beats':'Beat sequence · each beat is one cut on the timeline',
@@ -754,7 +756,7 @@ async function loadConfig(){
          [['reg.cover_strategies',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
      ['reg.narration_modes',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
     ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5 data-i18n="'+r[0]+'">'+esc(t(r[0]))+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
-    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(2*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+'</div></div>'+
+    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(2*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+((P._voices.sleeping&&vlist.length===0)?' · '+esc(t('voice.sleep')):'')+'</div></div>'+
     REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+3)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
   applyLang();
 }
@@ -830,7 +832,8 @@ async function renderVoiceMgr(){
   }).join('');
   $('voicemgr-body').innerHTML=
     (!r.installed?'<div style="padding:14px;color:var(--gold)">'+esc(t('voice.notinstalled'))+'</div>':'')+
-    (rows||'<div style="padding:14px;color:var(--faint)">'+esc(t('voice.none'))+'</div>')+
+    (r.sleeping?'<div style="padding:14px;color:var(--gold)">'+esc(t('voice.sleeping'))+' <button class="ghost" onclick="voiceWake()">'+esc(t('voice.wake'))+'</button></div>':'')+
+    (rows||(r.sleeping?'':'<div style="padding:14px;color:var(--faint)">'+esc(t('voice.none'))+'</div>'))+
     '<div style="padding:16px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
     '<input id="vname" placeholder="'+esc(t('voice.name.ph'))+'" style="width:160px">'+
     '<button class="ghost" onclick="$(\'voicefile\').click()">'+esc(t('voice.pick'))+'</button>'+
@@ -838,6 +841,11 @@ async function renderVoiceMgr(){
     '<input id="vtext" placeholder="'+esc(t('voice.text.ph'))+'" style="flex:1;min-width:220px">'+
     '<button class="primary" onclick="voiceRegister()">'+esc(t('voice.register'))+'</button></div>';
   $('voicefile').onchange=()=>{$('vfile-label').textContent=($('voicefile').files[0]||{}).name||t('voice.nofile');};
+}
+async function voiceWake(){
+  $('voice-hint').textContent=t('voice.waking');
+  try{await(await fetch('/api/voices?wake=1')).json();}catch(e){}
+  renderVoiceMgr();
 }
 async function voiceRegister(){
   const f=$('voicefile').files[0];
