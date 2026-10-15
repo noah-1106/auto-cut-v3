@@ -665,17 +665,17 @@ const PAGES={
 const SECMAP={config:'s-config',registry:'s-registry',create:'s-create',library:'s-library'};
 
 function renderTabs(){
-  const pg=PAGES[VIEW.page],t=$('tabs');t.innerHTML='';
+  const pg=PAGES[VIEW.page],tb=$('tabs');tb.innerHTML='';  // tb（非 t）：t 是 i18n 函数，遮蔽=切页崩（2026-10-15 用户实锤根修）
   const sel=$('storysel-wrap');
   if(VIEW.page==='proj'){
     const h=document.createElement('div');h.className='tab home';h.dataset.i18n='tab.home';h.textContent='⌂ 返回主页';
-    h.onclick=()=>goHome();t.appendChild(h);
+    h.onclick=()=>goHome();tb.appendChild(h);
   }
   pg.tabs.forEach(([id,lb])=>{
     const d=document.createElement('div');d.className='tab';d.dataset.i18n=lb;d.textContent=I18N.zh[lb]||lb;d.dataset.id=id;
     if(VIEW.tab===id)d.classList.add('active');
     d.onclick=()=>showTab(id);
-    t.appendChild(d);
+    tb.appendChild(d);
   });
   // 故事线切换器：随面包屑（左上角），不再占页签行
   if(VIEW.page==='proj'&&P&&(P.stories||[]).length){
@@ -899,6 +899,14 @@ const PROFILE_SPEC={
     consumers:'pf.consumers.plat'
   }
 };
+function _regPath(o,path){return path.split('.').reduce((a,k)=>(a==null?a:a[k]),o)}
+function _regOpts(src){  // 下拉选项源：注册表/枚举自举（抽屉在哪都能开）
+  if(src==='subtitles')return Object.keys(P.registry.subtitles||{}).filter(k=>!k.startsWith('_')).map(k=>({v:k,n:(P.registry.subtitles[k]||{}).name||k}));
+  if(src==='transitions')return Object.keys(P.registry.transitions||{}).filter(k=>!k.startsWith('_')).map(k=>({v:k,n:k}));
+  if(src==='narr')return ((P.enums||{}).narration_modes||[]).map(x=>({v:x.id,n:x.name}));
+  if(src==='cover')return ((P.enums||{}).cover_strategies||[]).map(x=>({v:x.id,n:x.name}));
+  return [];
+}
 function pfField(e,k,kind,rows){
   const v=_regPath(e,k);
   if(kind==='text'||kind==='area'||kind==='num'){
@@ -1019,7 +1027,7 @@ async function renderRegMgr(){
       '<input class="req" style="flex:2;min-width:180px" value="'+esc(e.desc||'')+'" placeholder="'+esc(t('reg.desc.ph'))+'" onchange="regSet(\''+id+'\',\'desc\',this.value)">'+
       (needFile?'<span style="font:10px var(--mono);color:var(--faint)">'+esc(e.file||'')+'</span>':'')+
       '<button class="ghost" style="color:var(--bad)" onclick="regDel(\''+id+'\')">'+esc(t('reg.del'))+'</button>'+
-      '</div>'+regExtraRows(id,e)+'</div>';}).join('')||'<div class="empty">'+esc(t('reg.emptylist'))+'</div>';
+      '</div></div>';}).join('')||'<div class="empty">'+esc(t('reg.emptylist'))+'</div>';
   // 字幕样式样张：先请后端按需生成（/api/sub-preview 返回 {ok,url}），再挂图
   document.querySelectorAll('#regmgr-body img[data-subpv]').forEach(async img=>{
     try{const r=await(await fetch('/api/sub-preview/'+encodeURIComponent(img.dataset.subpv))).json();if(r.ok)img.src=r.url;else img.remove();}
@@ -1231,20 +1239,21 @@ function beatIntoView(i){
   if(el)el.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
 }
 function beatCard(b,i){
+  const t_=t;  // 参数 t(track) 遮蔽 i18n t()——本函数内 i18n 一律走别名（2026-10-15 根修：切页即崩一族）
   const en=P.enums||{};
   const trks=(b.tracks||[]).map((t,k)=>{
     const isB=t.role==='B';
     const win0=+nz(t.src_in,0), win1=win0+(+nz(t.duration,3));  // 素材窗口起止（原始素材内的取段）
-    return '<div class="trow"><span class="role">'+(isB?t('beat.roleB'):t('beat.roleA'))+'</span>'+
-      '<select title="'+esc(t('beat.src.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].source_id=this.value||null">'+srcOptions(t.source_id)+'</select>'+
-      '<span class="lbl">'+esc(t('beat.in'))+'</span><input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="'+esc(t('beat.in.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value;updWin('+i+','+k+')">'+
-      '<span class="lbl">'+esc(t('beat.dur'))+'</span><input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="'+esc(t('beat.dur.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value;updWin('+i+','+k+')">'+
-      '<span class="win" id="win-'+i+'-'+k+'" title="'+esc(t('beat.win.t'))+'">'+win0.toFixed(1)+'–'+win1.toFixed(1)+'s</span>'+
-      '<div class="req-line" title="'+esc(t('beat.req.t'))+'" onclick="reqEdit('+i+','+k+',this)">'+
-        ((t.requirement||'')?'<span class="req-v">'+esc(t.requirement)+'</span>':'<span class="req-e">'+esc(t('beat.req.add'))+'</span>')+'</div>'+
-      (isB?'<select title="'+esc(t('beat.pos.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].pos=this.value">'+optHtml(en.positions,t.pos||'top-right')+'</select>'+
-           '<input class="n" type="text" value="'+esc(nz(t.scale,0.3))+'" title="'+esc(t('beat.scale.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].scale=this.value">'+
-           '<button class="x" title="'+esc(t('beat.deltrk.t'))+'" onclick="delTrack('+i+','+k+')">✕</button>':'')+
+    return '<div class="trow"><span class="role">'+(isB?t_('beat.roleB'):t_('beat.roleA'))+'</span>'+
+      '<select title="'+esc(t_('beat.src.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].source_id=this.value||null">'+srcOptions(t.source_id)+'</select>'+
+      '<span class="lbl">'+esc(t_('beat.in'))+'</span><input class="n" type="text" value="'+esc(nz(t.src_in,0))+'" title="'+esc(t_('beat.in.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].src_in=this.value;updWin('+i+','+k+')">'+
+      '<span class="lbl">'+esc(t_('beat.dur'))+'</span><input class="n" type="text" value="'+esc(nz(t.duration,3))+'" title="'+esc(t_('beat.dur.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].duration=this.value;updWin('+i+','+k+')">'+
+      '<span class="win" id="win-'+i+'-'+k+'" title="'+esc(t_('beat.win.t'))+'">'+win0.toFixed(1)+'–'+win1.toFixed(1)+'s</span>'+
+      '<div class="req-line" title="'+esc(t_('beat.req.t'))+'" onclick="reqEdit('+i+','+k+',this)">'+
+        ((t.requirement||'')?'<span class="req-v">'+esc(t.requirement)+'</span>':'<span class="req-e">'+esc(t_('beat.req.add'))+'</span>')+'</div>'+
+      (isB?'<select title="'+esc(t_('beat.pos.t'))+'" onchange="DRAFT.beats['+i+'].tracks['+k+'].pos=this.value">'+optHtml(en.positions,t.pos||'top-right')+'</select>'+
+           '<input class="n" type="text" value="'+esc(nz(t.scale,0.3))+'" title="'+esc(t_('beat.scale.t'))+'" oninput="DRAFT.beats['+i+'].tracks['+k+'].scale=this.value">'+
+           '<button class="x" title="'+esc(t_('beat.deltrk.t'))+'" onclick="delTrack('+i+','+k+')">✕</button>':'')+
       '</div>';
   }).join('');
   const stks=((b.effects||{}).stickers||[]).map((s,k)=>
@@ -1264,23 +1273,23 @@ function beatCard(b,i){
   const hint=k=>'<span style="margin-left:6px;text-transform:none;letter-spacing:0;color:var(--faint)">'+esc(k)+'</span>';
   return '<div class="beat" style="animation-delay:'+Math.min(i*0.05,0.4)+'s">'+
     '<div class="bhead"><span class="bno">#'+nz(b.no,i+1)+'</span><span class="badge">'+esc(b.id||'')+'</span>'+
-    '<span class="sp"><button class="pvbtn" id="pvbtn-'+nz(b.no,i+1)+'" onclick="previewBeat('+nz(b.no,i+1)+')">'+esc(t('beat.preview'))+'</button>'+
-    '<button class="x" title="'+esc(t('beat.del.t'))+'" onclick="delBeat('+i+')">✕</button></span></div>'+
+    '<span class="sp"><button class="pvbtn" id="pvbtn-'+nz(b.no,i+1)+'" onclick="previewBeat('+nz(b.no,i+1)+')">'+esc(t_('beat.preview'))+'</button>'+
+    '<button class="x" title="'+esc(t_('beat.del.t'))+'" onclick="delBeat('+i+')">✕</button></span></div>'+
     laneSub(esc(t('lane.preview'))+' '+hint(t('lane.preview.hint')),
-      '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>'+esc(t('beat.preview').replace('▶ ',''))+'</div></div>')+
+      '<div class="preview-strip" id="pvstrip-'+nz(b.no,i+1)+'"><div class="pv-empty" onclick="previewBeat('+nz(b.no,i+1)+')">▶<br>'+esc(t_('beat.preview').replace('▶ ',''))+'</div></div>')+
     laneSub(esc(t('lane.sub'))+' '+hint(subModeHint(b)),
       subBody(b,i)+
-      '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="'+esc(t('sub.style.t'))+'">'+optHtml([{id:'',name:t('beat.followglobal')}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
+      '<div class="trow" style="margin-top:8px"><select onchange="DRAFT.beats['+i+'].subtitle=this.value?{style:this.value}:{}" title="'+esc(t('sub.style.t'))+'">'+optHtml([{id:'',name:t_('beat.followglobal')}].concat(regList('subtitles')),(b.subtitle&&b.subtitle.style)||'')+'</select></div>')+
     laneSub(esc(t('lane.video'))+' '+hint(t('lane.video.hint')),
-      trks,'<button class="act" onclick="addTrack('+i+')">'+esc(t('beat.addB'))+'</button>')+
+      trks,'<button class="act" onclick="addTrack('+i+')">'+esc(t_('beat.addB'))+'</button>')+
     laneSub(esc(t('lane.nar'))+' '+hint(t('lane.nar.hint')),
       '<div class="trow"><select onchange="DRAFT.beats['+i+'].narration.mode=this.value;renderBeats()" title="'+esc(t('nar.mode.t'))+'">'+optHtml(en.narration_modes,(b.narration||{}).mode||'original')+'</select></div>')+
     laneSub(esc(t('lane.trans'))+' '+hint(t('lane.trans.hint')),
-      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">'+esc(t('beat.norole'))+'</option>'+((P.transition_ids||[]).map(tt=>{const tn=((P.registry||{}).transitions||{})[tt];return '<option value="'+esc(tt)+'"'+(tt===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+tt+'）':tt)+'</option>';}).join(''))+'</select></div>')+
+      '<div class="trow"><select onchange="DRAFT.beats['+i+'].transition_out=this.value||null"><option value="">'+esc(t_('beat.norole'))+'</option>'+((P.transition_ids||[]).map(tt=>{const tn=((P.registry||{}).transitions||{})[tt];return '<option value="'+esc(tt)+'"'+(tt===(b.transition_out||'')?' selected':'')+'>'+esc(tn&&tn.name?tn.name+'（'+tt+'）':tt)+'</option>';}).join(''))+'</select></div>')+
     laneSub(esc(t('lane.sticker'))+' '+hint(t('lane.sticker.hint')),
-      (stks||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'stickers\')">'+esc(t('beat.addstk'))+'</button>')+
+      (stks||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'stickers\')">'+esc(t_('beat.addstk'))+'</button>')+
     laneSub(esc(t('lane.sfx'))+' '+hint(t('lane.sfx.hint')),
-      (sfx||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'sfx\')">'+esc(t('beat.addsfx'))+'</button>')+
+      (sfx||'<div class="empty">'+esc(t('eff.none'))+'</div>'),'<button class="act" onclick="addEff('+i+',\'sfx\')">'+esc(t_('beat.addsfx'))+'</button>')+
     laneSub(esc(t('lane.music')), musicRow(b,i))+
     '</div>';
 }
@@ -1306,8 +1315,8 @@ function addTrack(i){
   renderBeats();markDirty();
 }
 function updWin(i,k){  // 素材窗口标注联动：入点/时长编辑时实时刷新起止显示（2026-09-15 维护者：起止时间点要标清楚）
-  const t=(DRAFT.beats[i].tracks||[])[k];const el=$('win-'+i+'-'+k);if(!t||!el)return;
-  const a=+nz(t.src_in,0), b=a+(+nz(t.duration,3));
+  const tk=(DRAFT.beats[i].tracks||[])[k];const el=$('win-'+i+'-'+k);if(!tk||!el)return;  // tk（非 t）：t 是 i18n 函数，遮蔽=编辑起止时崩（2026-10-15 用户实锤根修）
+  const a=+nz(tk.src_in,0), b=a+(+nz(tk.duration,3));
   el.textContent=(isNaN(a)?'?':a.toFixed(1))+'–'+(isNaN(b)?'?':b.toFixed(1))+'s';
 }
 function delTrack(i,k){
@@ -1562,7 +1571,6 @@ function renderPack(){
   document.querySelectorAll('#packgroups video, #packgroups img, #packgroups audio').forEach(el=>{el.onerror=()=>phReplace(el,t('pack.missing'));});
 }
 function packCard(f){
-  const t_=t;  // 本函数内 t 被 transcript 占用，i18n 走别名
   const q=(($('tsearch')||{}).value||'').trim().toLowerCase();
   // 审核有实义化（2026-09-15 维护者 #3）：待审=该 kind 所需审计未齐（与 draft 门禁同判据）——
   // 审计齐即视同过审（transcribe/understand 下次跑时会回写 review 字段，旧数据此处兜齐）
@@ -1572,7 +1580,7 @@ function packCard(f){
   const rev=((f.review||'pending-review')==='pending-review'&&!audited)?'pending-review':'reviewed';
   const kind=f.kind||'video';
   const KLBL=t('pack.kind.'+kind)||kind;  // 2026-10-15 去黑话：ASR→转写、视觉→识别
-  const t=f.transcript;
+  const tr=f.transcript;  // tr（非 t）：t 是 i18n 函数——别名法躲不开 TDZ（2026-10-15 根修）
   const pend=kind!=='image'&&((f.audit||{}).transcript!=='done');
   let media='';
   if(kind==='image'){
@@ -1586,43 +1594,43 @@ function packCard(f){
     :(kind==='image')?(f.width+'×'+f.height+' · '+f.size_mb+'MB')
     :(fmtT(f.duration)+' · '+f.size_mb+'MB');
   let trHtml='';
-  if(t&&t.text){
-    trHtml='<textarea class="tedit" title="'+esc(t_('pack.text.t',t.provider+'/'+t.tier))+'" placeholder="'+esc(t_('pack.text.ph'))+'" onblur="savePackText(\''+esc(f.id)+'\',this.value)">'+esc(t.text)+'</textarea>';
-    if(q&&t.text.indexOf(q)>=0){
-      const idx=t.text.indexOf(q);
+  if(tr&&tr.text){
+    trHtml='<textarea class="tedit" title="'+esc(t('pack.text.t',tr.provider+'/'+tr.tier))+'" placeholder="'+esc(t('pack.text.ph'))+'" onblur="savePackText(\''+esc(f.id)+'\',this.value)">'+esc(tr.text)+'</textarea>';
+    if(q&&tr.text.indexOf(q)>=0){
+      const idx=tr.text.indexOf(q);
       let atT=null,pos=0;
-      for(const w of (t.words||[])){if(pos>=idx){atT=w.start;break;}pos+=(w.text||'').length;}
-      trHtml+='<div class="defect"><span class="tag hit">'+esc(t_('pack.hit'))+'</span><span class="mono">'+(atT!==null?atT.toFixed(1)+'s':'—')+'</span><span>…'+esc(t.text.slice(Math.max(0,idx-10),idx+q.length+10))+'…</span></div>';
+      for(const w of (tr.words||[])){if(pos>=idx){atT=w.start;break;}pos+=(w.text||'').length;}
+      trHtml+='<div class="defect"><span class="tag hit">'+esc(t('pack.hit'))+'</span><span class="mono">'+(atT!==null?atT.toFixed(1)+'s':'—')+'</span><span>…'+esc(tr.text.slice(Math.max(0,idx-10),idx+q.length+10))+'…</span></div>';
     }
-  }else if(t&&!t.text&&kind!=='image'){trHtml='<div class="empty">'+esc(t_('pack.nospeech'))+'</div>';}
+  }else if(tr&&!tr.text&&kind!=='image'){trHtml='<div class="empty">'+esc(t('pack.nospeech'))+'</div>';}
   const v=f.visual;
   let visHtml='';
   if(v){
     visHtml='<div class="visbox"><div class="vdesc">'+esc(v.desc||'')+'</div>'+
       ((v.ocr||[]).length?'<div class="ocrchips">'+v.ocr.map(o=>'<span class="ocrchip">『'+esc(o)+'』</span>').join('')+'</div>':'')+
-      (v.usage?'<div class="vusage">'+esc(t_('pack.usage'))+esc(v.usage)+'</div>':'')+'</div>';
+      (v.usage?'<div class="vusage">'+esc(t('pack.usage'))+esc(v.usage)+'</div>':'')+'</div>';
   }
-  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(t_('pack.manual'))+esc(d.type||t_('pack.mark'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
+  const defs=(f.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(t('pack.manual'))+esc(d.type||t('pack.mark'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delPackDefect(\''+esc(f.id)+'\','+k+')">✕</button></div>').join('');
   const ditems=((P._disp&&P._disp.materials&&P._disp.materials[f.id])||{}).items||[];
-  const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">'+esc(t_('pack.log'))+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':t_('pack.mark'))+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
+  const dispHtml=ditems.slice(0,4).map(it=>'<div class="defect"><span class="tag hit">'+esc(t('pack.log'))+esc(it.type)+'</span><span class="mono">'+esc(it.t?it.t[0]+'-'+it.t[1]+'s':t('pack.mark'))+'</span><span>'+esc((it.suggestion||it.evidence||'').slice(0,56))+'</span></div>').join('');
   const tags=(f.tags||[]).map(t2=>'<span class="packtag">'+esc(t2)+'</span>').join('');
   const vpend=kind!=='audio'&&((f.audit||{}).visual!=='done');
   return '<div class="mcard'+(f.usable?'':' usable-false')+'">'+
     '<div id="pv-'+esc(f.id)+'">'+media+'</div>'+
     '<div class="mhead2" style="margin-top:8px"><span class="mid">'+esc(f.id)+'</span>'+
     '<span class="mt">'+meta+'</span>'+tags+
-    '<span class="usebadge '+(f.usable?(rev==='pending-review'?'pending':'usable'):'waste')+'" title="'+esc(t_('pack.usebadge.t'))+'" onclick="togglePackUsable(\''+esc(f.id)+'\')">'+
-    (f.usable?(rev==='pending-review'?t_('pack.pending'):t_('pack.usable')):t_('pack.waste'))+'</span></div>'+
+    '<span class="usebadge '+(f.usable?(rev==='pending-review'?'pending':'usable'):'waste')+'" title="'+esc(t('pack.usebadge.t'))+'" onclick="togglePackUsable(\''+esc(f.id)+'\')">'+
+    (f.usable?(rev==='pending-review'?t('pack.pending'):t('pack.usable')):t('pack.waste'))+'</span></div>'+
     '<div class="ktag">'+esc(KLBL)+'</div>'+
     trHtml+visHtml+defs+dispHtml+
     '<div class="defadd" style="display:flex;gap:6px;margin-top:6px">'+
-    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">'+esc(t_('pack.adddefect'))+'</button></div>'+
+    '<button class="addtrk" onclick="addPackDefect(\''+esc(f.id)+'\')">'+esc(t('pack.adddefect'))+'</button></div>'+
     '<div class="audit">'+
-    (kind==='image'?'<span class="achip">'+esc(t_('pack.tr.dash'))+'</span>'
-      :'<span class="achip'+(pend?' act':' done')+'" '+(pend?'title="'+esc(t_('pack.tr.t'))+'" onclick="transcribeOne(\''+esc(f.id)+'\',this)"':'')+'>'+(pend?t_('pack.tr.go'):t_('pack.tr.ok'))+'</span>')+
-    '<span class="achip'+(((f.audit||{}).proofread==='done')?' done':'')+'">'+esc(t_('pack.pf'))+((((f.audit||{}).proofread==='done'))?t_('pack.pf.ok'):t_('pack.pf.edit'))+'</span>'+
-    (kind==='audio'?'<span class="achip">'+esc(t_('pack.vi.dash'))+'</span>'
-      :'<span class="achip'+(vpend?' act':' done')+'" '+(vpend?'title="'+esc(t_('pack.vi.t'))+'" onclick="understandOne(\''+esc(f.id)+'\',this)"':'')+'>'+(vpend?t_('pack.vi.go'):t_('pack.vi.ok'))+'</span>')+
+    (kind==='image'?'<span class="achip">'+esc(t('pack.tr.dash'))+'</span>'
+      :'<span class="achip'+(pend?' act':' done')+'" '+(pend?'title="'+esc(t('pack.tr.t'))+'" onclick="transcribeOne(\''+esc(f.id)+'\',this)"':'')+'>'+(pend?t('pack.tr.go'):t('pack.tr.ok'))+'</span>')+
+    '<span class="achip'+(((f.audit||{}).proofread==='done')?' done':'')+'">'+esc(t('pack.pf'))+((((f.audit||{}).proofread==='done'))?t('pack.pf.ok'):t('pack.pf.edit'))+'</span>'+
+    (kind==='audio'?'<span class="achip">'+esc(t('pack.vi.dash'))+'</span>'
+      :'<span class="achip'+(vpend?' act':' done')+'" '+(vpend?'title="'+esc(t('pack.vi.t'))+'" onclick="understandOne(\''+esc(f.id)+'\',this)"':'')+'>'+(vpend?t('pack.vi.go'):t('pack.vi.ok'))+'</span>')+
     '</div></div>';
 }
 async function savePackFile(f){
