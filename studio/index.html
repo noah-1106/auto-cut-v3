@@ -415,7 +415,7 @@ zh:{
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
 'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。',
 'cfg.registry':'全盘注册表','cfg.regnote':'创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。',
-'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','reg.defaults':'默认值 JSON','reg.qcjson':'QC 区间 JSON','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）','msg.type.badjson':'JSON 解析失败——未保存',
+'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','reg.def.subtitle':'默认字幕','reg.def.transition':'默认转场','reg.def.narration':'默认旁白','reg.def.cover':'默认封面策略','reg.qc.dur':'时长区间','reg.qc.min':'下限','reg.qc.max':'上限','reg.unset':'（未设）','reg.save':'保存','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）',
 'reg.manage':'管理 →','reg.empty':'空','reg.noruntime':'未装运行时','reg.single':'单故事线','reg.mgr':'注册表管理',
 'reg.add':'＋ 新增条目','reg.import':'⬆ 导入素材文件','dlg.close':'✕ 关闭',
 'reg.fmtnote':'文件格式：%s · 注册表是人与 Agent 共用的选材事实源——改完保存即生效，下一次渲染使用新值',
@@ -506,7 +506,7 @@ en:{
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
 'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials). Click a card to open; deletion always <b class="k">archives to _attic</b> — recoverable.',
 'cfg.registry':'Global registries','cfg.regnote':'Every dropdown in Creator reads from here — <b class="k">click a card to manage</b> (add/edit/delete/import). Saved changes apply to the next render.',
-'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','reg.defaults':'Defaults JSON','reg.qcjson':'QC range JSON','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)','msg.type.badjson':'Invalid JSON — not saved',
+'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','reg.def.subtitle':'Default subtitle','reg.def.transition':'Default transition','reg.def.narration':'Default narration','reg.def.cover':'Default cover strategy','reg.qc.dur':'Duration range','reg.qc.min':'min','reg.qc.max':'max','reg.unset':'(unset)','reg.save':'Save','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)',
 'reg.manage':'Manage →','reg.empty':'empty','reg.noruntime':'runtime not installed','reg.single':'single storyline','reg.mgr':'Registry manager',
 'reg.add':'＋ Add entry','reg.import':'⬆ Import asset file','dlg.close':'✕ Close',
 'reg.fmtnote':'File: %s · Registries are the shared source of truth for humans and agents — saved changes apply to the next render',
@@ -724,8 +724,8 @@ async function loadConfig(){
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
   const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers'],['video_types','reg.vtypes'],['platforms','reg.plats']];
-  P={registry:{}};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）
-  const _regs=await Promise.all(REGS.map(([rn])=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发取五件套（原串行 5 个 RTT，2026-10-15 体检）
+  P={registry:{},enums:en};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）；enums 进 P——档案抽屉下拉（旁白/封面）消费它（2026-10-15 实锤：曾漏存，抽屉空选项）
+  const _regs=await Promise.all(REGS.map(([rn])=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发取注册表（效果五件套+类型/平台档案；原串行 5 个 RTT，2026-10-15 体检）
   REGS.forEach(([rn],i)=>P.registry[rn]=_regs[i]);
   try{P._voices=await(await fetch('/api/voices')).json();}catch(e){P._voices={installed:false,voices:[]};}
   const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
@@ -860,25 +860,74 @@ async function voiceDel(name){
 /* ═══ 注册表管理抽屉：五件套（bgm/subtitles/transitions/sfx/stickers）增删改+素材导入 ═══ */
 let REGCUR=null;
 const REGFILE={bgm:'reg.file.bgm',sfx:'reg.file.sfx',stickers:'reg.file.stickers',subtitles:'reg.file.subtitles',transitions:'reg.file.transitions',video_types:'reg.file.video_types',platforms:'reg.file.platforms'};  // 值=i18n key
-const REGEXTRA={  // 档案域专属字段（2026-10-15 类型/平台档案化）：input 直存 / json 先校验后存对象
-  video_types:[['rhythm','input','reg.rhythm'],['draft_prompt','textarea','reg.draftprompt'],['defaults','json','reg.defaults'],['qc','json','reg.qcjson']],
-  platforms:[['lufs_target','input','reg.lufs'],['lufs_tol','input','reg.lufstol']]
+const REGEXTRA={  // 档案域专属字段（2026-10-15 档案化；同日改版：JSON textarea 撤——人不写 JSON，
+  // 一切结构化表单。sel:*=下拉（选项来自对应注册表/枚举），num=数字，range=区间双数字框，未设=删键走回退链）
+  video_types:[['rhythm','text','reg.rhythm'],['draft_prompt','area','reg.draftprompt'],
+    ['defaults.subtitle','sel:subtitles','reg.def.subtitle'],['defaults.transition','sel:transitions','reg.def.transition'],
+    ['defaults.narration_mode','sel:narr','reg.def.narration'],['defaults.cover_strategy','sel:cover','reg.def.cover'],
+    ['qc.duration_range','range','reg.qc.dur']],
+  platforms:[['lufs_target','num','reg.lufs'],['lufs_tol','num','reg.lufstol']]
 };
+function _regPath(o,path){return path.split('.').reduce((a,k)=>(a==null?a:a[k]),o)}
+function _regOpts(src){  // 下拉选项源：注册表/枚举自举（抽屉在哪都能开）
+  if(src==='subtitles')return Object.keys(P.registry.subtitles||{}).filter(k=>!k.startsWith('_')).map(k=>({v:k,n:(P.registry.subtitles[k]||{}).name||k}));
+  if(src==='transitions')return Object.keys(P.registry.transitions||{}).filter(k=>!k.startsWith('_')).map(k=>({v:k,n:k}));
+  if(src==='narr')return ((P.enums||{}).narration_modes||[]).map(x=>({v:x.id,n:x.name}));
+  if(src==='cover')return ((P.enums||{}).cover_strategies||[]).map(x=>({v:x.id,n:x.name}));
+  return [];
+}
 function regExtraRows(id,e){
   const spec=REGEXTRA[REGCUR];if(!spec)return '';
-  return '<div style="display:grid;grid-template-columns:90px 1fr;gap:6px 10px;align-items:start;margin-top:10px">'+
+  const L=k=>'<span style="font-size:10px;color:var(--faint)">'+esc(t(k))+'</span>';
+  return '<div style="display:grid;grid-template-columns:90px 1fr;gap:6px 10px;align-items:center;margin-top:10px">'+
     spec.map(([k,kind,lbl])=>{
-      const v=e[k];
-      const shown=(kind==='json')?JSON.stringify(v==null?(k==='defaults'?{}:{}) :v,null,1):String(v==null?'':v);
-      if(kind==='input')return '<span style="font-size:10px;color:var(--faint)">'+esc(t(lbl))+'</span>'+
-        '<input style="width:100%" value="'+esc(shown)+'" onchange="regSet(\''+id+'\',\''+k+'\',this.value)">';
-      return '<span style="font-size:10px;color:var(--faint)">'+esc(t(lbl))+'</span>'+
-        '<textarea rows="'+(kind==='json'?3:2)+'" style="width:100%;font:11px var(--mono)" onchange="regSetJson(\''+id+'\',\''+k+'\',this)">'+esc(shown)+'</textarea>';
+      if(kind==='text'||kind==='area'||kind==='num'){
+        const v=String(_regPath(e,k)??'');
+        const tag=(kind==='area')?'textarea rows="2"':'input';
+        const numf=(kind==='num')?' type="number" step="any"':'';
+        const cast=(kind==='num')?('+this.value||0'):'this.value';
+        return L(lbl)+'<'+tag+numf+' style="width:100%'+(kind==='area'?';font:11px var(--mono)':'')+'" onchange="regSetDeep(\''+id+'\',\''+k+'\','+cast+')">'+(kind==='area'?esc(v)+'</textarea>':' value="'+esc(v)+'">');
+      }
+      if(kind.startsWith('sel:')){
+        const cur=_regPath(e,k);
+        const opts=_regOpts(kind.slice(4));
+        return L(lbl)+'<select onchange="regSetDeep(\''+id+'\',\''+k+'\',this.value||null)">'+
+          '<option value="">'+esc(t('reg.unset'))+'</option>'+
+          opts.map(o=>'<option value="'+esc(o.v)+'"'+(o.v===cur?' selected':'')+'>'+esc(o.n)+'</option>').join('')+'</select>';
+      }
+      if(kind==='range'){  // qc.duration_range=[min,max]：两个数字框，清空=删整个区间（R11 跳过）
+        const cur=_regPath(e,k)||[];
+        const mid='xr-'+REGCUR+'-'+id;
+        return L(lbl)+'<span style="display:flex;gap:6px;align-items:center">'+
+          '<input id="'+mid+'-min" type="number" step="any" style="width:80px" value="'+esc(cur[0]??'')+'" placeholder="'+esc(t('reg.qc.min'))+'">'+
+          '<span style="color:var(--faint)">–</span>'+
+          '<input id="'+mid+'-max" type="number" step="any" style="width:80px" value="'+esc(cur[1]??'')+'" placeholder="'+esc(t('reg.qc.max'))+'">'+
+          '<span style="font-size:10px;color:var(--faint)">s</span>'+
+          '<button class="ghost" style="height:22px;font-size:10px;padding:0 8px" onclick="regSetRange(\''+id+'\',\''+k+'\',\''+mid+'\')">'+esc(t('reg.save'))+'</button></span>';
+      }
+      return '';
     }).join('')+'</div>';
 }
-function regSetJson(id,k,el){  // JSON 字段：解析失败不保存并标红（档案是管线消费的，坏 JSON 不能落盘）
-  let v;try{v=JSON.parse(el.value)}catch(e){el.style.borderColor='var(--bad)';alert(t('msg.type.badjson'));return}
-  el.style.borderColor='';regSet(id,k,v);
+async function regSetDeep(id,path,v){  // 点路径写入（defaults.subtitle 等）；空值删键——回退链与「未设」语义一致
+  const reg=Object.assign({},P.registry[REGCUR]);
+  const e=JSON.parse(JSON.stringify(reg[id]||{}));
+  const parts=path.split('.');let o=e;
+  for(let i=0;i<parts.length-1;i++){o[parts[i]]=o[parts[i]]||{};o=o[parts[i]];}
+  const leaf=parts[parts.length-1];
+  if(v===null||v==='')delete o[leaf];else o[leaf]=v;
+  reg[id]=e;
+  await regSave(reg);
+}
+async function regSetRange(id,path,mid){  // 区间框收值：两个都填才成区间；任一空=删区间（明确的不设）
+  const mn=$(mid+'-min').value,mx=$(mid+'-max').value;
+  const reg=Object.assign({},P.registry[REGCUR]);
+  const e=JSON.parse(JSON.stringify(reg[id]||{}));
+  const parts=path.split('.');let o=e;
+  for(let i=0;i<parts.length-1;i++){o[parts[i]]=o[parts[i]]||{};o=o[parts[i]];}
+  if(mn===''||mx==='')delete o[parts[parts.length-1]];
+  else o[parts[parts.length-1]]=[+mn,+mx];
+  reg[id]=e;
+  await regSave(reg);
 }
 function openRegMgr(rn,titleKey){
   REGCUR=rn;
