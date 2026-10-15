@@ -854,6 +854,7 @@ async function voiceRegister(){
     else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.regfail'));
   }catch(e){$('voice-hint').textContent='✗ '+e;}
 }
+let VOICE_AUDIO=null;  // 持引用防 GC：无引用的 Audio 元素 play() 照样 resolve 但随即被回收=无声（2026-10-15 用户实锤：提示播放中却没声音）
 async function voiceTest(name){
   const t0=Date.now();
   const tick=setInterval(()=>{$('voice-hint').textContent=t('voice.synth',Math.round((Date.now()-t0)/1000));},1000);
@@ -861,7 +862,11 @@ async function voiceTest(name){
     const text=prompt(t('msg.voice.test.p'),t('msg.voice.test.d'))||'';
     if(!text)return;
     const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text))).json();
-    if(r.ok){$('voice-hint').textContent=t('voice.testready');new Audio(r.url).play()
+    if(r.ok){$('voice-hint').textContent=t('voice.testready');
+      try{if(VOICE_AUDIO)VOICE_AUDIO.pause();}catch(e){}  // 连续试听：先停上一条
+      VOICE_AUDIO=new Audio(r.url);
+      VOICE_AUDIO.onerror=()=>{$('voice-hint').textContent='✗ '+t('voice.testfail');};  // 加载失败不得无声（play 的 resolve 不覆盖 onerror）
+      VOICE_AUDIO.play()
       .then(()=>{$('voice-hint').textContent=t('voice.playing',Math.round((Date.now()-t0)/1000));})
       .catch(()=>{$('voice-hint').textContent=t('voice.autoplay');});}
     else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.testfail'));
