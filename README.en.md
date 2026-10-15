@@ -162,7 +162,7 @@ materials/packs/     # user footage store (large files, not in git)
 projects/<name>/     # project workspace: storylines/, out-*.mp4 finals, qc-report.json (not in git, .gitkeep placeholder)
 config/              # services.json (service keys) lexicon.json (proofread lexicon) qc_rules.json
 docs/                # design docs (pipeline-v2.md = pipeline automation design; archive/ = retired material; README.md = doc map + glossary)
-tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor)
+tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor) domsim.js (frontend execution-sim template, T64)
 bin/                 # ffmpeg 6.0+ (bring your own, not in git)
 ```
 

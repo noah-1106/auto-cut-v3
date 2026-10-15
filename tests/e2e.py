@@ -2959,6 +2959,7 @@ def main():
     t61_advance_dynamic_reestimate()
     t62_structural_pagination()
     t63_type_platform_profiles()
+    t64_dom_execution_sim()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3030,6 +3031,68 @@ def t63_type_platform_profiles():
               % (ok1a, ok1b, ok1c, ok1d, ok2a, ok2b, ok3, ok4a, ok4b, ok4c, ok5, code6a, back))
     except Exception as e:
         check("T63 类型/平台档案化（draft注入/渲染默认值/平台锚/R11/enums派生/写闭环）", False, str(e)[:160])
+
+
+# ---------------------------------------------------------------- T64 前端 DOM 执行模拟（2026-10-15）
+def t64_dom_execution_sim():
+    # 锚：t 遮蔽 i18n t() 一族前端运行时崩溃（切页崩/抽屉空白/转写框空白）曾穿过
+    # node --check + audit + e2e 全部门禁——因为没有任何测试真正【执行】过 index.html 的 JS。
+    # 本测用 node + DOM 桩（tests/domsim.js 模板）真实执行关键路径：
+    # boot → 开项目 → 渲染幕/包/切片 → 搜索命中 → 7 个注册表抽屉。MOCK 从运行中的
+    # studio 实时抓取（夹具项目自给，不依赖任何真实项目），前端/后端数据契约漂移同样在此现形。
+    try:
+        import tempfile
+        node = shutil.which("node")
+        if not node:
+            check("T64 前端 DOM 执行模拟", False, "node 不可用（执行模拟需要 node，runner/开发机均预装）")
+            return
+        # ① 选夹具项目的第一条故事线（前面测试可能增删线，以 /api/projects 现报为准）
+        st, projs = api("/api/projects")
+        me = next((p for p in (projs or []) if p.get("name") == PROJ), None)
+        story = (me and me.get("stories") or [""])[0]
+        # ② 实时抓前端 boot→项目→抽屉 会碰的全部端点 → MOCK
+        paths = ["/api/projects", "/api/enums", "/api/voices", "/api/formats",
+                 "/api/packs", "/api/pulse", "/api/library/" + PROJ,
+                 "/api/project/%s?story=%s" % (PROJ, story)] + \
+                ["/api/registry/" + r for r in ("bgm", "subtitles", "transitions", "sfx",
+                                                "stickers", "video_types", "platforms")]
+        mock = {}
+        for p in paths:
+            st, d = api(p)
+            mock[p.split("?")[0]] = d
+        # ③ 拼装：模板 + index.html 脚本体，替换占位
+        tpl = open(os.path.join(ROOT, "tests", "domsim.js"), encoding="utf-8").read()
+        html = open(os.path.join(ROOT, "studio", "index.html"), encoding="utf-8").read()
+        app = re.search(r"<script>\n(.*?)\n</script>", html, re.S).group(1)
+        sim = (tpl.replace("__MOCK__", "const MOCK=" + json.dumps(mock, ensure_ascii=False))
+                  .replace("__PROJ__", PROJ).replace("__STORY__", story)) + "\n" + app + "\n"
+        # ④ 执行并解析断言行
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+            f.write(sim)
+            tmp = f.name
+        try:
+            r = subprocess.run([node, tmp], capture_output=True, text=True, timeout=120)
+        finally:
+            os.unlink(tmp)
+        out = (r.stdout or "") + (r.stderr or "")
+        open_ok = "OPEN: OK" in out and "active= s-create" in out
+        render_ok = re.search(r"metabar= (\d+) beatcards= (\d+) packgroups= (\d+)", out or "")  # console.log 参数间有空格
+        search_ok = "textarea-shows-transcript= true" in out
+        drawers = dict(re.findall(r"DRAWER (\w+) len= (\d+)", out))
+        drawer_errs = [l for l in (out or "").splitlines() if "ERR" in l]
+        ok = (r.returncode == 0 and open_ok and render_ok
+              and all(int(v) > 0 for v in render_ok.groups())
+              and search_ok and len(drawers) == 7 and all(int(v) > 0 for v in drawers.values())
+              and not drawer_errs)
+        open_line = next((l for l in (out or "").splitlines() if l.startswith("OPEN:")), "?")
+        if not ok:  # 取证落盘：完整模拟输出（OPEN 行含异常栈首帧）
+            open("/tmp/t64_dom_out.txt", "w", encoding="utf-8").write(out or "(无输出) rc=%s" % r.returncode)
+        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉）", ok,
+              "story=%s open=%s 渲染=%s 搜索=%s 抽屉=%d %s" % (story or "?", open_line[:120],
+              ("OK" if render_ok else "无输出"), search_ok, len(drawers),
+              ("；" + " | ".join(drawer_errs[:2]) if drawer_errs else "")))
+    except Exception as e:
+        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉）", False, str(e)[:160])
 
 
 

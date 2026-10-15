@@ -163,7 +163,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
-tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器)
+tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器) domsim.js(前端执行模拟模板,T64)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
