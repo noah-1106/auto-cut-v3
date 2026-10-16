@@ -279,13 +279,22 @@ class H(BaseHTTPRequestHandler):
                     sids = [f[:-5] for f in sorted(os.listdir(f"{p}/storylines")) if f.endswith(".json")] \
                         if os.path.isdir(f"{p}/storylines") else []
                     if pj:  # 新档案项目：一个工程多条故事线
+                        # 海报墙封面（2026-10-17 前端设计批）：当前线优先→首条有封面的线→main；
+                        # ?t=mtime 防浏览器缓存旧封面（封面会随迭代重出）
+                        cov = None
+                        for s in [pj.get("active")] + sids + [None]:
+                            cp = f"{p}/cover/cover{('-' + s) if s else ''}.jpg"
+                            if os.path.exists(cp):
+                                cov = f"/files/projects/{name}/cover/cover{('-' + s) if s else ''}.jpg?t={int(os.path.getmtime(cp))}"
+                                break
                         out.append({"name": name, "title": pj.get("title", name),
-                                    "active": pj.get("active"), "stories": sids,
+                                    "active": pj.get("active"), "stories": sids, "cover": cov,
                                     "has_out": any(os.path.exists(f"{p}/out-{s}.mp4") for s in sids),
                                     "outs": [s for s in sids if os.path.exists(f"{p}/out-{s}.mp4")]})
                     elif os.path.exists(f"{p}/storyline.json"):  # 旧项目兼容
                         st = jload(f"{p}/storyline.json", {})
-                        out.append({"name": name, "title": st.get("title", name),
+                        cov0 = f"/files/projects/{name}/cover/cover.jpg" if os.path.exists(f"{p}/cover/cover.jpg") else None
+                        out.append({"name": name, "title": st.get("title", name), "cover": cov0,
                                     "active": None, "stories": [],
                                     "has_out": os.path.exists(f"{p}/out.mp4"), "outs": []})
             self._json(out)
