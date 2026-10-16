@@ -18,6 +18,12 @@ def _safe(s):
     return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.]{1,80}", s) and ".." not in s
 
 
+def _safe_name(s):
+    """项目名/故事线 id：ASCII 白名单 + 中文（CJK）——名称是用户资产（同 _filename 立规：
+    系统不剥夺），2026-10-17 用户裁定命名支持中文。安全不变量不变：禁路径分隔符、禁 .. 穿越。"""
+    return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.\u4e00-\u9fff]{1,80}", s) and ".." not in s
+
+
 def _filename(s):
     """用户上传文件名校验（2026-09-14 立规：素材名是用户资产，系统不剥夺——中文全放行）。
     只禁真正危险的：路径分隔符、空字节、.. 穿越、隐藏文件。"""
@@ -152,7 +158,7 @@ class H(BaseHTTPRequestHandler):
             # v1 切片层（2026-10-15 注）：创作台「项目素材」区在读（cuts/sources 展示）；
             # ensure_thumbs 对纯包项目是空转——v1 缩略帧机制，cuts.json 缺 thumb 才补
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             pd = f"{ROOT}/projects/{name}"
             try:  # 素材审阅必须看得到素材：缺哪张缩略帧补哪张
@@ -174,14 +180,14 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/sync/"):
             # 双向同步探针：先落库，后读取——Studio 每 5s 轮询这里，看见 Agent 的落库
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
                 return self._json({"err": "no such project"}, 404)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             sdir = f"{p}/storylines"
             stories = {f[:-5]: int(os.path.getmtime(os.path.join(sdir, f)))
@@ -193,7 +199,7 @@ class H(BaseHTTPRequestHandler):
             # 管线编排状态（2026-09-15 接管落地件）：与 CLI orchestrate.py 同一实现推导——人机同一份事实。
             # 只读，无锁；前端管线进度条随 PULSE 轮询这里，人随时跟进 Agent 的推进
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
@@ -211,7 +217,7 @@ class H(BaseHTTPRequestHandler):
                                "story": st and ORCH._latest_story(p)})
         if u.path.startswith("/api/render-progress/"):
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(u.query)
             sid = (_q.get("story") or [None])[0]
@@ -300,14 +306,14 @@ class H(BaseHTTPRequestHandler):
             self._json(out)
         elif u.path.startswith("/api/project/"):
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
                 return self._json({"err": "no such project"}, 404)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             sdir = f"{p}/storylines"
             sids_all = sorted(f[:-5] for f in (os.listdir(sdir) if os.path.isdir(sdir) else []) if f.endswith(".json"))
@@ -535,7 +541,7 @@ class H(BaseHTTPRequestHandler):
             return self._handle_voice(u)
         if u.path.startswith("/api/cover-gen/"):
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad project"}, 400)
             try:
                 body = json.loads((self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}").decode("utf-8") or "{}")
@@ -565,7 +571,7 @@ class H(BaseHTTPRequestHandler):
             name = u.path.split("/")[3]
             qs = parse_qs(u.query)
             sid = (qs.get("story") or [None])[0]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad project"}, 400)
             try:
                 r = subprocess.run([sys.executable, PIPE, "cover", f"{ROOT}/projects/{name}"] + ([sid] if sid else []),
@@ -578,7 +584,7 @@ class H(BaseHTTPRequestHandler):
             # v1 切片层（2026-10-15 注）：cuts 预览视频切片用，创作台「项目素材」区仍在用
             parts = u.path.split("/")
             name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）
-            if not (_safe(name) and ci.isdigit()):
+            if not (_safe_name(name) and ci.isdigit()):
                 return self._json({"err": "bad id"}, 400)
             pd = f"{ROOT}/projects/{name}"
             lib = jload(f"{pd}/materials/library.json", {})
@@ -602,7 +608,7 @@ class H(BaseHTTPRequestHandler):
             # 挂载/卸载：library.json packs 是唯一事实源
             parts = u.path.split("/")
             name, pid, op = parts[3], parts[4], parts[5]  # mount / unmount
-            if not (_safe(name) and _safe(pid)):
+            if not (_safe_name(name) and _safe(pid)):
                 return self._json({"err": "bad id"}, 400)
             lp = f"{ROOT}/projects/{name}/materials/library.json"
             if not os.path.isfile(lp):
@@ -645,8 +651,8 @@ class H(BaseHTTPRequestHandler):
             name = str(body.get("name") or "").strip()
             title = str(body.get("title") or "").strip() or name
             fmt_id = str(body.get("format") or "vertical")
-            if not _safe(name):
-                return self._json({"err": "项目名只允许字母数字下划线中划线"}, 400)
+            if not _safe_name(name):
+                return self._json({"err": "项目名只允许字母/数字/中文/._-（禁路径分隔符与 ..）"}, 400)
             fmts = jload(f"{ROOT}/registry/formats.json", {})
             if fmt_id not in fmts:
                 return self._json({"err": "未知画幅: %s" % fmt_id}, 400)
@@ -665,11 +671,11 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/render-start/"):
             # R2：渲染改为任务模型——启动后轮询 /api/render-progress，前端实时百分比
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(u.query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
@@ -861,9 +867,11 @@ class H(BaseHTTPRequestHandler):
             # 删除故事线 = 归档到 projects/_attic/<pid>/<时间戳>/（可手工找回），至少保留一条
             parts = u.path.split("/")
             name = parts[3]
+            if not _safe_name(name):
+                return self._json({"err": "bad id"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             p = f"{ROOT}/projects/{name}"
             sdir = f"{p}/storylines"
@@ -895,7 +903,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/project-delete/"):
             # 删除项目 = 整目录归档到 projects/_attic/（素材包是根级资产，不受影响）
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):
@@ -962,7 +970,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/proofread-cut/"):
             # v1 切片层（2026-10-15 注）：n001 切片台词人工校对，创作台「项目素材」区在用
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             lp = f"{ROOT}/projects/{name}/materials/library.json"
             lib = jload(lp, {})
@@ -1020,7 +1028,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/draft/"):
             # 人机等价入口：Agent 走 CLI，人点「✨ AI 起草」——同一落盘 storylines/aidraft*.json
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             try:
                 n = int(self.headers.get("Content-Length", 0))
@@ -1143,7 +1151,7 @@ class H(BaseHTTPRequestHandler):
             # v1 切片层（2026-10-15 注）：创作台「项目素材」区切换切片 usable 在用
             # 拍摄层废片决策：usable 只评拍摄层（说错/卡等/重复/气口），不评创作取用
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             lp = f"{ROOT}/projects/{name}/materials/library.json"
             lib = jload(lp, {})
@@ -1173,7 +1181,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "bad beat no"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             tag = (sid + "_") if sid else ""
             p = f"{ROOT}/projects/{name}"
@@ -1188,11 +1196,11 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/storyline/"):
             # 人和 Agent 共用的故事线写入口（等价机制：所有编辑落为同一 JSON 变更）
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             _q = parse_qs(urlparse(self.path).query)
             sid = (_q.get("story") or [None])[0]
-            if sid and not _safe(sid):
+            if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
             sp = f"{ROOT}/projects/{name}/storylines/{sid}.json" if sid else f"{ROOT}/projects/{name}/storyline.json"
             is_new = bool(sid) and not os.path.isfile(sp)
@@ -1326,7 +1334,7 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": True, "id": rid, "registry": regf, "file": fp[len(ROOT)+1:]})
         if u.path.startswith("/api/cover-upload/"):
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             cover_dir = f"{ROOT}/projects/{name}/cover"
             os.makedirs(cover_dir, exist_ok=True)
@@ -1339,7 +1347,7 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/render/"):
             # 同步渲染（600s 阻塞）——前端走 render-start/progress 任务模型，此端点供 e2e/脚本用
             name = u.path.split("/")[3]
-            if not _safe(name):
+            if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
             p = f"{ROOT}/projects/{name}"
             if not os.path.isdir(p):

@@ -19,7 +19,7 @@ def sec(title):
 sec("A. 路由安全（studio.py）")
 studio = open(os.path.join(ROOT, "studio.py"), encoding="utf-8").read()
 
-# A1. 从 path/query 取出的用户参数，用前是否过校验（_safe/_safe_id/_filename/_safe_pid）
+# A1. 从 path/query 取出的用户参数，用前是否过校验（_safe/_safe_name/_safe_id/_filename/_safe_pid）
 # 抽取所有 parts[N] / split("/")[N] 赋值行，检查后续 5 行内是否有校验调用
 param_lines = []
 for i, ln in enumerate(studio.split("\n")):
@@ -39,7 +39,7 @@ for i, ln in param_lines:
     EXEMPT = {"sid_render_progress", "kind",  # 已人工复核：kind 在 KIND 白名单内 / sid 仅入内存 job key
               "text"}  # 已人工复核（2026-10-14）：/api/voice-test 的 text 只作 TTS 文本进 JSON body，输出路径由 _safe_id 校验过的 name 派生，无注入面
     if var in EXEMPT: continue  # 2026-10-14 修：EXEMPT 集合定义后从未被消费（装饰性豁免），接上
-    if not re.search(r'_safe\(|_safe_id\(|_filename\(|isdigit\(\)|in \("|\.(lower\(\))', window):
+    if not re.search(r'_safe\(|_safe_name\(|_safe_id\(|_filename\(|isdigit\(\)|in \("|\.(lower\(\))', window):
         if var == "kind" and "KIND" in "\n".join(lines[i:i+12]):
             continue
         if var == "rid" and "unquote" in window or var == "rid" and "KIND" in "\n".join(lines[i:i+12]):

@@ -444,7 +444,7 @@ zh:{
 'tab.config':'项目','tab.registry':'注册表','tab.create':'创作台','tab.library':'素材库','tab.home':'⌂ 返回主页',
 'st.lbl':'故事线','st.del.t':'删除该故事线（归档可找回）','st.new.t':'新建故事线（同一批素材的另一种成片取法）',
 'pipe.next':'下一动作: ','pipe.alldone':'全部就绪',
-'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目 id（字母/数字/-，不含中文，如 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
+'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目名（字母/数字/中文/._-，如 沈艳探盘 或 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
 'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。',
 'cfg.registry':'全盘注册表','cfg.regnote':'注册表是人与 Agent 共用的选材资产库——改完保存即生效，下一次渲染使用新值。',
@@ -505,13 +505,13 @@ zh:{
 'msg.delbeat.confirm':'删除幕 #%s？自动落盘后不可找回（整条幕的轨道/贴纸/音效一并消失）',
 'msg.deltrack.confirm':'删除该 B 轨叠加？自动落盘后不可找回',
 'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？','msg.delcutdef.confirm':'删除这条缺陷标记？',
-'msg.newstory.p':'新故事线 id（字母/数字/下划线/中划线，不支持中文）：\n例：koubo2 / aidraft-x','msg.badid':'id 只允许字母、数字、下划线、中划线（不支持中文）',
+'msg.newstory.p':'新故事线 id（字母/数字/中文/下划线/中划线）：\n例：koubo2 / 口播二版','msg.badid':'id 只允许字母、数字、中文、下划线、中划线',
 'msg.save.fail':'✗ 保存失败：%s——DIRTY 保持，点右上角芯片重试',
 'msg.draft.p':'给 AI 一句起草意图：\n例：用开场钩子和空镜起一条 3 幕口播线，总长 40 秒',
 'msg.sync.new':'↻ 对方更新了 %s，自动载入','msg.sync.conflict':'对方（Agent）刚更新了「%s」，你的本地改动未保存。\n载入新版本（丢弃本地改动）？',
 'msg.voice.test.p':'试听文本','msg.voice.test.d':'你好，这是一条试听配音。',
 'msg.regimport.badid':'id 只允许字母/数字/下划线/中划线（≤40）——与新增条目同口径',
-'msg.wizard.badname':'项目名只允许字母/数字/._-（开头须字母或数字）——与服务端白名单同口径',
+'msg.wizard.badname':'项目名只允许字母/数字/中文/._-（开头须字母、数字或中文）——与服务端白名单同口径',
 'voice.pickfile.err':'✗ 先选参考音频文件','voice.name.err':'✗ 音色名只能英文/数字/._-','voice.text.err':'✗ 逐字稿必填（零样本克隆硬契约）','voice.registering':'注册中（零样本克隆推理中，请稍候）…','voice.registered':'✓ 已注册 %s','voice.regfail':'注册失败','voice.synth':'试听合成中…（已 %ss，本地 CPU 推理）','voice.testready':'✓ 试听已生成，加载播放中…','voice.playing':'✓ 试听播放中（生成 %ss）','voice.autoplay':'✓ 试听已生成（浏览器拦截自动播放，点页面任意处再听）','voice.testfail':'试听失败','voice.del.confirm':'删除音色 %s？',
 'msg.deleted':'✓ 已删除 %s','msg.delfail':'删除失败','msg.createfail':'创建失败：','msg.savefail':'保存失败：','msg.importfail':'导入失败：',
 'cfg.pdel.t':'删除项目（归档到 _attic，可找回）','reg.bgm':'BGM','reg.subtitles':'字幕样式','reg.transitions':'转场','reg.sfx':'音效','reg.stickers':'贴纸','reg.sample':'样字','msg.regdel.confirm':'删除条目「%s」？\n（素材文件保留在 assets/，可再导入恢复）','msg.regimport.idp':'条目 id（Agent 用它引用）：','msg.regimport.dup':'id 已存在','msg.regadd.idp':'新条目 id（字母/数字/下划线/中划线，Agent 用它引用）：',
@@ -536,7 +536,7 @@ en:{
 'tab.config':'Projects','tab.registry':'Registries','tab.create':'Creator','tab.library':'Library','tab.home':'⌂ Home',
 'st.lbl':'Storylines','st.del.t':'Delete this storyline (archived, recoverable)','st.new.t':'New storyline (another cut of the same materials)',
 'pipe.next':'Next: ','pipe.alldone':'All done',
-'cfg.newproj':'＋ New project','cfg.name.ph':'Project id (letters/digits/-, no Chinese, e.g. my-first-project)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
+'cfg.newproj':'＋ New project','cfg.name.ph':'Project name (letters/digits/Chinese/._-)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
 'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials).',
 'cfg.registry':'Global registries','cfg.regnote':'Registries are a shared material library for humans and Agents — changes take effect on save; the next render uses the new values.',
@@ -597,13 +597,13 @@ en:{
 'msg.delbeat.confirm':'Delete beat #%s? Unrecoverable after autosave (its tracks/stickers/SFX go with it)',
 'msg.deltrack.confirm':'Delete this B-track overlay? Unrecoverable after autosave',
 'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?','msg.delcutdef.confirm':'Delete this defect mark?',
-'msg.newstory.p':'New storyline id (letters/digits/underscore/dash, no Chinese):\ne.g. koubo2 / aidraft-x','msg.badid':'id allows only letters, digits, underscore, dash (no Chinese)',
+'msg.newstory.p':'New storyline id (letters/digits/Chinese/underscore/dash):\ne.g. koubo2 / cut-2','msg.badid':'id allows only letters, digits, Chinese characters, underscore, dash',
 'msg.save.fail':'✗ Save failed: %s — DIRTY kept, click the chip top-right to retry',
 'msg.draft.p':'Give the AI a one-line intent:\ne.g. draft a 3-beat narration line with a hook opener and b-roll, ~40s total',
 'msg.sync.new':'↻ The other side updated %s, reloading','msg.sync.conflict':'The other side (agent) just updated "%s" and your local edits are unsaved.\nLoad the new version (discard local edits)?',
 'msg.voice.test.p':'Sample text','msg.voice.test.d':'Hello, this is a test narration.',
 'msg.regimport.badid':'id allows only letters/digits/underscore/dash (≤40) — same rule as Add entry',
-'msg.wizard.badname':'Project name allows only letters/digits/._- (must start with a letter or digit) — same whitelist as the server',
+'msg.wizard.badname':'Project name allows only letters/digits/Chinese/._- (must start with a letter, digit, or Chinese character) — same whitelist as the server',
 'voice.pickfile.err':'✗ Pick a reference audio file first','voice.name.err':'✗ Voice name allows only letters/digits/._-','voice.text.err':'✗ Transcript is required (zero-shot cloning hard contract)','voice.registering':'Registering (zero-shot cloning inference, please wait)…','voice.registered':'✓ Registered %s','voice.regfail':'registration failed','voice.synth':'Synthesizing sample… (%ss elapsed, local CPU inference)','voice.testready':'✓ Sample ready, loading…','voice.playing':'✓ Sample playing (generated in %ss)','voice.autoplay':'✓ Sample ready (browser blocked autoplay — click anywhere to hear it)','voice.testfail':'sample failed','voice.del.confirm':'Delete voice %s?',
 'msg.deleted':'✓ Deleted %s','msg.delfail':'delete failed','msg.createfail':'Create failed: ','msg.savefail':'Save failed: ','msg.importfail':'Import failed: ',
 'cfg.pdel.t':'Delete project (archived to _attic, recoverable)','reg.bgm':'BGM','reg.subtitles':'Subtitle styles','reg.transitions':'Transitions','reg.sfx':'SFX','reg.stickers':'Stickers','reg.sample':'Aa','msg.regdel.confirm':'Delete entry "%s"?\n(the asset file stays in assets/ and can be re-imported)','msg.regimport.idp':'Entry id (the agent references it):','msg.regimport.dup':'id already exists','msg.regadd.idp':'New entry id (letters/digits/underscore/dash, the agent references it):',
@@ -717,7 +717,7 @@ function renderTabs(){
 async function newStory(){
   const n=prompt(t('msg.newstory.p'));
   if(!n)return;
-  if(!/^[\w-]+$/.test(n))return alert(t('msg.badid'));
+  if(!/^[\w\u4e00-\u9fff-]{1,80}$/.test(n))return alert(t('msg.badid'));
   try{
     const sl={outline:'',meta:{},beats:[]};
     const r=await(await fetch('/api/storyline/'+VIEW.proj+'?story='+encodeURIComponent(n),
@@ -1439,7 +1439,7 @@ function wzToggle(){  // 新建项目幽灵卡：点开就地展开表单（2026
 async function wizardCreate(){
   const name=$('wz-name').value.trim(), title=$('wz-title').value.trim(), fmt=$('wz-fmt').value;
   if(!name)return alert(t('msg.wizard.noname'));
-  if(!/^[A-Za-z0-9][A-Za-z0-9_.\-]{0,79}$/.test(name))return alert(t('msg.wizard.badname'));  // 前端先拦，不等服务端 400（2026-10-15 体检）
+  if(!/^[\u4e00-\u9fffA-Za-z0-9][\u4e00-\u9fffA-Za-z0-9_.\-]{0,79}$/.test(name))return alert(t('msg.wizard.badname'));  // 前端先拦，不等服务端 400（2026-10-15 体检）
   const btn=event.target;if(btn){btn.disabled=true;}
   try{
     const r=await(await fetch('/api/project-create/'+name,{method:'POST',

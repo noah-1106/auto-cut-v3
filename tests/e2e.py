@@ -2967,6 +2967,7 @@ def main():
     t63_type_platform_profiles()
     t64_dom_execution_sim()
     t65_human_agent_equivalence()
+    t66_chinese_naming()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3082,6 +3083,39 @@ def t65_human_agent_equivalence():
               "narration=%r" % nar)
     finally:
         api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")
+
+
+def t66_chinese_naming():
+    # 锚：2026-10-17 用户裁定项目名/故事线 id 支持中文（_safe_name = ASCII 白名单 + CJK，
+    # 安全不变量不变：禁分隔符 + 禁 ..）。钉全链路：建项目→GET→建中文故事线→落盘读回→删除清理。
+    from urllib.parse import quote
+    name, sid = "e2e中文项目", "口播一版"
+    api("/api/project-delete/" + quote(name), method="POST")  # 清残
+    try:
+        st, d = api("/api/project-create/x", method="POST",
+                    body={"name": name, "title": "中文命名锚", "format": "vertical"})
+        ok = st == 200 and d.get("name") == name and os.path.isdir(os.path.join(ROOT, "projects", name))
+        check("T66a 中文项目名建库", ok, "st=%s name=%r" % (st, d.get("name")))
+        st, d = api("/api/project/" + quote(name))
+        check("T66b 中文项目名读回", st == 200 and name in json.dumps(d, ensure_ascii=False),
+              "st=%s" % st)
+        beats = [{"no": 1, "id": "b1", "story": "第一句", "narration": {"mode": "inherit"},
+                  "tracks": [], "music": {"inherit": True},
+                  "effects": {"stickers": [], "sfx": []}, "subtitle": {}, "transition_out": None}]
+        st, _ = api("/api/storyline/" + quote(name) + "?story=" + quote(sid), method="POST",
+                    body={"title": "中文线", "outline": "", "meta": {}, "beats": beats})
+        sfx = os.path.join(ROOT, "projects", name, "storylines", sid + ".json")
+        sl = json.load(open(sfx, encoding="utf-8")) if st == 200 and os.path.exists(sfx) else {}
+        check("T66c 中文故事线 id 写读闭环", st == 200 and sl.get("title") == "中文线",
+              "st=%s title=%r" % (st, sl.get("title")))
+        # 安全不变量不随中文放开：.. 穿越 / 路径分隔符照旧 400
+        st1, _ = api("/api/project-create/x", method="POST", body={"name": "..%2Fetc", "format": "vertical"})
+        st2, _ = api("/api/project/" + quote("a/b"))
+        check("T66d 穿越/分隔符仍拒", st1 == 400 and st2 in (400, 404), "create=%s get=%s" % (st1, st2))
+    finally:
+        api("/api/storyline-delete/" + quote(name) + "?story=" + quote(sid), method="POST")
+        api("/api/project-delete/" + quote(name), method="POST")
+
 
 
 # ---------------------------------------------------------------- T64 前端 DOM 执行模拟（2026-10-15）
