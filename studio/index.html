@@ -311,14 +311,14 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 <!-- ═══════════ 配置页 · 项目 ═══════════ -->
 <section id="s-config">
   <div class="sec" data-i18n="cfg.projects">视频项目</div>
-  <div class="note" data-i18n-html="cfg.projnote">一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。</div>
+  <div class="note" data-i18n-html="cfg.projnote">一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。</div>
   <div class="projgrid" id="projgrid"></div>
 </section>
 
 <!-- ═══════════ 配置页 · 注册表 ═══════════ -->
 <section id="s-registry">
   <div class="sec" data-i18n="cfg.registry">全盘注册表</div>
-  <div class="note" data-i18n-html="cfg.regnote">创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。</div>
+  <div class="note" data-i18n-html="cfg.regnote">注册表是人与 Agent 共用的选材资产库——改完保存即生效，下一次渲染使用新值。</div>
   <div class="reggrid" id="reggrid"></div>
 </section>
 
@@ -431,8 +431,8 @@ zh:{
 'pipe.next':'下一动作: ','pipe.alldone':'全部就绪',
 'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目名（字母/数字/-，如 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
-'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。点卡片进入操作页；删除一律<b class="k">归档到 _attic</b>，可找回。',
-'cfg.registry':'全盘注册表','cfg.regnote':'创作台的一切下拉都从这来——<b class="k">点卡片进管理抽屉</b>（增删改 / 导入素材文件），保存后下一次渲染生效。',
+'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。',
+'cfg.registry':'全盘注册表','cfg.regnote':'注册表是人与 Agent 共用的选材资产库——改完保存即生效，下一次渲染使用新值。',
 'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','pf.name':'名称','pf.desc':'描述','pf.sec.draft':'起草引导','pf.sec.defaults':'渲染默认值（未设=走回退链）','pf.sec.qc':'QC 时长域（出界 R11 告警；留空=不设）','pf.sec.anchor':'响度锚','pf.empty':'还没有档案——右上「＋ 新增条目」','pf.pick':'左侧选择一个档案','pf.consumers':'生效链：节奏与起草要求 → AI 起草提示词（Studio AI 起草 / draft --type 自动带上）；默认值 → 渲染时补未显式设置的字段；时长区间 → QC R11 出界告警。','pf.consumers.plat':'生效链：故事线 meta.platform → QC R6 响度判定 + 渲染后 loudnorm 两遍精修。','reg.def.subtitle':'默认字幕','reg.def.transition':'默认转场','reg.def.narration':'默认旁白','reg.def.cover':'默认封面策略','reg.qc.dur':'时长区间','reg.qc.min':'下限','reg.qc.max':'上限','reg.unset':'（未设）','reg.save':'保存','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）',
 'reg.manage':'管理 →','reg.empty':'空','reg.noruntime':'未装运行时','reg.single':'单故事线','reg.mgr':'注册表管理',
 'reg.add':'＋ 新增条目','reg.import':'⬆ 导入素材文件','dlg.close':'✕ 关闭',
@@ -523,8 +523,8 @@ en:{
 'pipe.next':'Next: ','pipe.alldone':'All done',
 'cfg.newproj':'＋ New project','cfg.name.ph':'Project name (letters/digits/-, e.g. my-first-project)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
-'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials). Click a card to open; deletion always <b class="k">archives to _attic</b> — recoverable.',
-'cfg.registry':'Global registries','cfg.regnote':'Every dropdown in Creator reads from here — <b class="k">click a card to manage</b> (add/edit/delete/import). Saved changes apply to the next render.',
+'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials).',
+'cfg.registry':'Global registries','cfg.regnote':'Registries are a shared material library for humans and Agents — changes take effect on save; the next render uses the new values.',
 'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','pf.name':'Name','pf.desc':'Description','pf.sec.draft':'Drafting guidance','pf.sec.defaults':'Render defaults (unset = fallback chain)','pf.sec.qc':'QC duration domain (out of range -> R11 warn; empty = none)','pf.sec.anchor':'Loudness anchor','pf.empty':'No profiles yet - use the Add button top right','pf.pick':'Pick a profile on the left','pf.consumers':'Effect chain: rhythm & drafting prompt -> the AI drafting prompt (Studio AI draft / draft --type carries it); defaults -> render fills unset fields; duration range -> QC R11 out-of-range warn.','pf.consumers.plat':'Effect chain: storyline meta.platform -> QC R6 loudness verdict + post-render two-pass loudnorm refinement.','reg.def.subtitle':'Default subtitle','reg.def.transition':'Default transition','reg.def.narration':'Default narration','reg.def.cover':'Default cover strategy','reg.qc.dur':'Duration range','reg.qc.min':'min','reg.qc.max':'max','reg.unset':'(unset)','reg.save':'Save','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)',
 'reg.manage':'Manage →','reg.empty':'empty','reg.noruntime':'runtime not installed','reg.single':'single storyline','reg.mgr':'Registry manager',
 'reg.add':'＋ Add entry','reg.import':'⬆ Import asset file','dlg.close':'✕ Close',
