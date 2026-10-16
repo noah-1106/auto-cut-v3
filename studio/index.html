@@ -46,7 +46,6 @@ body{
 /* 键盘焦点可见（设计质量地板）：焦点环=金，不改动鼠标态 */
 :focus-visible{outline:2px solid var(--gold-line);outline-offset:2px;border-radius:6px}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold-line);outline-offset:1px}
-.crumbbox{display:flex;align-items:center;gap:10px;min-width:0}
 .status{margin-left:auto;font:12px var(--mono);color:var(--dim);display:flex;align-items:center;gap:8px;min-width:0}
 .status #status{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rline{font:11px var(--mono);color:var(--gold);white-space:nowrap}
@@ -60,12 +59,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .tab.active{color:var(--gold);border-color:var(--line);border-bottom-color:transparent;background:linear-gradient(180deg,rgba(255,212,0,.07),transparent)}
 .tab.home{color:var(--faint)}
 .tab.home:hover{color:var(--gold)}
-.storysel{display:none;gap:6px;align-items:center;overflow-x:auto;max-width:44vw;padding:2px}
+.storysel{display:none;gap:6px;align-items:center;overflow-x:auto;padding:2px;margin-bottom:10px}  /* 创作台内故事线切换（2026-10-17 从顶栏挪入） */
 .storysel.show{display:flex}
 .storysel .lbl{font-size:10px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;flex:0 0 auto}
 .storysel .px{margin-left:2px;color:var(--faint);font-size:10px;padding:0 3px;border-radius:4px}
 .storysel .px:hover{color:var(--bad)}
-.crumbbox{display:flex;align-items:center;gap:10px;min-width:0}
 .stpill{padding:6px 14px;height:var(--ctl-h-s);display:flex;align-items:center;border:1px solid var(--line);border-radius:999px;font:12px var(--mono);color:var(--dim);cursor:pointer;transition:.18s}
 .stpill:hover{color:var(--txt);border-color:var(--line2)}
 .stpill.on{color:var(--gold);border-color:var(--gold-line);background:var(--gold-soft)}
@@ -310,9 +308,6 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 
 <header class="topbar">
   <div class="brand" onclick="goHome()" data-i18n-t="tab.home"><span class="dot"></span>AutoCut <small>Studio</small></div>
-  <div class="crumbbox">
-    <div class="storysel" id="storysel-wrap"></div>
-  </div>
   <div class="status">
     <span class="rline" id="cli-render-bar" style="display:none"></span>
     <button class="ghost" id="langbtn" onclick="toggleLang()" style="height:26px;padding:0 10px;font-size:11px">EN</button>
@@ -380,6 +375,8 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
       <div id="monwrap"></div>
     </div>
     <div class="pane story-pane">
+      <!-- 故事线切换器（2026-10-17 用户裁定：故事线是项目的属性不是全局属性——从顶栏挪进创作台） -->
+      <div class="storysel" id="storysel-wrap"></div>
       <div class="vmeta-bar" id="vmeta"></div>
       <h4><span data-i18n="cr.outline">故事线大纲 · 贯穿元素</span> <span class="hint" data-i18n="cr.outline.hint">手写 / Agent 审计 / 脚本分幕</span>
         <button class="pane-act" id="draftbtn" onclick="aiDraft()" data-i18n="cr.draft" data-i18n-t="cr.draft.t">✨ AI 起草</button></h4>
@@ -447,7 +444,7 @@ zh:{
 'tab.config':'项目','tab.registry':'注册表','tab.create':'创作台','tab.library':'素材库','tab.home':'⌂ 返回主页',
 'st.lbl':'故事线','st.del.t':'删除该故事线（归档可找回）','st.new.t':'新建故事线（同一批素材的另一种成片取法）',
 'pipe.next':'下一动作: ','pipe.alldone':'全部就绪',
-'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目名（字母/数字/-，如 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
+'cfg.newproj':'＋ 新建项目','cfg.name.ph':'项目 id（字母/数字/-，不含中文，如 my-first-project）','cfg.title.ph':'标题（可中文）','cfg.create':'创建',
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
 'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。',
 'cfg.registry':'全盘注册表','cfg.regnote':'注册表是人与 Agent 共用的选材资产库——改完保存即生效，下一次渲染使用新值。',
@@ -508,7 +505,7 @@ zh:{
 'msg.delbeat.confirm':'删除幕 #%s？自动落盘后不可找回（整条幕的轨道/贴纸/音效一并消失）',
 'msg.deltrack.confirm':'删除该 B 轨叠加？自动落盘后不可找回',
 'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？','msg.delcutdef.confirm':'删除这条缺陷标记？',
-'msg.newstory.p':'新故事线 id（字母数字下划线中划线）：\n例：koubo2 / aidraft-x','msg.badid':'id 只允许字母数字下划线中划线',
+'msg.newstory.p':'新故事线 id（字母/数字/下划线/中划线，不支持中文）：\n例：koubo2 / aidraft-x','msg.badid':'id 只允许字母、数字、下划线、中划线（不支持中文）',
 'msg.save.fail':'✗ 保存失败：%s——DIRTY 保持，点右上角芯片重试',
 'msg.draft.p':'给 AI 一句起草意图：\n例：用开场钩子和空镜起一条 3 幕口播线，总长 40 秒',
 'msg.sync.new':'↻ 对方更新了 %s，自动载入','msg.sync.conflict':'对方（Agent）刚更新了「%s」，你的本地改动未保存。\n载入新版本（丢弃本地改动）？',
@@ -520,7 +517,7 @@ zh:{
 'cfg.pdel.t':'删除项目（归档到 _attic，可找回）','reg.bgm':'BGM','reg.subtitles':'字幕样式','reg.transitions':'转场','reg.sfx':'音效','reg.stickers':'贴纸','reg.sample':'样字','msg.regdel.confirm':'删除条目「%s」？\n（素材文件保留在 assets/，可再导入恢复）','msg.regimport.idp':'条目 id（Agent 用它引用）：','msg.regimport.dup':'id 已存在','msg.regadd.idp':'新条目 id（字母/数字/下划线/中划线，Agent 用它引用）：',
 'src.project':'（项目自有切片）','src.project.suffix':' · 项目自有',
 'msg.wizard.noname':'先填项目名','msg.wizard.done':'✓ 项目已创建：%s',
-'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：','pk.del':'删除选中包','msg.pk.delconfirm':'删除包「%s」？\n（归档到 materials/_attic 可找回；所有项目的挂载一并摘除）','msg.pk.delok':'已删除（归档）',
+'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：','pk.del':'删除选中包','msg.pk.delconfirm':'删除包「%s」？\n（归档到 materials/_attic 可找回；所有项目的挂载一并摘除）','msg.pk.delok':'已删除（归档）','cfg.stories':'%s 条故事线','cfg.stories.done':'%s 条已出片',
 'msg.draft.d':'用开场钩子+空镜，起一条 3 幕口播线','msg.draft.busy':'✨ 起草中…（约1分钟）','msg.draft.busy2':'AI 正在读素材档案起草故事线…','msg.draft.done':'✓ AI 草稿已落盘：%s 幕 · %s','msg.draft.fail':'起草失败：',
 'msg.saving':'保存中…','msg.saved':'✓ 已保存 %s · 人和 Agent 同一事实',
 'msg.render.queue':'渲染排队…','msg.render.startfail':'任务启动失败','msg.render.timeout':'✗ 渲染进度轮询超时（25 分钟无结果）——任务可能仍在跑，看 render.status 或稍后刷新','msg.render.ing':'渲染中 [%s] %s%','msg.render.fail':'✗ 渲染失败：','msg.render.done':'✓ 渲染完成 %s · 监视器/封面已刷新','msg.render.none':'还没有成片——先「保存并重渲」',
@@ -539,7 +536,7 @@ en:{
 'tab.config':'Projects','tab.registry':'Registries','tab.create':'Creator','tab.library':'Library','tab.home':'⌂ Home',
 'st.lbl':'Storylines','st.del.t':'Delete this storyline (archived, recoverable)','st.new.t':'New storyline (another cut of the same materials)',
 'pipe.next':'Next: ','pipe.alldone':'All done',
-'cfg.newproj':'＋ New project','cfg.name.ph':'Project name (letters/digits/-, e.g. my-first-project)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
+'cfg.newproj':'＋ New project','cfg.name.ph':'Project id (letters/digits/-, no Chinese, e.g. my-first-project)','cfg.title.ph':'Title (any language)','cfg.create':'Create',
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
 'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials).',
 'cfg.registry':'Global registries','cfg.regnote':'Registries are a shared material library for humans and Agents — changes take effect on save; the next render uses the new values.',
@@ -600,7 +597,7 @@ en:{
 'msg.delbeat.confirm':'Delete beat #%s? Unrecoverable after autosave (its tracks/stickers/SFX go with it)',
 'msg.deltrack.confirm':'Delete this B-track overlay? Unrecoverable after autosave',
 'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?','msg.delcutdef.confirm':'Delete this defect mark?',
-'msg.newstory.p':'New storyline id (letters/digits/underscore/dash):\ne.g. koubo2 / aidraft-x','msg.badid':'id allows only letters, digits, underscore, dash',
+'msg.newstory.p':'New storyline id (letters/digits/underscore/dash, no Chinese):\ne.g. koubo2 / aidraft-x','msg.badid':'id allows only letters, digits, underscore, dash (no Chinese)',
 'msg.save.fail':'✗ Save failed: %s — DIRTY kept, click the chip top-right to retry',
 'msg.draft.p':'Give the AI a one-line intent:\ne.g. draft a 3-beat narration line with a hook opener and b-roll, ~40s total',
 'msg.sync.new':'↻ The other side updated %s, reloading','msg.sync.conflict':'The other side (agent) just updated "%s" and your local edits are unsaved.\nLoad the new version (discard local edits)?',
@@ -612,7 +609,7 @@ en:{
 'cfg.pdel.t':'Delete project (archived to _attic, recoverable)','reg.bgm':'BGM','reg.subtitles':'Subtitle styles','reg.transitions':'Transitions','reg.sfx':'SFX','reg.stickers':'Stickers','reg.sample':'Aa','msg.regdel.confirm':'Delete entry "%s"?\n(the asset file stays in assets/ and can be re-imported)','msg.regimport.idp':'Entry id (the agent references it):','msg.regimport.dup':'id already exists','msg.regadd.idp':'New entry id (letters/digits/underscore/dash, the agent references it):',
 'src.project':'(project cuts)','src.project.suffix':' · project-owned',
 'msg.wizard.noname':'Enter a project name first','msg.wizard.done':'✓ Project created: %s',
-'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ','pk.del':'Delete selected pack','msg.pk.delconfirm':'Delete pack "%s"?\n(archived to materials/_attic, recoverable; removed from every project\'s mounts)','msg.pk.delok':'Deleted (archived)',
+'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ','pk.del':'Delete selected pack','msg.pk.delconfirm':'Delete pack "%s"?\n(archived to materials/_attic, recoverable; removed from every project\'s mounts)','msg.pk.delok':'Deleted (archived)','cfg.stories':'%s storylines','cfg.stories.done':'%s rendered',
 'msg.draft.d':'draft a 3-beat narration line with a hook opener and b-roll','msg.draft.busy':'✨ Drafting… (~1 min)','msg.draft.busy2':'AI is reading the material dossier and drafting a storyline…','msg.draft.done':'✓ AI draft saved: %s beats · %s','msg.draft.fail':'Draft failed: ',
 'msg.saving':'Saving…','msg.saved':'✓ Saved %s · human and agent share one truth',
 'msg.render.queue':'Queued for render…','msg.render.startfail':'failed to start task','msg.render.timeout':'✗ Render progress poll timed out (no result in 25 min) — the task may still be running; check render.status or refresh later','msg.render.ing':'Rendering [%s] %s%','msg.render.fail':'✗ Render failed: ','msg.render.done':'✓ Render complete %s · monitor/cover refreshed','msg.render.none':'No final cut yet — use "Save & render" first',
@@ -759,7 +756,10 @@ async function loadConfig(){
     '<button class="pdel" data-i18n-t="cfg.pdel.t" title="'+esc(t('cfg.pdel.t'))+'" onclick="event.stopPropagation();delProject(\''+esc(p.name)+'\')">🗑</button>'+
     (p.cover?'<div class="pcov"><img loading="lazy" src="'+esc(p.cover)+'" alt=""></div>':'<div class="pcov pcov-none"><span>'+esc(p.name)+'</span></div>')+
     '<div class="pbody"><h3>'+esc(p.title)+'<span class="arrow">→</span></h3><div class="pid">'+esc(p.name)+'</div>'+
-    '<div class="stags">'+((p.stories||[]).length?p.stories.map(s=>'<span class="stag'+((p.outs||[]).includes(s)?' has':'')+'">'+esc(s)+((p.outs||[]).includes(s)?' ✓':'')+'</span>').join(''):'<span class="stag" data-i18n="reg.single">单故事线</span>')+'</div></div>'+
+    /* 卡片只写故事线条数不写名称（2026-10-17 用户裁定：名称是项目内部信息，列表层只需规模） */
+    '<div class="stags">'+((p.stories||[]).length
+      ?'<span class="stag">'+esc(t('cfg.stories',p.stories.length))+'</span>'+((p.outs||[]).length?'<span class="stag has">'+esc(t('cfg.stories.done',p.outs.length))+'</span>':'')
+      :'<span class="stag" data-i18n="reg.single">单故事线</span>')+'</div></div>'+
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
   const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers'],['video_types','reg.vtypes'],['platforms','reg.plats']];
