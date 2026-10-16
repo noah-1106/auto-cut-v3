@@ -863,6 +863,16 @@ async function voiceRegister(){
   }catch(e){$('voice-hint').textContent='✗ '+e;}
 }
 let VOICE_AUDIO=null;  // 持引用防 GC：无引用的 Audio 元素 play() 照样 resolve 但随即被回收=无声（2026-10-15 用户实锤：提示播放中却没声音）
+let _AC=null;  // Safari 自动播放策略：play() 须紧邻手势；点击→合成数秒→播 的链路必被拒（2026-10-16 用户实锤）。
+function _ac(){if(!_AC){try{_AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}return _AC}  // 手势内 resume 一次即解锁，此后 WebAudio 随时可出声
+document.addEventListener('pointerdown',()=>{const c=_ac();if(c&&c.state==='suspended')c.resume().catch(()=>{})},{capture:true});
+async function _playViaWebAudio(url){  // Audio 元素被 Safari 拒（NotAllowedError）时的兜底通道
+  const c=_ac();if(!c)throw new Error('no AudioContext');
+  await c.resume();
+  const buf=await c.decodeAudioData(await(await fetch(url)).arrayBuffer());
+  const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);src.start();
+  return src;
+}
 async function voiceTest(name){
   const t0=Date.now();
   const tick=setInterval(()=>{$('voice-hint').textContent=t('voice.synth',Math.round((Date.now()-t0)/1000));},1000);
@@ -876,7 +886,12 @@ async function voiceTest(name){
       VOICE_AUDIO.onerror=()=>{$('voice-hint').textContent='✗ '+t('voice.testfail');};  // 加载失败不得无声（play 的 resolve 不覆盖 onerror）
       VOICE_AUDIO.play()
       .then(()=>{$('voice-hint').textContent=t('voice.playing',Math.round((Date.now()-t0)/1000));})
-      .catch(()=>{$('voice-hint').textContent=t('voice.autoplay');});}
+      .catch((e)=>{
+        if(e&&e.name==='NotAllowedError'){  // Safari/严格策略：走手势期已解锁的 WebAudio 通道真出声，不摆"被拦截"的提示
+          _playViaWebAudio(r.url)
+          .then(()=>{$('voice-hint').textContent=t('voice.playing',Math.round((Date.now()-t0)/1000));})
+          .catch(()=>{$('voice-hint').textContent=t('voice.autoplay');});
+        }else $('voice-hint').textContent=t('voice.autoplay');});}
     else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.testfail'));
   }catch(e){$('voice-hint').textContent='✗ '+e;}
   finally{clearInterval(tick);}  // 取消 prompt 的 return 也要还计时器——否则"合成中"每秒刷屏到下次操作（2026-10-15 体检）
