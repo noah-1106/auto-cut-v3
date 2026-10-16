@@ -965,8 +965,11 @@ function pfField(e,k,kind,rows){
   if(kind==='text'||kind==='area'||kind==='num'){
     const tag=(kind==='area')?'textarea rows="'+(rows||3)+'"':'input'+((kind==='num')?' type="number" step="any"':'');
     const cast=(kind==='num')?('+this.value||0'):'this.value';
-    return '<'+tag+' style="width:100%'+(kind==='area'?';resize:vertical':'')+'" onchange="regSetDeep(\''+PROFILE_SEL+'\',\''+k+'\','+cast+')">'
-      +((kind==='area')?(esc(String(v??''))+'</textarea>'):' value="'+esc(String(v??''))+'">');
+    // value 必须在标签闭合前（2026-10-17 用户实锤：曾拼在 '>' 之后——input 空壳 +
+    // 页面上裸显 value="…" 文本；textarea 走标签间内容所以没炸，掩盖了同族 bug）
+    if(kind==='area')
+      return '<'+tag+' style="width:100%;resize:vertical" onchange="regSetDeep(\''+PROFILE_SEL+'\',\''+k+'\','+cast+')">'+esc(String(v??''))+'</textarea>';
+    return '<'+tag+' value="'+esc(String(v??''))+'" style="width:100%" onchange="regSetDeep(\''+PROFILE_SEL+'\',\''+k+'\','+cast+')">';
   }
   if(kind&&kind.startsWith('sel:')){
     const opts=_regOpts(kind.slice(4));

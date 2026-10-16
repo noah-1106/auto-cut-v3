@@ -3130,20 +3130,22 @@ def t64_dom_execution_sim():
         render_ok = re.search(r"metabar= (\d+) beatcards= (\d+) packgroups= (\d+)", out or "")  # console.log 参数间有空格
         search_ok = "textarea-shows-transcript= true" in out
         drawers = dict(re.findall(r"DRAWER (\w+) len= (\d+)", out))
+        broken = re.findall(r"DRAWER (\w+) .*no-broken-tag= false", out)  # pfField 断串锚（2026-10-17 用户实锤）
         drawer_errs = [l for l in (out or "").splitlines() if "ERR" in l]
         ok = (r.returncode == 0 and open_ok and render_ok
               and all(int(v) > 0 for v in render_ok.groups())
               and search_ok and len(drawers) == 7 and all(int(v) > 0 for v in drawers.values())
-              and not drawer_errs)
+              and not drawer_errs and not broken)
         open_line = next((l for l in (out or "").splitlines() if l.startswith("OPEN:")), "?")
         if not ok:  # 取证落盘：完整模拟输出（OPEN 行含异常栈首帧）
             open("/tmp/t64_dom_out.txt", "w", encoding="utf-8").write(out or "(无输出) rc=%s" % r.returncode)
-        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉）", ok,
-              "story=%s open=%s 渲染=%s 搜索=%s 抽屉=%d %s" % (story or "?", open_line[:120],
+        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉/无断串）", ok,
+              "story=%s open=%s 渲染=%s 搜索=%s 抽屉=%d %s%s" % (story or "?", open_line[:120],
               ("OK" if render_ok else "无输出"), search_ok, len(drawers),
-              ("；" + " | ".join(drawer_errs[:2]) if drawer_errs else "")))
+              ("；" + " | ".join(drawer_errs[:2]) if drawer_errs else ""),
+              ("；断串抽屉: " + ",".join(broken) if broken else "")))
     except Exception as e:
-        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉）", False, str(e)[:160])
+        check("T64 前端 DOM 执行模拟（开项目/渲染/搜索命中/7抽屉/无断串）", False, str(e)[:160])
 
 
 

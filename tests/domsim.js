@@ -44,7 +44,12 @@ global.setInterval=()=>0;global.clearInterval=()=>{};
   }else console.log('SEARCH: mock 无转写包，跳过');
   for(const rn of ['bgm','subtitles','transitions','sfx','stickers','video_types','platforms']){
     REGCUR=rn;PROFILE_SEL=null;
-    try{await renderRegMgr();console.log('DRAWER',rn,'len=',el('regmgr-body').innerHTML.length);}
+    try{await renderRegMgr();
+      const html=el('regmgr-body').innerHTML;
+      // 断串签名（2026-10-17 pfField 实锤：value= 拼在标签闭合 '>' 之后 → 页面裸显 value="…" 文本。
+      // 桩 DOM 不解析 HTML，浏览器才现形——用正则锚死这个模式）
+      const broken=/>\s+value="/.test(html)||/<\/(input)>\s*value="/.test(html);
+      console.log('DRAWER',rn,'len=',html.length,'| no-broken-tag=',!broken);}
     catch(e){console.log('DRAWER',rn,'ERR:',e.message);}
   }
 })();
