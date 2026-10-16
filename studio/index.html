@@ -866,11 +866,14 @@ let VOICE_AUDIO=null;  // 持引用防 GC：无引用的 Audio 元素 play() 照
 let _AC=null;  // Safari 自动播放策略：play() 须紧邻手势；点击→合成数秒→播 的链路必被拒（2026-10-16 用户实锤）。
 function _ac(){if(!_AC){try{_AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}return _AC}  // 手势内 resume 一次即解锁，此后 WebAudio 随时可出声
 document.addEventListener('pointerdown',()=>{const c=_ac();if(c&&c.state==='suspended')c.resume().catch(()=>{})},{capture:true});
+let VOICE_SRC=null;  // WebAudio 兜底通道的当前源（连听要停）
 async function _playViaWebAudio(url){  // Audio 元素被 Safari 拒（NotAllowedError）时的兜底通道
   const c=_ac();if(!c)throw new Error('no AudioContext');
   await c.resume();
   const buf=await c.decodeAudioData(await(await fetch(url)).arrayBuffer());
   const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);src.start();
+  if(VOICE_SRC){try{VOICE_SRC.stop()}catch(e){}}  // 审查补丁：连听上一条 WebAudio 源也停，否则 Safari 连点试听叠音（2026-10-16）
+  VOICE_SRC=src;
   return src;
 }
 async function voiceTest(name){
