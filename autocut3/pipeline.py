@@ -1080,7 +1080,9 @@ def build_cmd(plan, ass_path, out_path):
         "-filter_complex", ";".join(fc),
         "-map", "[vout]", "-map", "[amix]", "-t", f"{total}",
         "-c:v", hw_encoder(), "-b:v", "6M",
-        "-c:a", "aac", "-b:a", "128k", out_path]
+        # -ar 48000：loudnorm 内部升采样会泄漏到输出（实测 96kHz AAC）——ffmpeg/afplay 宽容能放，
+        # 浏览器解不动=成片/预览一开声就停（2026-10-16 用户实锤：幕预览/配音/BGM 全中招）
+        "-ar", "48000", "-c:a", "aac", "-b:a", "128k", out_path]
     return cmd
 
 def _cover_frame(plan, c, out):
@@ -1273,7 +1275,8 @@ def build_beat_cmd(plan, seg, ass_path, out_path):
     fc.append(f"{mix}amix=inputs={n_in}:duration=first:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[amix]")
     return [FF, "-y", "-hide_banner", "-loglevel", "error"] + inputs + [
         "-filter_complex", ";".join(fc), "-map", "[voutp]", "-map", "[amix]", "-t", f"{dur}",
-        "-c:v", hw_encoder(), "-b:v", "1.5M", "-c:a", "aac", "-b:a", "96k", out_path]
+        # -ar 48000：同 build_cmd——loudnorm 泄漏 96kHz，浏览器解不动（2026-10-16）
+        "-c:v", hw_encoder(), "-b:v", "1.5M", "-ar", "48000", "-c:a", "aac", "-b:a", "96k", out_path]
 
 def render_beat(plan, project_dir, beat_no, sid=None):
     sfx, _rs = art_suffix(project_dir, sid)

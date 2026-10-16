@@ -1754,8 +1754,14 @@ def t46_loudnorm_chain():
         m = re.search(r"I:\s*(-?[\d.]+)\s*LUFS", pv.stderr)
         lufs = float(m.group(1)) if m else None
         ok_loud = lufs is not None and abs(lufs - (-16)) <= 1.0
-        check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）",
-              ok_filter and ok_loud, "filter=%s lufs=%s" % (ok_filter, lufs))
+        # 采样率锚（2026-10-16 用户实锤：loudnorm 内部升采样泄漏 → 96kHz AAC，ffmpeg/afplay
+        # 宽容能放但浏览器解不动=成片/预览一开声就停。主渲染与幕预览两出口都钉 -ar 48000）
+        sr = subprocess.run([FFMPEG, "-hide_banner", "-i", out], capture_output=True, text=True)
+        ok_rate = re.search(r"Audio: aac.*?48000 Hz", sr.stderr or "") is not None
+        ok_beat_rate = "-ar 48000" in " ".join(pipeline.build_beat_cmd(p_on, seg, ass_path, os.path.join(tmp, "b.mp4")))
+        check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS；出口采样率 48k）",
+              ok_filter and ok_loud and ok_rate and ok_beat_rate,
+              "filter=%s lufs=%s 采样率48k=%s 幕预览-ar=%s" % (ok_filter, lufs, ok_rate, ok_beat_rate))
     except Exception as e:
         check("T46 loudnorm 渲染链（默认开/可关，实测 integrated≈-16 LUFS）",
               False, "异常: %s" % str(e)[:140])
