@@ -147,6 +147,9 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
   `--intent` 一句话自由文本一条通道（outline 是 LLM 输出字段，不是输入）。
 - **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
   （本地 audio8 音色按需注册，现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准）。
+  **人侧等价链（2026-10-17 补）**：Studio 幕卡切「配音」+写台词即可——保存时台词变更自动
+  摘除旧音频，`POST /api/render-start` 前置自动 `tts.synth` + vadwords 量词轨，失败不开渲；
+  无需再走 `--dub` CLI。
   换音色=先注册参考音色再改配置：
   `python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"`——
   **硬契约：参考音频 0.5–30s 且逐字稿一字不差**，否则克隆出来的是哑嗓子；
@@ -441,17 +444,25 @@ Studio 路由（http://127.0.0.1:8765）：
 
 启动：`python3 studio.py [port]`（默认 8765，只绑 127.0.0.1）。**改 studio.py 后必须重启进程**。
 
-- 状态：`GET /api/status/<proj>`（15 环节，与 orchestrate 同源）、`GET /api/pulse`（全项目签名）
+- 状态：`GET /api/status/<proj>`（15 环节，与 orchestrate 同源）、`GET /api/pulse`（全项目签名）、
+  `GET /api/sync/<proj>?story=<sid>`（落库探针：先写后读自检）
 - 创作台数据：`GET /api/project/<proj>?story=<sid>`（故事线/plan/素材/参数全量）
-- 写故事线：`POST /api/storyline/<proj>?story=<sid>`（title/outline/meta/beats 整体替换）
-- 渲染：`POST /api/render-start/<proj>?story=<sid>`（异步）或 `POST /api/render/<proj>?story=<sid>`（同步 600s）
-- 幕试渲：`GET /api/beat/<proj>/<beat_no>?story=<sid>`（同步 300s）
+- 写故事线：`POST /api/storyline/<proj>?story=<sid>`（title/outline/meta/beats 整体替换；
+  dub 幕台词变更会自动摘除旧配音音频，渲染前重新合成）
+- 渲染：`POST /api/render-start/<proj>?story=<sid>`（异步，**dub 幕缺音频会先自动合成+vadwords，
+  失败不开渲**）或 `POST /api/render/<proj>?story=<sid>`（同步 600s）；
+  进度轮询 `GET /api/render-progress/<proj>?story=<sid>`（CLI 渲染也可见——读 render.status）
+- 幕试渲：`POST /api/beat/<proj>/<beat_no>?story=<sid>`（同步 300s。**是 POST 不是 GET**）
 - 素材：`POST /api/transcribe/<pack>/<fid>`、`POST /api/understand/<pack>/<fid>`、
   `POST /api/digest/<pid>`（项目级盘点）、
   `POST /api/proofread-pack/<pack>/<fid>`（人工校对单条转写）
 - AI 起草：`POST /api/draft/<proj>` body `{"intent": "..."}`
-- 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`
-- 项目/包：`POST /api/project-create/`、`POST /api/pack-mount/<pid>/<pack>/mount|unmount`、
+- 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`、
+  `POST /api/cover-make/<proj>?story=<sid>`（本地合成收口=CLI `pipeline.py cover`）
+- 声纹：`GET /api/voices?wake=1`（唤醒闲置自停的 Audio8 服务，数秒）、
+  `GET /api/voice-test/<name>?text=...`（试听合成）、`POST /api/voice-delete/<name>`
+- 项目/包：`POST /api/project-create/`、`POST /api/project-delete/<name>`（归档 _attic）、
+  `POST /api/pack-mount/<pid>/<pack>/mount|unmount`、`POST /api/pack-delete/<pack>`（归档+摘挂载）、
   `POST /api/pack-upload/<pack>?filename=`、`POST /api/pack-create/`
 - 文件：`GET /files/projects/<proj>/out-<sid>.mp4` 等（Range 流，可拖进度）
 
@@ -513,15 +524,22 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
 | `POST /api/pack-mount/<pid>/<pack>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
 | `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
-| `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。改 beats 后记得重跑 vadwords |
+| `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。dub 幕台词变更会自动摘除旧配音音频（render-start 前置重合成）；original 幕改 beats 后记得重跑 vadwords |
 | `POST /api/storyline-delete/<proj>?story=<sid>` | 无 body | 删线 |
-| `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409；**另一进程在渲同项目也 409**（render.status 磁盘双检，2026-09-18） |
+| `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409；**另一进程在渲同项目也 409**（render.status 磁盘双检，2026-09-18）。**前置自动补 dub 幕配音+词轨，失败不开渲** |
 | `POST /api/render/<proj>?story=&...` | 无 body | 同步渲染（600s 超时），长片用 render-start |
-| `GET  /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
+| `GET  /api/render-progress/<proj>?story=<sid>` | 无 body | 渲染进度轮询；CLI/Agent 渲染也可见（读 render.status，5 分钟新鲜窗） |
+| `POST /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
 | `POST /api/pack/<pid>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
 | `POST /api/library/<proj>/usable` | `{"cut_index":0,"usable":false,"defects":[...]}` | cut 级废片（cuts 形态项目） |
 | `POST /api/proofread-pack/<pid>/<fid>` | 词轨等长替换结构（走 Studio 界面更稳） | 人工校对单条转写 |
 | `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
+| `GET  /api/voices?wake=1` | 无 body | 列音色；`wake=1`=唤醒闲置自停的 Audio8 服务（数秒）。响应 `sleeping` 仅在已安装但闲置时为 true |
+| `GET  /api/voice-test/<name>?text=...` | 无 body | 试听合成（自动拉起休眠服务），产物 assets/preview/voicetest-<name>.mp3 |
+| `POST /api/voice-delete/<name>` | 无 body | 删音色（无该音色=404） |
+| `POST /api/project-delete/<name>` | 无 body | 删项目（归档 _attic，可找回） |
+| `POST /api/pack-delete/<pack>` | 无 body | 删包（归档 materials/_attic + 所有项目摘挂载） |
+| `POST /api/cover-make/<proj>?story=<sid>` | 无 body | 封面本地合成收口（=CLI `pipeline.py cover` 同实现） |
 | `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers |
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
 | `POST /api/pack-upload/<pid>?filename=<名>` | 原始字节（文件字节） | **导入素材**（文件名中文/`#`/空格均允许）。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |

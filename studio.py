@@ -38,6 +38,62 @@ def _resolve_ff():
     return _ffmpeg_path() or "ffmpeg"  # 裸名兜底：交给 exec 时 PATH 解析，报错信息不变
 
 FF = _resolve_ff()
+
+
+def _dub_ensure(pdir, sid, job):
+    """人侧配音补齐（2026-10-17 人与 Agent 等价审查实锤：Studio 幕卡可切 dub+写台词，
+    但人侧无任何合成入口，渲染时 pipeline 见 narration.audio 缺失只打日志警告就静默回退
+    原声，界面还显示"渲染完成"）——渲染前自动合成缺失/过期 dub 幕：tts 适配层（供应商
+    =config/services.json tts 段，与 draft --dub 同实现同契约），随后 vadwords 量词轨
+    （与 orchestrate「渲染前自动 vadwords」同哲学）。
+    过期判据：台词 ≠ narration.synth_text（台词变更时 storyline POST 已先摘除 audio，
+    走到这里=缺失）；无 synth_text 的存量线（Agent 老产物）不强制重合成——不花冤枉钱。
+    合成失败=渲染前置失败：ok=False + tail 可见，不开渲（不过闸不渲染）。"""
+    sf = os.path.join(pdir, "storylines", "%s.json" % sid) if sid else os.path.join(pdir, "storyline.json")
+    if not os.path.exists(sf):
+        return
+    sl = jload(sf, {})
+    todo = []
+    for i, b in enumerate(sl.get("beats") or []):
+        nar = b.get("narration") or {}
+        if nar.get("mode") != "dub":
+            continue
+        text = (b.get("story") or "").strip()
+        if not text:
+            continue  # 无台词可合成——留给渲染期原声回退警告
+        af = nar.get("audio")
+        if af and os.path.exists(os.path.join(pdir, af)) and nar.get("synth_text", text) == text:
+            continue  # 新鲜：音频在场且台词未变
+        todo.append((i, b, nar, text))
+    if not todo:
+        return
+    import tts  # autocut3 TTS 适配层（R3 dub 唯一依赖，供应商可换）
+    job["stage"] = "dub"; job["pct"] = 0
+    os.makedirs(os.path.join(pdir, "materials", "dub"), exist_ok=True)
+    fails = []
+    for i, b, nar, text in todo:
+        no = b.get("no") or i + 1
+        try:
+            job["tail"].append("幕%d 配音合成中…" % no); del job["tail"][:-6]
+            af = "materials/dub/%s-b%d.mp3" % (sid or "main", no)
+            tts.synth(text, out=os.path.join(pdir, af))
+            nar["audio"] = af
+            nar["synth_text"] = text  # 留痕：台词变更检测的基准（draft --dub 老产物无此键，不溯及）
+            b["narration"] = nar
+        except Exception as e:
+            fails.append("幕%d: %s" % (no, str(e)[:160]))
+    if fails:
+        job["running"] = False; job["ok"] = False
+        job["tail"].append("DUB FAIL（配音合成失败，不开渲）: " + "；".join(fails)); del job["tail"][:-6]
+        return
+    flock.write_json(sf, sl)
+    vw = subprocess.run([sys.executable, "-u", os.path.join(ROOT, "autocut3", "vadwords.py"),
+                         pdir] + (["--story", sid] if sid else []),
+                        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
+    if vw.returncode != 0:  # 词轨量不出=卡拉OK字幕失源——同闸处理
+        job["running"] = False; job["ok"] = False
+        out = ((vw.stdout or "") + (vw.stderr or "")).strip().splitlines()
+        job["tail"].append("VAD FAIL（词轨测量失败，不开渲）: " + (out[-1][:160] if out else "?")); del job["tail"][:-6]
 MIME = {"mp4": "video/mp4", "png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
         "mp3": "audio/mpeg", "json": "application/json", "ass": "text/plain; charset=utf-8",
         "srt": "text/plain; charset=utf-8", "mlt": "application/xml",
@@ -400,8 +456,11 @@ class H(BaseHTTPRequestHandler):
             # sleeping=TTS 服务闲置自停（voices() 设计为不副作用启动）——前端据此显示「休眠中+唤醒」而非误报"暂无音色"（2026-10-15 用户实锤：以为声纹被清空）
             if (parse_qs(u.query).get("wake") or ["0"])[0] == "1":
                 tts_audio8.ensure_server()  # 显式唤醒（本地模型加载需数秒）
-            return self._json({"ok": True, "installed": tts_audio8.installed(),
-                               "provider": "local-audio8", "sleeping": not tts_audio8._health(),
+            # 未安装 ≠ 休眠（2026-10-17 等价审查实锤：_health() 对未安装也 False，
+            # 前端曾"未安装"与"休眠中+唤醒"双横幅同挂，点唤醒白等）——休眠仅描述已安装但闲置自停
+            _inst = tts_audio8.installed()
+            return self._json({"ok": True, "installed": _inst,
+                               "provider": "local-audio8", "sleeping": _inst and not tts_audio8._health(),
                                "voices": tts_audio8.voices()})
         _q = parse_qs(u.query)
         if u.path.startswith("/api/voice-register"):
@@ -632,6 +691,9 @@ class H(BaseHTTPRequestHandler):
             RENDER_JOBS[key] = {"running": True, "stage": "plan", "pct": 0, "tail": [], "ok": None, "t0": time.time()}
             def _run(job=RENDER_JOBS[key]):
                 try:
+                    _dub_ensure(p, sid, job)  # 人侧配音前置：合成失败会置 ok=False，不开渲
+                    if job.get("ok") is False:
+                        return
                     r = subprocess.Popen([sys.executable, "-u", PIPE, "render", p] + ([sid] if sid else []),
                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=1)
                     for line in r.stdout:
@@ -1148,6 +1210,34 @@ class H(BaseHTTPRequestHandler):
                     else:
                         story["meta"][k] = v
             if isinstance(body.get("beats"), list):
+                # dub 台词变更失效（2026-10-17 等价审查）：台词变了而旧配音音频残留=渲染静默用旧音
+                # 唱新词。只凭实锤证据摘除——synth_text 与台词不符，或同一 audio 在旧线里配的是
+                # 别的台词；台词不变则按文本配对迁移旧音频/词轨（插幕调序不误伤）；
+                # 无证据的新线/新幕信任调用方（Agent 手造线自带预制音频合法，T12 实锤）
+                pool = {}
+                audio_text = {}
+                for ob in story.get("beats") or []:
+                    on = ob.get("narration") or {}
+                    if on.get("mode") == "dub" and on.get("audio"):
+                        pool.setdefault((ob.get("story") or "").strip(), []).append(on)
+                        audio_text[on["audio"]] = (ob.get("story") or "").strip()
+                for nb in body["beats"]:
+                    nn = nb.get("narration") or {}
+                    if nn.get("mode") != "dub":
+                        continue
+                    text = (nb.get("story") or "").strip()
+                    stale = (nn.get("synth_text") is not None and nn.get("synth_text") != text) or \
+                            (nn.get("audio") and audio_text.get(nn["audio"], text) != text)
+                    cand = pool.get(text)
+                    if cand and not stale:
+                        old = cand.pop(0)
+                        for k in ("audio", "synth_text", "words"):
+                            if old.get(k) is not None:
+                                nn[k] = old[k]
+                    elif stale:
+                        for k in ("audio", "synth_text", "words"):
+                            nn.pop(k, None)
+                    nb["narration"] = nn
                 story["beats"] = body["beats"]  # 幕序列整体替换（编号幕，编辑器持有全文）
             flock.write_json(sp, story)  # 多故事线=storylines/<sid>.json，旧版=storyline.json
             return self._json({"ok": True, "storyline": story})

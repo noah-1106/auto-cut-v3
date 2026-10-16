@@ -398,6 +398,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
     <select id="pk-mount" style="max-width:230px"></select>
     <button class="ghost" onclick="packMount(1)" data-i18n="pk.mount">挂载到本项目</button>
     <button class="ghost" onclick="packMount(0)" data-i18n="pk.unmount">卸载选中</button>
+    <button class="ghost" style="color:var(--bad)" onclick="packDel()" data-i18n="pk.del">删除选中包</button>
     <span class="statusline" id="pkstat"></span>
   </div>
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
@@ -448,7 +449,7 @@ zh:{
 'cr.beats':'幕序列 · 每幕是多轨上的一刀',
 'cr.beatsnote':'最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。',
 'cr.cover':'封面收口','cr.cover.hint':'第 0 张 · 钉在最左',
-'meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量','meta.grade':'画幅氛围',
+'meta.stitle':'故事线标题','meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量','meta.grade':'画幅氛围',
 'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','meta.grade.natural':'自然','mus.bgm.t':'幕级换曲（注册表）','meta.grade.warm':'暖调','meta.grade.cool':'冷调','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
 'cov.strategy':'封面策略','cov.title':'封面标题','cov.beat':'底图幕号','cov.at':'幕内秒','cov.prompt':'提示词',
 'cov.prompt.ph':'保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白',
@@ -463,7 +464,7 @@ zh:{
 'lane.preview':'幕预览','lane.preview.hint':'点框即渲 · 秒级低清','lane.sub':'字幕轨','lane.video':'视频轨','lane.video.hint':'A 定时长 · B 叠加','lane.nar':'旁白轨','lane.nar.hint':'本幕语音来源','lane.trans':'转场轨','lane.trans.hint':'本幕→下一幕','lane.sticker':'贴纸轨','lane.sticker.hint':'词点触发','lane.sfx':'音效轨','lane.sfx.hint':'时刻触发','lane.music':'音乐轨',
 'beat.addB':'＋ B 轨','beat.addstk':'＋ 贴纸','beat.addsfx':'＋ 音效','beat.norole':'（无）','beat.followglobal':'（跟随全局）',
 'sub.dub':'配音台词 · TTS+卡拉OK','sub.none':'静音幕 · 无字幕','sub.orig':'原声转写 · 只读',
-'sub.dub.t':'dub 幕：这段文字就是配音台词=卡拉OK字幕（pipeline 按配音实测时长均分词轨）。按口语台词标准写；改后下次渲染生效',
+'sub.dub.t':'dub 幕：这段文字就是配音台词=卡拉OK字幕。渲染前自动合成配音（供应商见 config/services.json tts 段）+ 对配音实测铺词轨；改台词后下次渲染自动重配。按口语台词标准写',
 'sub.none.body':'静音幕——无字幕。已有文本仅作语义摘要存档（创作台可见），不上画面。',
 'sub.empty':'该素材窗口内暂无转写词轨——素材库跑转写后这里显示精确字幕',
 'sub.meta':'精确字幕 · 素材原声转写 · 窗口 %s–%s · 只读（改错字→素材库校对该素材转写；自己写台词→旁白轨切配音；换内容→换素材或改入点/时长）',
@@ -502,7 +503,7 @@ zh:{
 'cfg.pdel.t':'删除项目（归档到 _attic，可找回）','reg.bgm':'BGM','reg.subtitles':'字幕样式','reg.transitions':'转场','reg.sfx':'音效','reg.stickers':'贴纸','reg.sample':'样字','msg.regdel.confirm':'删除条目「%s」？\n（素材文件保留在 assets/，可再导入恢复）','msg.regimport.idp':'条目 id（Agent 用它引用）：','msg.regimport.dup':'id 已存在','msg.regadd.idp':'新条目 id（字母/数字/下划线/中划线，Agent 用它引用）：',
 'src.project':'（项目自有切片）','src.project.suffix':' · 项目自有',
 'msg.wizard.noname':'先填项目名','msg.wizard.done':'✓ 项目已创建：%s',
-'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：',
+'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：','pk.del':'删除选中包','msg.pk.delconfirm':'删除包「%s」？\n（归档到 materials/_attic 可找回；所有项目的挂载一并摘除）','msg.pk.delok':'已删除（归档）',
 'msg.draft.d':'用开场钩子+空镜，起一条 3 幕口播线','msg.draft.busy':'✨ 起草中…（约1分钟）','msg.draft.busy2':'AI 正在读素材档案起草故事线…','msg.draft.done':'✓ AI 草稿已落盘：%s 幕 · %s','msg.draft.fail':'起草失败：',
 'msg.saving':'保存中…','msg.saved':'✓ 已保存 %s · 人和 Agent 同一事实',
 'msg.render.queue':'渲染排队…','msg.render.startfail':'任务启动失败','msg.render.timeout':'✗ 渲染进度轮询超时（25 分钟无结果）——任务可能仍在跑，看 render.status 或稍后刷新','msg.render.ing':'渲染中 [%s] %s%','msg.render.fail':'✗ 渲染失败：','msg.render.done':'✓ 渲染完成 %s · 监视器/封面已刷新','msg.render.none':'还没有成片——先「保存并重渲」',
@@ -540,7 +541,7 @@ en:{
 'cr.beats':'Beat sequence · each beat is one cut on the timeline',
 'cr.beatsnote':'The leftmost card is the <b class="k">cover</b> (card 0, always pinned first). Horizontal = timeline direction. <b class="k">A track</b> is the main picture and sets duration; <b class="k">B track</b> overlays. Stickers trigger on <b class="k">words</b>, SFX mix at <b class="k">beat-relative times</b>. Edits are conclusions — <b class="k">autosaved</b> (1s after you pause; watch the chip top-right); the <b class="k">＋</b> on the gold line inserts a beat anywhere.',
 'cr.cover':'Cover','cr.cover.hint':'Card 0 · pinned left',
-'meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume','meta.grade':'Grade',
+'meta.stitle':'Storyline title','meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume','meta.grade':'Grade',
 'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'beat-frame = representative material frame (only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','meta.grade.natural':'Natural','mus.bgm.t':'Beat-level track override (registry)','meta.grade.warm':'Warm','meta.grade.cool':'Cool','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
 'cov.strategy':'Cover strategy','cov.title':'Cover title','cov.beat':'Base beat','cov.at':'Offset (s)','cov.prompt':'Prompt',
 'cov.prompt.ph':'Keep the reference scene unchanged, warm natural light, slight background blur, leave the top empty',
@@ -555,7 +556,7 @@ en:{
 'lane.preview':'Preview','lane.preview.hint':'click to render · quick low-res','lane.sub':'Subtitles','lane.video':'Video tracks','lane.video.hint':'A sets duration · B overlays','lane.nar':'Narration','lane.nar.hint':'voice source of this beat','lane.trans':'Transition','lane.trans.hint':'this beat → next','lane.sticker':'Stickers','lane.sticker.hint':'word-triggered','lane.sfx':'SFX','lane.sfx.hint':'time-triggered','lane.music':'Music',
 'beat.addB':'＋ B track','beat.addstk':'＋ Sticker','beat.addsfx':'＋ SFX','beat.norole':'(none)','beat.followglobal':'(inherit global)',
 'sub.dub':'Dubbed lines · TTS + karaoke','sub.none':'Silent beat · no subtitles','sub.orig':'Original audio transcript · read-only',
-'sub.dub.t':'dub beat: this text IS the dubbing line = karaoke subtitles (pipeline spreads the word track over the measured dub duration). Write like spoken lines; applies on next render',
+'sub.dub.t':'dub beat: this text IS the dubbing line = karaoke subtitles. Dub audio is auto-synthesized before render (provider: config/services.json tts) and the word track is measured off the result; edit the text and the next render re-dubs. Write like spoken lines',
 'sub.none.body':'Silent beat — no subtitles. Existing text is kept as a semantic summary (visible in Creator) and never reaches the picture.',
 'sub.empty':'No transcript in this window yet — run transcribe in Library and precise subtitles appear here',
 'sub.meta':'Precise subtitles · source transcript · window %s–%s · read-only (fix typos → proofread the material in Library; write your own lines → switch Narration to dub; different content → swap material or in/duration)',
@@ -594,7 +595,7 @@ en:{
 'cfg.pdel.t':'Delete project (archived to _attic, recoverable)','reg.bgm':'BGM','reg.subtitles':'Subtitle styles','reg.transitions':'Transitions','reg.sfx':'SFX','reg.stickers':'Stickers','reg.sample':'Aa','msg.regdel.confirm':'Delete entry "%s"?\n(the asset file stays in assets/ and can be re-imported)','msg.regimport.idp':'Entry id (the agent references it):','msg.regimport.dup':'id already exists','msg.regadd.idp':'New entry id (letters/digits/underscore/dash, the agent references it):',
 'src.project':'(project cuts)','src.project.suffix':' · project-owned',
 'msg.wizard.noname':'Enter a project name first','msg.wizard.done':'✓ Project created: %s',
-'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ',
+'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ','pk.del':'Delete selected pack','msg.pk.delconfirm':'Delete pack "%s"?\n(archived to materials/_attic, recoverable; removed from every project\'s mounts)','msg.pk.delok':'Deleted (archived)',
 'msg.draft.d':'draft a 3-beat narration line with a hook opener and b-roll','msg.draft.busy':'✨ Drafting… (~1 min)','msg.draft.busy2':'AI is reading the material dossier and drafting a storyline…','msg.draft.done':'✓ AI draft saved: %s beats · %s','msg.draft.fail':'Draft failed: ',
 'msg.saving':'Saving…','msg.saved':'✓ Saved %s · human and agent share one truth',
 'msg.render.queue':'Queued for render…','msg.render.startfail':'failed to start task','msg.render.timeout':'✗ Render progress poll timed out (no result in 25 min) — the task may still be running; check render.status or refresh later','msg.render.ing':'Rendering [%s] %s%','msg.render.fail':'✗ Render failed: ','msg.render.done':'✓ Render complete %s · monitor/cover refreshed','msg.render.none':'No final cut yet — use "Save & render" first',
@@ -844,8 +845,11 @@ async function renderVoiceMgr(){
 }
 async function voiceWake(){
   $('voice-hint').textContent=t('voice.waking');
-  try{await(await fetch('/api/voices?wake=1')).json();}catch(e){}
+  let r=null;
+  try{r=await(await fetch('/api/voices?wake=1')).json();}catch(e){}
   renderVoiceMgr();
+  // 提示复位（2026-10-17：唤醒后 hint 曾永久挂"唤醒中…"）——仍休眠显休眠，醒来回默认提示
+  $('voice-hint').textContent=(r&&r.sleeping)?t('voice.sleep'):t('voice.hint');
 }
 async function voiceRegister(){
   const f=$('voicefile').files[0];
@@ -1180,6 +1184,7 @@ function buildCreator(){
   const m=DRAFT.meta,en=P.enums||{};
   $('outline').value=DRAFT.outline||'';
   $('metabar').innerHTML=
+    '<div class="mf"><label data-i18n="meta.stitle">'+esc(t('meta.stitle'))+'</label><input type="text" value="'+esc(DRAFT.title||'')+'" oninput="DRAFT.title=this.value"></div>'+
     '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="onTypeChange(this.value)">'+optHtml(en.video_types,m.type)+'</select><span id="vtype-hint" style="font-size:10px;color:var(--faint)">'+esc(vtypeHint(m.type))+'</span></div>'+
     '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
     '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="onPlatformChange(this.value)">'+optHtml(en.platforms,m.platform)+'</select><span id="plat-hint" style="font-size:10px;color:var(--faint)">'+esc(platformHint(m.platform))+'</span></div>'+
@@ -1365,6 +1370,7 @@ function upEff(i,kind,k,f,v){DRAFT.beats[i].effects[kind][k][f]=v;}
 
 function collectStory(){
   return {
+    title:DRAFT.title||undefined,  // undefined 被 JSON.stringify 丢弃=服务端"缺省键不动"；空串不发（防误清标题）
     outline:DRAFT.outline||'',
     meta:DRAFT.meta,
     beats:(DRAFT.beats||[]).map((b,i)=>({
@@ -1439,6 +1445,16 @@ async function packMount(mount){
     const r=await(await fetch('/api/pack-mount/'+VIEW.proj+'/'+pid+'/'+(mount?'mount':'unmount'),{method:'POST'})).json();
     if(r.ok){$('pkstat').textContent='✓ '+t(mount?'msg.pk.mountok':'msg.pk.unmountok')+' '+pid;await openProj(VIEW.proj,VIEW.story,true);}
     else alert(t('msg.pk.fail2',t(mount?'msg.pk.mountok':'msg.pk.unmountok'),(r.err||'')));
+  }catch(e){alert(t('msg.pk.reqfail')+e);}
+}
+async function packDel(){
+  const pid=$('pk-mount').value;
+  if(!pid)return alert(t('msg.pk.nosel'));
+  if(!confirm(t('msg.pk.delconfirm',pid)))return;
+  try{
+    const r=await(await fetch('/api/pack-delete/'+encodeURIComponent(pid),{method:'POST'})).json();
+    if(r.ok){$('pkstat').textContent='✓ '+t('msg.pk.delok')+' '+pid;await refreshPackChoices();await openProj(VIEW.proj,VIEW.story,true);}
+    else alert(t('msg.pk.fail2',t('pk.del'),(r.err||'')));
   }catch(e){alert(t('msg.pk.reqfail')+e);}
 }
 async function refreshPackChoices(){

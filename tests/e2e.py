@@ -2966,6 +2966,7 @@ def main():
     t62_structural_pagination()
     t63_type_platform_profiles()
     t64_dom_execution_sim()
+    t65_human_agent_equivalence()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3037,6 +3038,50 @@ def t63_type_platform_profiles():
               % (ok1a, ok1b, ok1c, ok1d, ok2a, ok2b, ok3, ok4a, ok4b, ok4c, ok5, code6a, back))
     except Exception as e:
         check("T63 类型/平台档案化（draft注入/渲染默认值/平台锚/R11/enums派生/写闭环）", False, str(e)[:160])
+
+
+# ---------------------------------------------------------------- T65 人与 Agent 等价补齐（2026-10-17）
+def t65_human_agent_equivalence():
+    # 锚：等价审查修复的三条服务端契约——
+    # ① /api/voices sleeping：未安装 ≠ 休眠（_health() 对未安装也 False，曾致前端
+    #    "未安装"与"休眠中+唤醒"双横幅同挂）——sleeping 为真的前提是 installed
+    # ② 故事线 title 人侧可写：POST 带 title → 落盘读回（创作台 metabar 标题字段的 API 锚）
+    # ③ dub 台词变更失效：台词改了，旧配音 audio/synth_text/words 必须摘除（防旧音唱新词
+    #    静默回退）；台词不变则按文本配对迁移保留（插幕/调序不误伤）
+    st, v = api("/api/voices")
+    ok = st == 200 and (not v.get("sleeping") or bool(v.get("installed")))
+    check("T65a voices sleeping 契约（休眠⇒已安装）", ok,
+          "installed=%s sleeping=%s" % (v.get("installed"), v.get("sleeping")))
+
+    sid = "e2eeq"
+    sfx = os.path.join(ROOT, "projects", PROJ, "storylines", sid + ".json")
+    api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")  # 清残
+    nar0 = {"mode": "dub", "audio": "materials/dub/%s-b1.mp3" % sid,
+            "synth_text": "旧台词", "words": [{"text": "旧", "start": 0, "end": 1}]}
+    mk = lambda text, nar: {"no": 1, "id": "b1", "story": text, "narration": nar,
+                            "tracks": [], "music": {"inherit": True},
+                            "effects": {"stickers": [], "sfx": []}, "subtitle": {}, "transition_out": None}
+    try:
+        st, _ = api("/api/storyline/" + PROJ + "?story=" + sid, method="POST",
+                    body={"title": "等价锚线", "outline": "", "meta": {}, "beats": [mk("旧台词", dict(nar0))]})
+        sl = json.load(open(sfx, encoding="utf-8")) if st == 200 else {}
+        check("T65b 故事线 title 写读闭环", st == 200 and sl.get("title") == "等价锚线",
+              "st=%s title=%r" % (st, sl.get("title")))
+        # 台词不变（客户端未透传 audio 也按文本配对从旧线迁移保留）
+        api("/api/storyline/" + PROJ + "?story=" + sid, method="POST",
+            body={"beats": [mk("旧台词", {"mode": "dub"})]})
+        nar = (json.load(open(sfx, encoding="utf-8")).get("beats") or [{}])[0].get("narration") or {}
+        check("T65c dub 台词不变→音频迁移保留", nar.get("audio") == nar0["audio"] and nar.get("words") == nar0["words"],
+              "narration=%r" % nar)
+        # 台词改了→旧配音三键摘除（render-start 前置会重合成）
+        api("/api/storyline/" + PROJ + "?story=" + sid, method="POST",
+            body={"beats": [mk("新台词", dict(nar0))]})
+        nar = (json.load(open(sfx, encoding="utf-8")).get("beats") or [{}])[0].get("narration") or {}
+        check("T65d dub 台词变更→旧音频失效",
+              nar.get("mode") == "dub" and "audio" not in nar and "synth_text" not in nar and "words" not in nar,
+              "narration=%r" % nar)
+    finally:
+        api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")
 
 
 # ---------------------------------------------------------------- T64 前端 DOM 执行模拟（2026-10-15）
