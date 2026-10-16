@@ -772,11 +772,11 @@ async function loadConfig(){
   const vlist=(P._voices.voices||[]);
   const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
-         [['reg.cover_strategies',(en.cover_strategies||[]).length,(en.cover_strategies||[]).map(x=>x.name).join(' · ')],
-     ['reg.narration_modes',(en.narration_modes||[]).length,(en.narration_modes||[]).map(x=>x.name).join(' · ')],
-    ].map((r,i)=>'<div class="regcard" style="animation-delay:'+Math.min(i*0.05,0.35)+'s"><h5 data-i18n="'+r[0]+'">'+esc(t(r[0]))+'</h5><div class="cnt">'+r[1]+'</div><div class="items">'+esc(r[2])+'</div></div>').join('')+
-    '<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min(2*0.05,0.35)+'s" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+((P._voices.sleeping&&vlist.length===0)?' · '+esc(t('voice.sleep')):'')+'</div></div>'+
-    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+3)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
+    /* 封面策略/旁白模式卡片已撤（2026-10-17 用户裁定）：那是管线代码能力枚举——enums.json
+       里加一条管线也不会多一种能力，"改完保存即生效"不成立，不是资产。枚举仍由 /api/enums
+       供创作台下拉框消费（该出现的唯一场所）。 */
+    '<div class="regcard" style="cursor:pointer" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+((P._voices.sleeping&&vlist.length===0)?' · '+esc(t('voice.sleep')):'')+'</div></div>'+
+    REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+1)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
   applyLang();
 }
 /* ═══ 项目操作页 ═══ */
