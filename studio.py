@@ -11,6 +11,7 @@ import urllib.parse
 from urllib.parse import urlparse, parse_qs, unquote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+START_TS = time.time()  # 进程出生证（/api/health 新鲜度探针用，2026-10-19）
 
 
 def _safe(s):
@@ -171,6 +172,17 @@ class H(BaseHTTPRequestHandler):
             self._json(jload(f"{pd}/materials/library.json", {}))
         elif u.path == "/api/enums":
             self._json(_enums())
+        elif u.path == "/api/health":
+            # 新鲜度探针（2026-10-19）：进程启动时间 vs 仓库全部 .py 的最新 mtime。
+            # e2e 起跑前先打这里——"测的是旧代码"假绿/假红三次实锤：mtime 晚于进程启动、
+            # 旧实例占端口新实例 bind 失败死在 nohup 日志。1s 容差吸收同秒写盘。
+            newest = max(
+                [os.path.getmtime(os.path.join(ROOT, "studio.py"))] +
+                [os.path.getmtime(os.path.join(dp, f))
+                 for dp, _dn, fs in os.walk(os.path.join(ROOT, "autocut3"))
+                 for f in fs if f.endswith(".py")])
+            self._json({"ok": True, "pid": os.getpid(), "started": int(START_TS),
+                        "newest_py": int(newest), "fresh": START_TS + 1 >= newest})
         elif u.path.startswith("/api/registry/"):
             # 注册表读接口（2026-09-14）：/api/registry/bgm → registry/bgm.json。人/Agent 同权。
             rname = u.path[len("/api/registry/"):]

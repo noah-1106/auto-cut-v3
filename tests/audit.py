@@ -346,6 +346,28 @@ else:
         print("  ✓ en 词典无中文残留")
 
 
+# ═══════════ I. 人机等价三向对账 ═══════════
+sec("I. 人机等价三向对账（路由 ↔ 前端 ↔ 手册）")
+# 缘起（2026-10-19）：等价审查靠人肉三向映射，功能一多就漂移。钉死规则——
+# 前端调不存在的路由=P1；路由两端都无影=P2 孤儿；路由没进手册=P2 Agent 侧等价缺口。
+_st = studio  # studio.py 全文（A 节已读）
+_idx = open(os.path.join(ROOT, "studio", "index.html"), encoding="utf-8").read()
+_man = open(os.path.join(ROOT, "剪辑Agent操作手册.md"), encoding="utf-8").read()
+_routes = set(re.findall(r'u\.path\.startswith\("(/api/[a-z0-9_-]+)', _st)) | \
+            set(re.findall(r'u\.path == "(/api/[^"]+)"', _st))
+_routes = {r.strip("/").split("/")[1] for r in _routes}
+_fe = set(re.findall(r"fetch\(\s*['\"`]/api/([a-z0-9_-]+)", _idx))
+_doc = set(re.findall(r"/api/([a-z0-9_-]+)", _man))
+for r in sorted(_fe - _routes):
+    add("P1", "I1 等价", "前端 fetch /api/%s 但 studio.py 无此路由" % r)
+for r in sorted(_routes - _fe - _doc):
+    add("P2", "I1 等价", "路由 /api/%s 前端无入口、手册未载——孤儿或隐藏 Agent-only 面" % r)
+for r in sorted(_routes - _doc):
+    add("P2", "I1 等价", "路由 /api/%s 未进操作手册——Agent 侧等价缺口" % r)
+if not (_fe - _routes) and not (_routes - _fe - _doc) and not (_routes - _doc):
+    print("  ✓ 三向对账闭合：路由 %d / 前端 %d / 手册 %d" % (len(_routes), len(_fe), len(_doc)))
+
+
 # ═══════════ 汇总 ═══════════
 sec("汇总")
 p1 = [x for x in issues if x[0] == "P1"]

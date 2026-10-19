@@ -763,19 +763,21 @@ async function loadConfig(){
     '</div>').join('');
   const en=await(await fetch('/api/enums')).json();
   const REGS=[['bgm','reg.bgm'],['subtitles','reg.subtitles'],['transitions','reg.transitions'],['sfx','reg.sfx'],['stickers','reg.stickers'],['video_types','reg.vtypes'],['platforms','reg.plats']];
-  P={registry:{},enums:en};  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）；enums 进 P——档案抽屉下拉（旁白/封面）消费它（2026-10-15 实锤：曾漏存，抽屉空选项）
+  const P0=P={registry:{},enums:en};  // P0 钉住本次渲染的对象：await 期间人可点开项目换掉全局 P
+  // （2026-10-19 T67 冒烟实锤竞态：恢复后读 P._voices 崩）。下文一律用 P0，不回头读全局。
+  // goHome 置 P=null 后重建（2026-09-14 修复：直接 P.registry 解引用 null，返回首页按钮失灵）；enums 进 P——档案抽屉下拉（旁白/封面）消费它（2026-10-15 实锤：曾漏存，抽屉空选项）
   const _regs=await Promise.all(REGS.map(([rn])=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发取注册表（效果五件套+类型/平台档案；原串行 5 个 RTT，2026-10-15 体检）
-  REGS.forEach(([rn],i)=>P.registry[rn]=_regs[i]);
-  try{P._voices=await(await fetch('/api/voices')).json();}catch(e){P._voices={installed:false,voices:[]};}
-  const items=rn=>Object.keys(P.registry[rn]||{}).filter(k=>!k.startsWith('_'));
-  const names=rn=>items(rn).map(k=>(P.registry[rn][k].name||k)).join(' · ');
-  const vlist=(P._voices.voices||[]);
+  REGS.forEach(([rn],i)=>P0.registry[rn]=_regs[i]);
+  try{P0._voices=await(await fetch('/api/voices')).json();}catch(e){P0._voices={installed:false,voices:[]};}
+  const items=rn=>Object.keys(P0.registry[rn]||{}).filter(k=>!k.startsWith('_'));
+  const names=rn=>items(rn).map(k=>(P0.registry[rn][k].name||k)).join(' · ');
+  const vlist=(P0._voices.voices||[]);
   const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
     /* 封面策略/旁白模式卡片已撤（2026-10-17 用户裁定）：那是管线代码能力枚举——enums.json
        里加一条管线也不会多一种能力，"改完保存即生效"不成立，不是资产。枚举仍由 /api/enums
        供创作台下拉框消费（该出现的唯一场所）。 */
-    '<div class="regcard" style="cursor:pointer" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P._voices.installed?'':' · '+esc(t('reg.noruntime')))+((P._voices.sleeping&&vlist.length===0)?' · '+esc(t('voice.sleep')):'')+'</div></div>'+
+    '<div class="regcard" style="cursor:pointer" onclick="openVoiceMgr()"><h5><span data-i18n="reg.voices">'+esc(t('reg.voices'))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+vlist.length+'</div><div class="items">'+esc(vnames||t('reg.empty'))+(P0._voices.installed?'':' · '+esc(t('reg.noruntime')))+((P0._voices.sleeping&&vlist.length===0)?' · '+esc(t('voice.sleep')):'')+'</div></div>'+
     REGS.map((r,i)=>'<div class="regcard" style="cursor:pointer;animation-delay:'+Math.min((i+1)*0.05,0.35)+'s" onclick="openRegMgr(\''+r[0]+'\',\''+r[1]+'\')"><h5><span data-i18n="'+r[1]+'">'+esc(t(r[1]))+'</span><span style="margin-left:auto;font-size:10px;color:var(--faint);font-weight:400" data-i18n="reg.manage">'+esc(t('reg.manage'))+'</span></h5><div class="cnt">'+items(r[0]).length+'</div><div class="items">'+esc(names(r[0])||t('reg.empty'))+'</div></div>').join('');
   applyLang();
 }

@@ -519,7 +519,7 @@ Studio 路由（http://127.0.0.1:8765）：
 
 | 路由 | body / query | 说明 |
 |---|---|---|
-| `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 只允许字母数字下划线中划线；**`projects/<name>/` 目录已存在（含手工残件）=409「项目已存在」**——确认是残件后删目录再走本 API 重建，不要手工 mkdir 冒充创建 |
+| `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 允许字母/数字/中文/._-（禁路径分隔符与 `..`；故事线 sid 同口径）；**`projects/<name>/` 目录已存在（含手工残件）=409「项目已存在」**——确认是残件后删目录再走本 API 重建，不要手工 mkdir 冒充创建 |
 | `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
 | `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
 | `POST /api/pack-mount/<pid>/<pack>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
@@ -544,6 +544,10 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
 | `POST /api/pack-upload/<pid>?filename=<名>` | 原始字节（文件字节） | **导入素材**（文件名中文/`#`/空格均允许）。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |
 | `GET  /api/sticker-preview/<id>` | 无 body | 贴纸样式真渲染样张（走渲染同一实现，PNG URL） |
+| `GET  /api/projects` | 无 body | 项目列表（每条含故事线列表/封面 URL/成片计数）——选项目前先打这里 |
+| `GET  /api/packs` | 无 body | 素材包列表（pack.json 摘要） |
+| `GET  /api/formats` | 无 body | 画幅注册表（project-create 的 format 取值源） |
+| `GET  /api/health` | 无 body | 新鲜度探针：`fresh`=进程比仓库全部 .py 新。改完 studio.py/autocut3 先打这里，false=先重启再测 |
 
 **pack.json 字段口径**：`files[].size_mb` 是十进制显示值（字节数 ÷ 1e6，只用于人看）——
 **逐字节比对/完整性校验不要用 size_mb**，用 `os.path.getsize(文件)` 对字节数。

@@ -1,0 +1,78 @@
+<!doctype html><meta charset="utf-8">
+<!-- 真浏览器冒烟 harness（2026-10-19，e2e T67 的执行体）。
+     缘起：桩 DOM（domsim）不解析 HTML——pfField 断串（页面裸显 value="…" 文本，2026-10-15 潜伏
+     两天才被人眼截图抓到）证明「渲染事故」一类 bug 只有真浏览器能拦。本页 iframe 同域加载真实
+     Studio，驱动关键路径：主页卡片 → 开项目 → 故事线切换器 → 切 tab → 7 个注册表抽屉，
+     全程收 window.onerror / unhandledrejection，并扫「事件处理器属性泄漏成可见文本」这一
+     断串类签名。结果写进 #result（JSON），e2e 用 --dump-dom 读回断言。 -->
+<pre id="result">RUNNING</pre>
+<iframe id="f" src="/" style="width:1400px;height:900px;border:0"></iframe>
+<script>
+const R={errors:[],steps:{},leak:[]};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const q=new URLSearchParams(location.search);
+const PROJ=q.get('proj');
+const LEAK_RE=/\bon(change|click|input|error)="/;   // 处理器属性永远不该成为可见文本（断串类签名）
+const BROKEN_RE=/>\s+value="|<\/(input)>\s+value="/; // pfField 原始签名（序列化 HTML 上再扫一遍）
+
+function scanLeak(d,where){
+  // 克隆后剔除 script/style 再取文本——JS 源码本身合法含 onchange=" 等字符串，直接扫全
+  // body.textContent 必假阳（2026-10-19 首轮自测实锤）。抽屉区不含 script，原样双扫。
+  const c=d.body.cloneNode(true);
+  c.querySelectorAll('script,style').forEach(n=>n.remove());
+  if(LEAK_RE.test(c.textContent))R.leak.push(where+':textContent');
+}
+async function poll(fn,ms=8000){const t0=Date.now();while(Date.now()-t0<ms){try{const v=fn();if(v)return v}catch(e){}await sleep(120)}return null}
+
+(async()=>{
+  const f=document.getElementById('f');
+  await new Promise(r=>{f.onload=r});
+  const w=f.contentWindow,d=f.contentDocument;
+  w.addEventListener('error',e=>R.errors.push('onerror: '+e.message));
+  w.addEventListener('unhandledrejection',e=>R.errors.push('promise: '+String(e.reason&&e.reason.message||e.reason)));
+  try{
+    // ① 主页：卡片渲染（boot 失败的代理信号——boot 崩了不会有卡片）
+    const cards=await poll(()=>d.querySelectorAll('.pcard').length>0);
+    R.steps.home=!!cards;
+    scanLeak(d,'home');
+
+    // ② 开项目（silent=true 跳过脏确认——等价于无未保存改动的人操作）
+    await w.openProj(PROJ,null,true);
+    const meta=await poll(()=>{const m=d.getElementById('metabar');return m&&m.innerHTML.length>50});
+    R.steps.open=!!meta && !w.document.title.startsWith('ERR');
+    // 故事线切换器：有 pills 就必须在创作台可见（display 不是 none）
+    const sel=d.getElementById('storysel-wrap');
+    R.steps.storysel=!!sel&&(sel.children.length===0||w.getComputedStyle(sel).display!=='none');
+    scanLeak(d,'open');
+
+    // ③ 切 tab：素材库（项目页）/ 注册表（tab id ≠ section id，SECMAP 映射）
+    w.showTab('library');
+    await sleep(300);
+    R.steps.library=d.getElementById('s-library').classList.contains('active');
+    w.showTab('registry');
+    await sleep(300);
+    R.steps.registryTab=d.getElementById('s-registry').classList.contains('active');
+
+    // ④ 七个注册表抽屉：渲染非空 + 无泄漏；档案域（video_types/platforms）必须有 input
+    R.steps.drawers={};
+    for(const rn of ['bgm','subtitles','transitions','sfx','stickers','video_types','platforms']){
+      let ok=false;
+      try{
+        w.openRegMgr(rn,'reg.mgr');
+        const body=await poll(()=>{const b=d.getElementById('regmgr-body');return b&&b.innerHTML.length>50?b:null});
+        if(body){
+          ok=true;
+          if(['video_types','platforms'].includes(rn)&&!body.querySelector('input,textarea'))ok=false;
+          if(LEAK_RE.test(body.textContent)||BROKEN_RE.test(body.innerHTML)){ok=false;R.leak.push('drawer:'+rn)}
+        }
+      }catch(e){R.errors.push('drawer '+rn+': '+e.message)}
+      R.steps.drawers[rn]=ok;
+    }
+    scanLeak(d,'final');
+  }catch(e){R.errors.push('drive: '+(e&&e.message||e))}
+  const allSteps=Object.values(R.steps).every(v=>typeof v==='object'?Object.values(v).every(Boolean):v);
+  const pass=R.errors.length===0&&R.leak.length===0&&allSteps;
+  document.title='SMOKE '+(pass?'OK':'FAIL');
+  document.getElementById('result').textContent=JSON.stringify(R);
+})();
+</script>

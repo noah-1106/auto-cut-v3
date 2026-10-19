@@ -2903,6 +2903,14 @@ def main():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import fixtures
     fixtures.ensure()  # 测试底盘自给自足：夹具包缺失时合成（2026-09-14 清场后立——E2E 曾 40 处硬编码真实素材）
+    # 新鲜度门（2026-10-19）：进程必须比代码新，否则下游所有结果不可信——旧实例占端口 /
+    # mtime 倒挂三次实锤。无 /api/health = 服务太旧，同样中止。宁可不跑，不要假绿。
+    st, h = api("/api/health")
+    if st != 200 or not h.get("fresh"):
+        print("✗ studio 进程不是最新代码（%s）——重启 studio 后再测，否则结果不可信" %
+              ("无 /api/health 路由" if st != 200
+               else "pid=%s started=%s newest_py=%s" % (h.get("pid"), h.get("started"), h.get("newest_py"))))
+        sys.exit(2)
     t1_health()
     t2_injection()
     t3_default_story()
@@ -2968,6 +2976,7 @@ def main():
     t64_dom_execution_sim()
     t65_human_agent_equivalence()
     t66_chinese_naming()
+    t67_browser_smoke()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3115,6 +3124,37 @@ def t66_chinese_naming():
     finally:
         api("/api/storyline-delete/" + quote(name) + "?story=" + quote(sid), method="POST")
         api("/api/project-delete/" + quote(name), method="POST")
+
+
+
+def t67_browser_smoke():
+    # 锚：真浏览器冒烟（2026-10-19）。domsim 桩 DOM 不解析 HTML——pfField 断串裸显文本、
+    # loadConfig/openProj 竞态（await 期间全局 P 被换）这类【渲染事故+异步竞态】只有真浏览器
+    # 能拦。执行体 = tests/browser_smoke.html（iframe 同域驱动真实页面），--dump-dom 读回 JSON。
+    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if not os.path.exists(chrome):
+        check("T67 真浏览器冒烟", False, "Chrome 不在 %s——本层门禁无法降级，请安装" % chrome)
+        return
+    url = "%s/files/tests/browser_smoke.html?proj=%s" % (BASE, PROJ)
+    try:
+        r = subprocess.run([chrome, "--headless", "--disable-gpu",
+                            "--virtual-time-budget=30000", "--dump-dom", url],
+                           capture_output=True, text=True, timeout=150)
+    except Exception as e:
+        check("T67 真浏览器冒烟", False, "chrome 执行失败: %s" % e)
+        return
+    m = re.search(r'<pre id="result">(.*?)</pre>', r.stdout or "", re.S)
+    if not m or m.group(1) == "RUNNING":
+        check("T67 真浏览器冒烟", False, "harness 未出结果（rc=%s）" % r.returncode)
+        return
+    import html as _html
+    R = json.loads(_html.unescape(m.group(1)))
+    check("T67a 全程无 JS 异常", R.get("errors") == [], "errors=%r" % (R.get("errors") or [])[:200])
+    steps = R.get("steps") or {}
+    bad = {k: v for k, v in steps.items()
+           if not (all(v.values()) if isinstance(v, dict) else v)}
+    check("T67b 关键路径渲染（主页/开项目/切换器/tab×2/抽屉×7）", not bad, "bad=%r" % bad)
+    check("T67c 无断串泄漏（处理器属性不成可见文本）", R.get("leak") == [], "leak=%r" % R.get("leak"))
 
 
 
