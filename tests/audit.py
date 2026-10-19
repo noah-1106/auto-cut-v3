@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """auto-cut v3 代码审计器（2026-09-14 质量整顿）
-八个维度：路由安全 / 并发写点 / JS 函数对照 / 数据引用完整性 / Python 卫生 / 文档时效 / git 卫生 / i18n 一致性
+九个维度：路由安全 / 并发写点 / JS 函数对照 / 数据引用完整性 / Python 卫生 / 文档时效 / git 卫生 / i18n 一致性 / 人机等价对账
 用法：python3 tests/audit.py   输出：分级报告（P1 必修 / P2 应修 / P3 记录）
 """
 import ast, json, os, re, subprocess, sys

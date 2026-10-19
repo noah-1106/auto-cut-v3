@@ -163,7 +163,7 @@ materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
 config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
 docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
-tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器) domsim.js(前端执行模拟模板,T64)
+tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器) domsim.js(前端执行模拟模板,T64) browser_smoke.html(真浏览器冒烟,T67)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -206,7 +206,7 @@ python3 tests/audit.py                                     # 代码审计器
 ```bash
 python3 tests/e2e.py      # 端到端（上传/起草/渲染/并发/安全），ALL GREEN 是交付底线
                           # 项数以输出尾部「N 通过 / M 失败」为准；--fast 跳过 LLM/ASR/TTS 真实计费项，日常回归用这个
-python3 tests/audit.py    # 七维审计：路由安全/数据断链/JS函数对照/文档时效/git卫生
+python3 tests/audit.py    # 九维审计：路由安全/并发写点/JS函数对照/数据引用完整性/Python卫生/文档时效/git卫生/i18n一致性/等价对账
 python3 tests/rmw_smoke.py# 读-改-写并发原子性
 ```
 每次 push 到 main，GitHub Actions 在 windows-latest + ubuntu-latest 双端跑全量 e2e（含真实云端 LLM/ASR/TTS 冒烟，key 走 repository secret）。

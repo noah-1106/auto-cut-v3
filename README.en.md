@@ -162,7 +162,7 @@ materials/packs/     # user footage store (large files, not in git)
 projects/<name>/     # project workspace: storylines/, out-*.mp4 finals, qc-report.json (not in git, .gitkeep placeholder)
 config/              # services.json (service keys) lexicon.json (proofread lexicon) qc_rules.json
 docs/                # design docs (pipeline-v2.md = pipeline automation design; archive/ = retired material; README.md = doc map + glossary)
-tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor) domsim.js (frontend execution-sim template, T64)
+tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor) domsim.js (frontend execution-sim template, T64) browser_smoke.html (real-browser smoke harness, T67)
 bin/                 # ffmpeg 6.0+ (bring your own, not in git)
 ```
 
@@ -205,7 +205,7 @@ python3 tests/audit.py                                     # code auditor
 ```bash
 python3 tests/e2e.py      # end-to-end (upload/draft/render/concurrency/security); ALL GREEN is the delivery bar
                           # count = the trailing "N passed / M failed" line; --fast skips real-billing LLM/ASR/TTS items — daily regression
-python3 tests/audit.py    # seven-dimension audit: route safety / data-link integrity / JS cross-check / doc freshness / git hygiene
+python3 tests/audit.py    # nine-dimension audit: route safety / write-race / JS cross-check / data-link integrity / Python hygiene / doc freshness / git hygiene / i18n parity / human-agent equivalence
 python3 tests/rmw_smoke.py# read-modify-write concurrency atomicity
 ```
 Every push to main runs the full e2e on GitHub Actions windows-latest + ubuntu-latest (including real cloud LLM/ASR/TTS smoke tests; keys via repository secrets).
