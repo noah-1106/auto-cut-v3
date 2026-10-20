@@ -399,12 +399,8 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 
 <!-- ═══════════ 操作页 · 素材库 ═══════════ -->
 <section id="s-library">
-  <div class="sec"><span data-i18n="lib.mine">项目素材</span> <span class="packtag" style="border-color:var(--line);color:var(--dim)" data-i18n="lib.mine.tag">仅本项目</span></div>
-  <div class="note" data-i18n="lib.minenote">本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。</div>
-  <div class="libgrid" id="cutgrid"></div>
-
-  <div class="sec" style="margin-top:26px"><span data-i18n="lib.packs">跨项目素材</span> <span class="packtag" data-i18n="lib.packs.tag">仓库级</span></div>
-  <div class="note" data-i18n-html="lib.packsnote"><b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。</div>
+  <div class="sec"><span data-i18n="lib.packs">素材包</span> <span class="packtag" data-i18n="lib.packs.tag">挂载取用</span></div>
+  <div class="note" data-i18n-html="lib.packsnote"><b class="k">素材包</b>是素材的唯一入库形态（materials/packs/）——拍摄素材与通用空镜先审阅落盘成包，项目通过<b class="k">挂载</b>取用；转写/校对的审计投资做一次、多项目复用。<b class="k">先审阅落盘，后取用</b>。</div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
     <input id="pk-id" data-i18n-ph="pk.id.ph" placeholder="新包 id（字母数字-）" style="max-width:190px">
     <input id="pk-name" data-i18n-ph="pk.name.ph" placeholder="包名（可中文）" style="max-width:190px">
@@ -423,6 +419,10 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
     <span class="statusline" id="tallstat"></span>
   </div>
   <div id="packgroups"></div>
+
+  <div class="sec" style="margin-top:26px"><span data-i18n="lib.mine">项目切片</span> <span class="packtag" style="border-color:var(--line);color:var(--dim)" data-i18n="lib.mine.tag">仅本项目</span></div>
+  <div class="note" data-i18n="lib.minenote">本项目派生的切片资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。拍摄素材在上方素材包。</div>
+  <div class="libgrid" id="cutgrid"></div>
 </section>
 </main>
 
@@ -448,7 +448,7 @@ zh:{
 'cfg.fmtnote':'画幅是项目级属性（registry/formats.json）：竖版 1080×1920 / 横版 1920×1080 / 方版 1080×1080。创建后进项目 → 素材库页挂载素材包。',
 'cfg.projects':'视频项目','cfg.projnote':'一个项目 = 一个工程，可含<b class="k">多条故事线</b>（同一批素材的不同成片取法）。',
 'cfg.registry':'全盘注册表','cfg.regnote':'注册表是人与 Agent 共用的选材资产库——改完保存即生效，下一次渲染使用新值。',
-'reg.video_types':'视频类型','reg.cover_strategies':'封面策略','reg.narration_modes':'旁白模式','reg.platforms':'平台','reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','pf.name':'名称','pf.desc':'描述','pf.sec.draft':'起草引导','pf.sec.defaults':'渲染默认值（未设=走回退链）','pf.sec.qc':'QC 时长域（出界 R11 告警；留空=不设）','pf.sec.anchor':'响度锚','pf.empty':'还没有档案——右上「＋ 新增条目」','pf.pick':'左侧选择一个档案','pf.consumers':'生效链：节奏与起草要求 → AI 起草提示词（Studio AI 起草 / draft --type 自动带上）；默认值 → 渲染时补未显式设置的字段；时长区间 → QC R11 出界告警。','pf.consumers.plat':'生效链：故事线 meta.platform → QC R6 响度判定 + 渲染后 loudnorm 两遍精修。','reg.def.subtitle':'默认字幕','reg.def.transition':'默认转场','reg.def.narration':'默认旁白','reg.def.cover':'默认封面策略','reg.qc.dur':'时长区间','reg.qc.min':'下限','reg.qc.max':'上限','reg.unset':'（未设）','reg.save':'保存','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）',
+'reg.voices':'声纹','reg.vtypes':'视频类型档案','reg.plats':'发布平台档案','reg.rhythm':'节奏','reg.draftprompt':'起草要求（进 AI 提示词）','pf.name':'名称','pf.desc':'描述','pf.sec.draft':'起草引导','pf.sec.defaults':'渲染默认值（未设=走回退链）','pf.sec.qc':'QC 时长域（出界 R11 告警；留空=不设）','pf.sec.anchor':'响度锚','pf.empty':'还没有档案——右上「＋ 新增条目」','pf.pick':'左侧选择一个档案','pf.consumers':'生效链：节奏与起草要求 → AI 起草提示词（Studio AI 起草 / draft --type 自动带上）；默认值 → 渲染时补未显式设置的字段；时长区间 → QC R11 出界告警。','pf.consumers.plat':'生效链：故事线 meta.platform → QC R6 响度判定 + 渲染后 loudnorm 两遍精修。','reg.def.subtitle':'默认字幕','reg.def.transition':'默认转场','reg.def.narration':'默认旁白','reg.def.cover':'默认封面策略','reg.qc.dur':'时长区间','reg.qc.min':'下限','reg.qc.max':'上限','reg.unset':'（未设）','reg.save':'保存','reg.lufs':'响度锚 LUFS','reg.lufstol':'容差 ±','reg.file.video_types':'每类型=剪辑方法参数包：节奏/起草要求进 AI 提示词，默认值(字幕/转场/旁白/封面)作渲染回退，QC 区间(如 {"duration_range":[20,120]})供 R11','reg.file.platforms':'每平台=响度锚：qc R6 判定与渲染后 loudnorm 精修都按故事线 meta.platform 查这里','msg.type.applied':'已按类型档案补默认：%s（显式已设的不动）',
 'reg.manage':'管理 →','reg.empty':'空','reg.noruntime':'未装运行时','reg.single':'单故事线','reg.mgr':'注册表管理',
 'reg.add':'＋ 新增条目','reg.import':'⬆ 导入素材文件','dlg.close':'✕ 关闭',
 'reg.fmtnote':'文件格式：%s · 注册表是人与 Agent 共用的选材事实源——改完保存即生效，下一次渲染使用新值',
@@ -463,8 +463,9 @@ zh:{
 'cr.beats':'幕序列 · 每幕是多轨上的一刀',
 'cr.beatsnote':'最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。',
 'cr.cover':'封面收口','cr.cover.hint':'第 0 张 · 钉在最左',
-'meta.stitle':'故事线标题','meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量','meta.grade':'画幅氛围',
-'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'帧截图=素材代表帧（含人封面唯一真脸路线）/ ai-generated=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ output-frame=渲染后成片抽帧 / upload=已上传图','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','meta.grade.natural':'自然','mus.bgm.t':'幕级换曲（注册表）','meta.grade.warm':'暖调','meta.grade.cool':'冷调','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
+'meta.stitle':'故事线标题','meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量',
+'meta.persona.t':'讲述者人设——AI 起草时注入提示词，台词与叙事口吻贴合它',
+'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'首帧封面/指定幕帧=素材代表帧+标题本地合成（含真人脸封面的唯一保真路线）/ AI 生成封面=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ 成片抽帧=渲染后从成片抽（封面=发布产物本体）/ 外部上传=设计稿直传','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','mus.bgm.t':'幕级换曲（注册表）','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
 'cov.strategy':'封面策略','cov.title':'封面标题','cov.beat':'底图幕号','cov.at':'幕内秒','cov.prompt':'提示词',
 'cov.prompt.ph':'保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白',
 'cov.prompt.hint':'提示词写法：① 开头固定「保持参考图主体/场景不变」② 只写风格方向（色调/光线/氛围/构图），≤1500 字 ③ 注明「上半部分留白」（标题由管线本地合成在上部）④ <b>禁写「画面出现文字/标题」</b>——AI 画中文=假字 ⑤ 底图含真人脸会被平台审核拦截——含人封面请改用「首帧/指定幕帧」+标题',
@@ -484,8 +485,8 @@ zh:{
 'sub.meta':'精确字幕 · 素材原声转写 · 窗口 %s–%s · 只读（改错字→素材库校对该素材转写；自己写台词→旁白轨切配音；换内容→换素材或改入点/时长）',
 'sub.style.t':'幕级字幕样式（注册表）；留空=继承全局','nar.mode.t':'切换后字幕轨随之分流：dub=台词可编辑 / original=原声转写只读 / none=静音无字幕',
 'mus.inherit':'继承贯穿 BGM','mus.nobgm':'（此幕无 BGM）','mus.seg':'段落','mus.loop':'循环','mus.seg.t':'选用曲内段落（注册表 segments）','mus.loop.t':'段/曲短于幕时循环盖满；取消=播完即静音','mus.noseg':'该曲无段落','mus.whole':'（整条）',
-'lib.mine':'项目素材','lib.mine.tag':'仅本项目','lib.minenote':'本项目独有的素材与衍生资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。跨项目共享素材在下方。',
-'lib.packs':'跨项目素材','lib.packs.tag':'仓库级','lib.packsnote':'<b class="k">仓库级素材</b>（materials/packs/，不属于任何项目）——拍摄素材与通用空镜，哪个项目都能挂载复用；转写/校对的审计投资做一次、全公司复用。<b class="k">先审阅落盘，后取用</b>。',
+'lib.mine':'项目切片','lib.mine.tag':'仅本项目','lib.minenote':'本项目派生的切片资产——人工挑段拼合的权威源片+词轨（随本项目生灭）。拍摄素材在上方素材包。',
+'lib.packs':'素材包','lib.packs.tag':'挂载取用','lib.packsnote':'<b class="k">素材包</b>是素材的唯一入库形态（materials/packs/）——拍摄素材与通用空镜先审阅落盘成包，项目通过<b class="k">挂载</b>取用；转写/校对的审计投资做一次、多项目复用。<b class="k">先审阅落盘，后取用</b>。',
 'pk.id.ph':'新包 id（字母数字-）','pk.name.ph':'包名（可中文）','pk.create':'＋ 建包','pk.mount':'挂载到本项目','pk.unmount':'卸载选中','pk.pick':'— 选择包 —','pk.mounted':'（已挂）',
 'pk.tall':'↻ 转写全部待审','pk.uall':'◉ 识别全部待审','pk.search.ph':'按台词搜素材（转写文本 / 素材 id）','pk.digest':'📋 重新盘点','pk.digest.t':'包级统一理解：导演视角盘点全部素材（题材/资产清单/逐条定位/缺口）。识别有增删后建议重跑——draft 起草会以它开头',
 'pk.empty':'还没有挂载素材包——上方「＋ 建包」后上传素材，或从下拉挂载已有包；挂载后点「↻ 转写全部待审」开始审计',
@@ -501,7 +502,7 @@ zh:{
 'pulse.rendering':'⚙ 渲染中（%s）[%s] %s%——后台/命令行启动的渲染也能看到',
 'msg.unsaved.confirm':'当前故事线有未保存修改，切换将丢弃——继续？',
 'msg.delstory.confirm':'删除故事线「%s」？成片/字幕/预览一并归档到 projects/_attic/，可手工找回。',
-'msg.delproj.confirm':'删除项目「%s」？整个工程目录归档到 projects/_attic/；跨项目素材是仓库级资产，不受影响。',
+'msg.delproj.confirm':'删除项目「%s」？整个工程目录归档到 projects/_attic/；素材包是独立资产（materials/packs/），不受影响。',
 'msg.delbeat.confirm':'删除幕 #%s？自动落盘后不可找回（整条幕的轨道/贴纸/音效一并消失）',
 'msg.deltrack.confirm':'删除该 B 轨叠加？自动落盘后不可找回',
 'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？','msg.delcutdef.confirm':'删除这条缺陷标记？',
@@ -515,7 +516,7 @@ zh:{
 'voice.pickfile.err':'✗ 先选参考音频文件','voice.name.err':'✗ 音色名只能英文/数字/._-','voice.text.err':'✗ 逐字稿必填（零样本克隆硬契约）','voice.registering':'注册中（零样本克隆推理中，请稍候）…','voice.registered':'✓ 已注册 %s','voice.regfail':'注册失败','voice.synth':'试听合成中…（已 %ss，本地 CPU 推理）','voice.testready':'✓ 试听已生成，加载播放中…','voice.playing':'✓ 试听播放中（生成 %ss）','voice.autoplay':'✓ 试听已生成（浏览器拦截自动播放，点页面任意处再听）','voice.testfail':'试听失败','voice.del.confirm':'删除音色 %s？',
 'msg.deleted':'✓ 已删除 %s','msg.delfail':'删除失败','msg.createfail':'创建失败：','msg.savefail':'保存失败：','msg.importfail':'导入失败：',
 'cfg.pdel.t':'删除项目（归档到 _attic，可找回）','reg.bgm':'BGM','reg.subtitles':'字幕样式','reg.transitions':'转场','reg.sfx':'音效','reg.stickers':'贴纸','reg.sample':'样字','msg.regdel.confirm':'删除条目「%s」？\n（素材文件保留在 assets/，可再导入恢复）','msg.regimport.idp':'条目 id（Agent 用它引用）：','msg.regimport.dup':'id 已存在','msg.regadd.idp':'新条目 id（字母/数字/下划线/中划线，Agent 用它引用）：',
-'src.project':'（项目自有切片）','src.project.suffix':' · 项目自有',
+'src.project':'（项目切片）','src.project.suffix':' · 项目切片',
 'msg.wizard.noname':'先填项目名','msg.wizard.done':'✓ 项目已创建：%s',
 'msg.pk.noid':'先填包 id','msg.pk.created':'✓ 已建包 %s','msg.pk.fail':'建包失败：','msg.pk.nosel':'先选包','msg.pk.mountok':'已挂载','msg.pk.unmountok':'已卸载','msg.pk.fail2':'%s失败：%s\n（挂载要求包已存在；卸载不删包本身，素材仍在 materials/packs/）','msg.pk.reqfail':'挂载/卸载请求失败：','pk.del':'删除选中包','msg.pk.delconfirm':'删除包「%s」？\n（归档到 materials/_attic 可找回；所有项目的挂载一并摘除）','msg.pk.delok':'已删除（归档）','cfg.stories':'%s 条故事线','cfg.stories.done':'%s 条已出片',
 'msg.draft.d':'用开场钩子+空镜，起一条 3 幕口播线','msg.draft.busy':'✨ 起草中…（约1分钟）','msg.draft.busy2':'AI 正在读素材档案起草故事线…','msg.draft.done':'✓ AI 草稿已落盘：%s 幕 · %s','msg.draft.fail':'起草失败：',
@@ -540,7 +541,7 @@ en:{
 'cfg.fmtnote':'Format is project-level (registry/formats.json): vertical 1080×1920 / landscape 1920×1080 / square 1080×1080. After creating, open the project → Library tab to mount packs.',
 'cfg.projects':'Video projects','cfg.projnote':'A project = one workspace, may hold <b class="k">multiple storylines</b> (different cuts of the same materials).',
 'cfg.registry':'Global registries','cfg.regnote':'Registries are a shared material library for humans and Agents — changes take effect on save; the next render uses the new values.',
-'reg.video_types':'Video types','reg.cover_strategies':'Cover strategies','reg.narration_modes':'Narration modes','reg.platforms':'Platforms','reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','pf.name':'Name','pf.desc':'Description','pf.sec.draft':'Drafting guidance','pf.sec.defaults':'Render defaults (unset = fallback chain)','pf.sec.qc':'QC duration domain (out of range -> R11 warn; empty = none)','pf.sec.anchor':'Loudness anchor','pf.empty':'No profiles yet - use the Add button top right','pf.pick':'Pick a profile on the left','pf.consumers':'Effect chain: rhythm & drafting prompt -> the AI drafting prompt (Studio AI draft / draft --type carries it); defaults -> render fills unset fields; duration range -> QC R11 out-of-range warn.','pf.consumers.plat':'Effect chain: storyline meta.platform -> QC R6 loudness verdict + post-render two-pass loudnorm refinement.','reg.def.subtitle':'Default subtitle','reg.def.transition':'Default transition','reg.def.narration':'Default narration','reg.def.cover':'Default cover strategy','reg.qc.dur':'Duration range','reg.qc.min':'min','reg.qc.max':'max','reg.unset':'(unset)','reg.save':'Save','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)',
+'reg.voices':'Voices','reg.vtypes':'Video type profiles','reg.plats':'Platform profiles','reg.rhythm':'Rhythm','reg.draftprompt':'Drafting prompt (fed to AI)','pf.name':'Name','pf.desc':'Description','pf.sec.draft':'Drafting guidance','pf.sec.defaults':'Render defaults (unset = fallback chain)','pf.sec.qc':'QC duration domain (out of range -> R11 warn; empty = none)','pf.sec.anchor':'Loudness anchor','pf.empty':'No profiles yet - use the Add button top right','pf.pick':'Pick a profile on the left','pf.consumers':'Effect chain: rhythm & drafting prompt -> the AI drafting prompt (Studio AI draft / draft --type carries it); defaults -> render fills unset fields; duration range -> QC R11 out-of-range warn.','pf.consumers.plat':'Effect chain: storyline meta.platform -> QC R6 loudness verdict + post-render two-pass loudnorm refinement.','reg.def.subtitle':'Default subtitle','reg.def.transition':'Default transition','reg.def.narration':'Default narration','reg.def.cover':'Default cover strategy','reg.qc.dur':'Duration range','reg.qc.min':'min','reg.qc.max':'max','reg.unset':'(unset)','reg.save':'Save','reg.lufs':'LUFS anchor','reg.lufstol':'Tolerance ±','reg.file.video_types':'Each type = an editing-method parameter pack: rhythm/drafting prompt go into the AI prompt, defaults (subtitle/transition/narration/cover) act as render fallbacks, QC range (e.g. {"duration_range":[20,120]}) feeds R11','reg.file.platforms':'Each platform = a loudness anchor: qc R6 and the post-render loudnorm refinement both resolve it from the storyline\'s meta.platform','msg.type.applied':'Applied type-profile defaults: %s (explicit settings untouched)',
 'reg.manage':'Manage →','reg.empty':'empty','reg.noruntime':'runtime not installed','reg.single':'single storyline','reg.mgr':'Registry manager',
 'reg.add':'＋ Add entry','reg.import':'⬆ Import asset file','dlg.close':'✕ Close',
 'reg.fmtnote':'File: %s · Registries are the shared source of truth for humans and agents — saved changes apply to the next render',
@@ -555,8 +556,9 @@ en:{
 'cr.beats':'Beat sequence · each beat is one cut on the timeline',
 'cr.beatsnote':'The leftmost card is the <b class="k">cover</b> (card 0, always pinned first). Horizontal = timeline direction. <b class="k">A track</b> is the main picture and sets duration; <b class="k">B track</b> overlays. Stickers trigger on <b class="k">words</b>, SFX mix at <b class="k">beat-relative times</b>. Edits are conclusions — <b class="k">autosaved</b> (1s after you pause; watch the chip top-right); the <b class="k">＋</b> on the gold line inserts a beat anywhere.',
 'cr.cover':'Cover','cr.cover.hint':'Card 0 · pinned left',
-'meta.stitle':'Storyline title','meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume','meta.grade':'Grade',
-'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'beat-frame = representative material frame (only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','meta.grade.natural':'Natural','mus.bgm.t':'Beat-level track override (registry)','meta.grade.warm':'Warm','meta.grade.cool':'Cool','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
+'meta.stitle':'Storyline title','meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume',
+'meta.persona.t':'Narrator persona — injected into the AI drafting prompt; lines and tone follow it',
+'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'first-frame/beat-frame = representative material frame + locally composited title (the only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','mus.bgm.t':'Beat-level track override (registry)','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
 'cov.strategy':'Cover strategy','cov.title':'Cover title','cov.beat':'Base beat','cov.at':'Offset (s)','cov.prompt':'Prompt',
 'cov.prompt.ph':'Keep the reference scene unchanged, warm natural light, slight background blur, leave the top empty',
 'cov.prompt.hint':'Prompt rules: ① start with "keep the reference subject/scene unchanged" ② describe style only (tone/light/mood/composition), ≤1500 chars ③ state "leave the upper area empty" (the title is composited locally by the pipeline) ④ <b>never ask for text/titles in the image</b> — AI renders fake glyphs ⑤ real faces in the base image get blocked by platform review — for people covers use "first frame / beat frame" + title instead',
@@ -576,8 +578,8 @@ en:{
 'sub.meta':'Precise subtitles · source transcript · window %s–%s · read-only (fix typos → proofread the material in Library; write your own lines → switch Narration to dub; different content → swap material or in/duration)',
 'sub.style.t':'Beat-level subtitle style (registry); empty = inherit global','nar.mode.t':'Subtitles follow the mode: dub = editable lines / original = source transcript read-only / none = silent',
 'mus.inherit':'Inherit global BGM','mus.nobgm':'(no BGM this beat)','mus.seg':'Segment','mus.loop':'Loop','mus.seg.t':'Pick an intra-track segment (registry segments)','mus.loop.t':'Loop to cover when the segment/track is shorter than the beat; off = silence after it ends','mus.noseg':'No segments on this track','mus.whole':'(whole track)',
-'lib.mine':'Project materials','lib.mine.tag':'this project only','lib.minenote':'Materials and derived assets owned by this project — hand-picked source cuts with authoritative word tracks (live and die with the project). Cross-project shared materials below.',
-'lib.packs':'Shared materials','lib.packs.tag':'repo-wide','lib.packsnote':'<b class="k">Repo-wide materials</b> (materials/packs/, owned by no project) — shoots and generic b-roll, mountable by any project; transcribe/proofread once, reuse everywhere. <b class="k">Review and file first, then use</b>.',
+'lib.mine':'Project cuts','lib.mine.tag':'this project only','lib.minenote':'Cut assets derived within this project — hand-picked source clips with authoritative word tracks (live and die with the project). Footage lives in the packs above.',
+'lib.packs':'Material packs','lib.packs.tag':'mount to use','lib.packsnote':'<b class="k">Material packs</b> are the only way materials enter the library (materials/packs/) — shoots and generic b-roll are reviewed and filed into packs first, then mounted into projects; transcribe/proofread once, reuse across projects. <b class="k">Review and file first, then use</b>.',
 'pk.id.ph':'New pack id (letters/digits/-)','pk.name.ph':'Pack name (any language)','pk.create':'＋ New pack','pk.mount':'Mount to this project','pk.unmount':'Unmount selected','pk.pick':'— Pick a pack —','pk.mounted':'(mounted)',
 'pk.tall':'↻ Transcribe all pending','pk.uall':'◉ Identify all pending','pk.search.ph':'Search by transcript text or material id','pk.digest':'📋 Re-digest','pk.digest.t':'Pack-level unified understanding: director-view inventory (theme/assets/per-clip roles/gaps). Re-run after identifications change — drafting starts from it',
 'pk.empty':'No packs mounted yet — "＋ New pack" above then upload materials, or mount an existing pack from the dropdown; then "↻ Transcribe all pending" to start auditing',
@@ -593,7 +595,7 @@ en:{
 'pulse.rendering':'⚙ Rendering (%s) [%s] %s% — visible even for CLI/background renders',
 'msg.unsaved.confirm':'Current storyline has unsaved changes; switching discards them — continue?',
 'msg.delstory.confirm':'Delete storyline "%s"? Final cut/subtitles/previews are archived to projects/_attic/ — manually recoverable.',
-'msg.delproj.confirm':'Delete project "%s"? The whole workspace is archived to projects/_attic/; shared packs are repo-level assets and unaffected.',
+'msg.delproj.confirm':'Delete project "%s"? The whole workspace is archived to projects/_attic/; material packs are standalone assets (materials/packs/) and unaffected.',
 'msg.delbeat.confirm':'Delete beat #%s? Unrecoverable after autosave (its tracks/stickers/SFX go with it)',
 'msg.deltrack.confirm':'Delete this B-track overlay? Unrecoverable after autosave',
 'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?','msg.delcutdef.confirm':'Delete this defect mark?',
@@ -607,7 +609,7 @@ en:{
 'voice.pickfile.err':'✗ Pick a reference audio file first','voice.name.err':'✗ Voice name allows only letters/digits/._-','voice.text.err':'✗ Transcript is required (zero-shot cloning hard contract)','voice.registering':'Registering (zero-shot cloning inference, please wait)…','voice.registered':'✓ Registered %s','voice.regfail':'registration failed','voice.synth':'Synthesizing sample… (%ss elapsed, local CPU inference)','voice.testready':'✓ Sample ready, loading…','voice.playing':'✓ Sample playing (generated in %ss)','voice.autoplay':'✓ Sample ready (browser blocked autoplay — click anywhere to hear it)','voice.testfail':'sample failed','voice.del.confirm':'Delete voice %s?',
 'msg.deleted':'✓ Deleted %s','msg.delfail':'delete failed','msg.createfail':'Create failed: ','msg.savefail':'Save failed: ','msg.importfail':'Import failed: ',
 'cfg.pdel.t':'Delete project (archived to _attic, recoverable)','reg.bgm':'BGM','reg.subtitles':'Subtitle styles','reg.transitions':'Transitions','reg.sfx':'SFX','reg.stickers':'Stickers','reg.sample':'Aa','msg.regdel.confirm':'Delete entry "%s"?\n(the asset file stays in assets/ and can be re-imported)','msg.regimport.idp':'Entry id (the agent references it):','msg.regimport.dup':'id already exists','msg.regadd.idp':'New entry id (letters/digits/underscore/dash, the agent references it):',
-'src.project':'(project cuts)','src.project.suffix':' · project-owned',
+'src.project':'(project cuts)','src.project.suffix':' · project cut',
 'msg.wizard.noname':'Enter a project name first','msg.wizard.done':'✓ Project created: %s',
 'msg.pk.noid':'Enter a pack id first','msg.pk.created':'✓ Pack created: %s','msg.pk.fail':'Create pack failed: ','msg.pk.nosel':'Pick a pack first','msg.pk.mountok':'Mounted','msg.pk.unmountok':'Unmounted','msg.pk.fail2':'%s failed: %s\n(mounting requires the pack to exist; unmounting does not delete the pack — materials stay in materials/packs/)','msg.pk.reqfail':'Mount/unmount request failed: ','pk.del':'Delete selected pack','msg.pk.delconfirm':'Delete pack "%s"?\n(archived to materials/_attic, recoverable; removed from every project\'s mounts)','msg.pk.delok':'Deleted (archived)','cfg.stories':'%s storylines','cfg.stories.done':'%s rendered',
 'msg.draft.d':'draft a 3-beat narration line with a hook opener and b-roll','msg.draft.busy':'✨ Drafting… (~1 min)','msg.draft.busy2':'AI is reading the material dossier and drafting a storyline…','msg.draft.done':'✓ AI draft saved: %s beats · %s','msg.draft.fail':'Draft failed: ',
@@ -1209,14 +1211,13 @@ function buildCreator(){
   $('metabar').innerHTML=
     '<div class="mf"><label data-i18n="meta.stitle">'+esc(t('meta.stitle'))+'</label><input type="text" value="'+esc(DRAFT.title||'')+'" oninput="DRAFT.title=this.value"></div>'+
     '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="onTypeChange(this.value)">'+optHtml(en.video_types,m.type)+'</select><span id="vtype-hint" style="font-size:10px;color:var(--faint)">'+esc(vtypeHint(m.type))+'</span></div>'+
-    '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value"></div>'+
+    '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value" title="'+esc(t('meta.persona.t'))+'"></div>'+
     '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="onPlatformChange(this.value)">'+optHtml(en.platforms,m.platform)+'</select><span id="plat-hint" style="font-size:10px;color:var(--faint)">'+esc(platformHint(m.platform))+'</span></div>'+
     '<div class="mf"><label data-i18n="meta.subtitle">'+esc(t('meta.subtitle'))+'</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
     '<div class="mf"><label data-i18n="meta.bgm">'+esc(t('meta.bgm'))+'</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="'+esc(t('meta.bgm.t'))+'">'+optHtml([{id:'',name:t('meta.nobgm')}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
     (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmseg">'+esc(t('meta.bgmseg'))+'</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="'+esc(t('meta.bgmseg.t'))+'">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
     (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmloop">'+esc(t('meta.bgmloop'))+'</label><select onchange="DRAFT.meta.audio.bgm_loop=this.value===\'\'?null:this.value===\'true\'" title="'+esc(t('meta.bgmloop.t'))+'"><option value="">'+esc(t('meta.auto'))+'</option><option value="true"'+(m.audio.bgm_loop===true?' selected':'')+'>'+esc(t('meta.loop'))+'</option><option value="false"'+(m.audio.bgm_loop===false?' selected':'')+'>'+esc(t('meta.noloop'))+'</option></select></div>':'')+
-    '<div class="mf"><label data-i18n="meta.bgmvol">'+esc(t('meta.bgmvol'))+'</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="'+esc(t('meta.bgmvol.t'))+'"></div>'+
-    '<div class="mf"><label data-i18n="meta.grade">'+esc(t('meta.grade'))+'</label><select onchange="DRAFT.meta.style.grade=this.value">'+optHtml([{id:'natural',name:t('meta.grade.natural')},{id:'warm',name:t('meta.grade.warm')},{id:'cool',name:t('meta.grade.cool')}],m.style.grade)+'</select></div>';
+    '<div class="mf"><label data-i18n="meta.bgmvol">'+esc(t('meta.bgmvol'))+'</label><input type="text" value="'+esc(String(nz(m.audio.bgm_volume,0.22)))+'" onchange="DRAFT.meta.audio.bgm_volume=parseFloat(this.value)||0.22" title="'+esc(t('meta.bgmvol.t'))+'"></div>';
   $('coverops').innerHTML=
     '<div class="mf"><label data-i18n="cov.strategy">'+esc(t('cov.strategy'))+'</label><select onchange="DRAFT.meta.cover.strategy=this.value;buildCreator()" title="'+esc(t('cov.strategy.t'))+'">'+optHtml(en.cover_strategies,m.cover.strategy)+'</select></div>'+
     '<div class="mf"><label data-i18n="cov.title">'+esc(t('cov.title'))+'</label><input type="text" value="'+esc(m.cover.title_text)+'" oninput="DRAFT.meta.cover.title_text=this.value" title="'+esc(t('cov.title.t'))+'"></div>'+
@@ -1403,10 +1404,10 @@ function collectStory(){
         /* 序列化保真（2026-09-14）：words_from/audio 等管线字段不由 UI 编辑，但必须在保存时原样透传
            ——曾实锤：手工故事线经前端落盘后 words_from 全丢，真实词轨字幕静默退化为均分 */
         Object.fromEntries(Object.entries(b.narration||{}).filter(([k])=>!['mode'].includes(k)))),
-      tracks:(b.tracks||[]).map(t=>({role:t.role||'A',source_id:t.source_id||null,
-        cut_index:(t.cut_index===undefined||t.cut_index==='')?null:+t.cut_index,
-        src_in:+nz(t.src_in,0),duration:+nz(t.duration,3),
-        pos:t.pos,scale:+nz(t.scale,0.3),op:t.op||'overlay-pip',requirement:t.requirement||''})),
+      tracks:(b.tracks||[]).map(tk=>({role:tk.role||'A',source_id:tk.source_id||null,
+        cut_index:(tk.cut_index===undefined||tk.cut_index==='')?null:+tk.cut_index,
+        src_in:+nz(tk.src_in,0),duration:+nz(tk.duration,3),
+        pos:tk.pos,scale:+nz(tk.scale,0.3),op:tk.op||'overlay-pip',requirement:tk.requirement||''})),
       music:{inherit:b.music?b.music.inherit!==false:true,
              bgm:(b.music&&b.music.inherit===false)?(b.music.bgm||null):null,
              segment:(b.music&&b.music.segment)||null,   // 段落/循环序列化保真（2026-09-15）：白名单重建曾丢字段
@@ -1496,7 +1497,7 @@ async function aiDraft(){
   setStatus(t('msg.draft.busy2'));
   try{
     const r=await(await fetch('/api/draft/'+P.name,{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent,type:(DRAFT.meta||{}).type||null})})).json();
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent,type:(DRAFT.meta||{}).type||null,persona:(DRAFT.meta||{}).persona||null})})).json();
     if(r.ok){setStatus(t('msg.draft.done',r.sid+'（'+r.beats+'）',String(r.title||'')));
       await openProj(P.name,r.sid);showTab('create');}
     else alert(t('msg.draft.fail')+(r.err||''));

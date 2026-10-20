@@ -1053,7 +1053,8 @@ class H(BaseHTTPRequestHandler):
             try:
                 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
                 import draft as D
-                sid, draft, beats = D.run(name, intent, save=True, vtype=str(body.get("type") or "").strip() or None)
+                sid, draft, beats = D.run(name, intent, save=True, vtype=str(body.get("type") or "").strip() or None,
+                                          persona=str(body.get("persona") or "").strip() or None)
             except SystemExit as e:
                 return self._json({"err": "起草前置缺失（LLM key 未配置？）：%s" % (str(e.code) if e.code else "")[:180]}, 500)  # sys.exit 在 HTTP 线程里会打穿请求（Claude P2-②）
             except Exception as e:
@@ -1393,6 +1394,11 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    srv = ThreadingHTTPServer(("127.0.0.1", port), H)  # 只绑本机：素材不出本机
+    # 默认 listen backlog=5：素材库一屏 25+ 个媒体请求（HTTP/1.0 每请求一条连接）+ 前端轮询
+    # 并发一挤就被内核拒连（客户端 Failed to fetch，2026-10-20 T67 冒烟实锤）——backlog 放宽到 64；
+    # 必须落成类属性：构造函数内就 listen，事后改实例属性无效
+    class _Srv(ThreadingHTTPServer):
+        request_queue_size = 64
+    srv = _Srv(("127.0.0.1", port), H)  # 只绑本机：素材不出本机
     print(f"Studio: http://localhost:{port}")
     srv.serve_forever()

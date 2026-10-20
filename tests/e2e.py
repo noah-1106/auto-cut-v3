@@ -2977,6 +2977,7 @@ def main():
     t65_human_agent_equivalence()
     t66_chinese_naming()
     t67_browser_smoke()
+    t68_persona_prompt()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3155,6 +3156,23 @@ def t67_browser_smoke():
            if not (all(v.values()) if isinstance(v, dict) else v)}
     check("T67b 关键路径渲染（主页/开项目/切换器/tab×2/抽屉×7）", not bad, "bad=%r" % bad)
     check("T67c 无断串泄漏（处理器属性不成可见文本）", R.get("leak") == [], "leak=%r" % R.get("leak"))
+
+
+# ---------------------------------------------------------------- T68 人设注入起草提示词（2026-10-20）
+def t68_persona_prompt():
+    """meta.persona 曾是零消费假字段（UI 可设可落盘，draft/渲染全不读）——Noah 裁定接进
+    起草提示词。锚：注入生效 / 无人设零漂移 / run 链路参数在。"""
+    import inspect
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import draft as D
+    p_with = D.build_prompt("档" * 60, "起一条口播线", [], None, persona="三代同堂宝妈")
+    check("T68a 人设注入提示词", "讲述者人设：三代同堂宝妈" in p_with and "[人设]" in p_with,
+          "hit=%s" % ("[人设]" in p_with))
+    p_none = D.build_prompt("档" * 60, "起一条口播线", [], None)
+    check("T68b 无人设零漂移（提示词无 [人设] 段）", "[人设]" not in p_none, "")
+    check("T68c run 链路接受 persona（Studio/CLI 共用入口）",
+          "persona" in inspect.signature(D.run).parameters,
+          "params=%s" % list(inspect.signature(D.run).parameters))
 
 
 

@@ -213,13 +213,21 @@ def _vtype_section(profile):
                ("；".join(hints)) if hints else ""))
 
 
-def build_prompt(dossier, intent, transitions, profile=None):
+def _persona_section(persona):
+    """讲述者人设 → 提示词段落（无人设返回空串，prompt 零漂移——与 _vtype_section 同纪律）。"""
+    if not persona:
+        return ""
+    return ("\n[人设]\n讲述者人设：%s——台词措辞与叙事口吻贴合此人设\n" % persona)
+
+
+def build_prompt(dossier, intent, transitions, profile=None, persona=None):
     return """你是装修口播短视频的故事线起草师。基于素材档案起草一条新故事线。
 
 [素材档案]（台词以人工校对为准；标【拍摄废片——禁用】的素材绝对不可使用）
 %s
 
 [用户意图]
+%s
 %s
 %s
 %s
@@ -260,7 +268,7 @@ def build_prompt(dossier, intent, transitions, profile=None):
 "subtitle":{"style":"字幕样式id 或省略"},
 "effects":{"stickers":[{"asset":"贴纸样式id","text":"≤6字强调短语","at_word":"触发词","duration":1.2,"pos":"top-center"}],
 "sfx":[{"asset":"音效id","at":0.0,"duration":0.4}]}}],
-"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _vtype_section(profile), _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
+"audio":{"bgm_id":"BGM id 或 null（全片不配乐就 null）"}}""" % (dossier, intent, _persona_section(persona), _vtype_section(profile), _effect_catalog(), ", ".join(transitions) or "（无转场注册）",
     ", ".join("%s(%s：%s)" % (k, v.get("name", ""), (v.get("desc") or "")[:24]) for k, v in _bgm_reg().items() if not k.startswith("_")) or "（无 BGM 注册，bgm_id 填 null）")
 
 
@@ -469,9 +477,10 @@ def save_storyline(pid, draft, beats, vtype=None):
     return sid
 
 
-def run(project, intent, packs=None, save=True, vtype=None):
+def run(project, intent, packs=None, save=True, vtype=None, persona=None):
     """主入口（Studio 与 CLI 共用）。返回 (sid or None, draft, beats)。
-    vtype：视频类型档案 id（registry/video_types.json）——注入起草提示词 + 落盘 meta.type。"""
+    vtype：视频类型档案 id（registry/video_types.json）——注入起草提示词 + 落盘 meta.type。
+    persona：讲述者人设（故事线 meta.persona）——注入起草提示词；落盘靠 meta 继承链。"""
     packs = packs or project_packs(project)
     if not packs:
         raise RuntimeError("项目未挂载任何素材包")
@@ -493,7 +502,7 @@ def run(project, intent, packs=None, save=True, vtype=None):
         print("  ⚠ 未知视频类型 %r（registry/video_types.json 无此档案）——提示词退化为通用" % vtype, flush=True)
     if profile:
         print("  视频类型档案：%s（%s）" % (profile.get("name"), profile.get("rhythm")), flush=True)
-    messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions, profile)}]
+    messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions, profile, persona=persona)}]
     # nohup 重定向=全缓冲：不刷这句，后台跑全程日志 0 字节，Agent 只能瞎轮询（2026-09-18 张亮翔快线实锤）
     print("  档案 %d 字 → LLM 起草中（1-3 分钟无输出属正常）…" % len(dossier), flush=True)
     text = None
@@ -522,8 +531,9 @@ def main():
     ap.add_argument("--save", action="store_true", help="落盘为新故事线（不加则只打印草稿）")
     ap.add_argument("--dub", action="store_true", help="逐幕 AI 配音（TTS，narration.mode=dub）")
     ap.add_argument("--type", help="视频类型档案 id（registry/video_types.json——结构化节奏引导）")
+    ap.add_argument("--persona", help="讲述者人设（注入起草提示词；等同故事线 meta.persona）")
     a = ap.parse_args()
-    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save, vtype=a.type)
+    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save, vtype=a.type, persona=a.persona)
     if a.dub and sid and beats:
         # R3：逐幕配音（story=口播词）→ narration.mode=dub + audio 路径写回故事线
         import tts

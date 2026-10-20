@@ -34,7 +34,7 @@ This abstraction buys three things:
 **Creator**: pipeline progress bar on top (15 nodes with live ✓/○/✗/· status, same source as the orchestrator) | final-cut monitor | storyline outline and global settings (subtitle style/BGM/segment/cover) | the beat-sequence gold line (horizontal = timeline; ＋ inserts a beat; click a beat for a quick low-res proof).
 ![Creator](docs/screenshots/studio.png)
 
-**Library**: project cuts and repo-wide material packs; proofread transcripts in place; material cards carry review badges (✓ usable / ◌ pending / ✕ reject) and a defect log.
+**Library**: material packs mounted into the project (the only way materials enter) plus project cuts; proofread transcripts in place; material cards carry review badges (✓ usable / ◌ pending / ✕ reject) and a defect log.
 ![Library](docs/screenshots/library.png)
 
 ---

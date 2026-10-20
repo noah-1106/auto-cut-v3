@@ -141,10 +141,12 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
 # 配音版（整线 TTS）：python3 autocut3/draft.py <pid> --intent "..." --save --dub
 ```
 - `--intent` 必填（AI 起草路线）。不加 `--save` 只打印不落盘。
+- `--persona "<讲述者人设>"`（2026-10-20 起）：注入起草提示词的 [人设] 段，台词/口吻贴合；
+  等同故事线 `meta.persona`（Studio 创作台填了人设，点「AI 起草」自动带上；新线靠 meta 继承链落盘）。
 - **手写路线**：故事线门也接受人/Agent 手写——落盘 `storylines/<名字>.json`
   （Studio 创作台 / `POST /api/storyline` / 直接写文件）即过门，编排器不问出处；
-  手写线同样吃 vadwords→dubfit→渲染全链。大纲/意图想结构化传给 LLM 的目前只有
-  `--intent` 一句话自由文本一条通道（outline 是 LLM 输出字段，不是输入）。
+  手写线同样吃 vadwords→dubfit→渲染全链。传给 LLM 的结构化通道：`--intent` 自由文本
+  + `--type` 类型档案 + `--persona` 人设（outline 是 LLM 输出字段，不是输入）。
 - **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
   （本地 audio8 音色按需注册，现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准）。
   **人侧等价链（2026-10-17 补）**：Studio 幕卡切「配音」+写台词即可——保存时台词变更自动
@@ -250,7 +252,7 @@ python3 autocut3/qc.py <pid> --story <sid>
 - **视频类型/平台档案（registry/video_types.json、registry/platforms.json，2026-10-15）**：
   类型=剪辑方法参数包（rhythm/draft_prompt 进起草提示词、defaults 作渲染回退、qc.duration_range 供 R11）；
   平台=响度锚（qc R6 与渲染后 loudnorm 精修都按故事线 meta.platform 查）。Studio 抽屉或直接改 JSON 维护，
-  起草传类型：`draft.py --type knowledge-koubo` / POST /api/draft body 加 "type"。
+  起草传类型：`draft.py --type knowledge-koubo` / POST /api/draft body 加 "type"（人设同理：--persona / body "persona"）。
   R3 静音洞≤0.8s / R4 冻结帧<2s / R5 字幕页≥0.5s / R6 响度锚 -16±3 LUFS /
   R7 听觉（洞>1.5s、相邻段差>8dB）/ R8 填充词 7 个+呃嗯 / R9 重说（4 字 ngram×12s 窗）/
   R10 页同步偏移≤0.5s。**warn 不拦交付但要在交付说明里如实列出**。
