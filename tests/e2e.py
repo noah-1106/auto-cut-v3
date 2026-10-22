@@ -2978,6 +2978,7 @@ def main():
     t66_chinese_naming()
     t67_browser_smoke()
     t68_persona_prompt()
+    t69_voice_format_transcode()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3173,6 +3174,45 @@ def t68_persona_prompt():
     check("T68c run 链路接受 persona（Studio/CLI 共用入口）",
           "persona" in inspect.signature(D.run).parameters,
           "params=%s" % list(inspect.signature(D.run).parameters))
+
+
+# ---------------------------------------------------------------- T69 声纹注册格式归一（2026-10-22）
+def t69_voice_format_transcode():
+    """锚：studio 曾把上传的参考音频恒命名 .wav——m4a 字节顶 .wav 后缀发给 Audio8，
+    解码必炸（用户实锤 400 Format not recognised）。根修在 register_voice 入口层
+    （CLI/Studio 同路）：wav/mp3 直传，其余 ffmpeg 转 44.1k mono wav。离线锚不打 Audio8。"""
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import asr, tts_audio8, subprocess, tempfile
+    ff = asr.ffmpeg_path()
+    if not ff:
+        check("T69 声纹注册格式归一", False, "无 ffmpeg——本锚无法降级")
+        return
+    # a) wav/mp3 直通不转码
+    p, tmp = tts_audio8._reg_wav("/x/参考.wav")
+    a = (p == "/x/参考.wav" and tmp is None)
+    p2, tmp2 = tts_audio8._reg_wav("/x/voice.MP3")  # 大小写不敏感
+    a = a and p2 == "/x/voice.MP3" and tmp2 is None
+    check("T69a wav/mp3 直通（不转码、无临时文件）", a, "")
+    # b) m4a → 真转码出合法 wav
+    src = os.path.join(tempfile.mkdtemp(prefix="t69_"), "probe.m4a")
+    subprocess.run([ff, "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                    "-c:a", "aac", src], capture_output=True, check=True)
+    out, tmp3 = tts_audio8._reg_wav(src)
+    head = open(out, "rb").read(4)
+    ok = out.endswith(".wav") and head == b"RIFF" and tmp3 == out
+    if tmp3:
+        os.unlink(tmp3)
+    check("T69b m4a 转码为合法 WAV（RIFF 头+临时文件交还调用方）", ok,
+          "out=%s head=%r" % (out, head))
+    # c) 坏输入如实报错不静默
+    bad = os.path.join(os.path.dirname(src), "bad.m4a")
+    open(bad, "wb").write(b"not audio")
+    try:
+        tts_audio8._reg_wav(bad)
+        c = False
+    except RuntimeError:
+        c = True
+    check("T69c 坏音频转码失败如实抛错（不静默注册空音色）", c, "")
 
 
 

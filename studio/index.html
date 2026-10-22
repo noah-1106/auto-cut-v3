@@ -363,7 +363,7 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
     <div id="voicemgr-body" style="flex:1;overflow:auto;padding:16px 22px"></div>
   </div>
 </div>
-<input type="file" id="voicefile" style="display:none">
+<input type="file" id="voicefile" style="display:none" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg,.opus">
 
 
 
@@ -882,7 +882,7 @@ async function voiceRegister(){
   if(!text){$('voice-hint').textContent=t('voice.text.err');return;}
   $('voice-hint').textContent=t('voice.registering');
   try{
-    const r=await(await fetch('/api/voice-register?name='+encodeURIComponent(name)+'&text='+encodeURIComponent(text),
+    const r=await(await fetch('/api/voice-register?name='+encodeURIComponent(name)+'&text='+encodeURIComponent(text)+'&fname='+encodeURIComponent(f.name||''),
       {method:'POST',body:f})).json();
     if(r.ok){$('voice-hint').textContent=t('voice.registered',name);renderVoiceMgr();loadConfig();}
     else $('voice-hint').textContent='✗ '+((r.err||r.error)||t('voice.regfail'));

@@ -10,7 +10,7 @@
 参考音色=零样本克隆：register_voice(name, 参考音频, 参考逐字稿)——参考音频 0.5-30s，
 逐字稿必须与 spoken 内容完全一致（模型契约，错字直接降相似度）。
 """
-import json, os, sys, time, urllib.request
+import json, os, subprocess, sys, tempfile, time, urllib.request
 
 ARK = os.path.expanduser(os.environ.get("AUTOCUT_AUDIO8_HOME", "~/.local/share/autocut3/audio8"))
 _VENV_BIN = os.path.join(ARK, "venv", "Scripts" if os.name == "nt" else "bin")
@@ -121,10 +121,34 @@ def synth(text, out_wav, voice=None, max_new_tokens=1024, timeout_s=600):
     return out_wav
 
 
+def _reg_wav(audio_path):
+    """注册用音频归一：wav/mp3 原样直传（Audio8 服务按文件内容/后缀解码）；其余格式
+    （m4a/flac/aac/ogg…libsndfile 不认 AAC 系，2026-10-22 用户实锤 m4a 注册失败）经
+    ffmpeg 转 44.1k mono wav。返回 (路径, 待清理临时文件 or None)——调用方 finally 清。"""
+    ext = os.path.splitext(audio_path)[1].lower()
+    if ext in (".wav", ".mp3"):
+        return audio_path, None
+    import asr
+    ff = asr.ffmpeg_path()
+    if not ff:
+        raise RuntimeError("参考音频是 %s 格式，需转码但找不到 ffmpeg" % (ext or "未知"))
+    fd, tmp = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    r = subprocess.run([ff, "-y", "-i", audio_path, "-ar", "44100", "-ac", "1", tmp],
+                       capture_output=True)
+    if r.returncode != 0 or not os.path.getsize(tmp):
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise RuntimeError("参考音频（%s）转码失败：%s"
+                           % (ext, r.stderr.decode("utf-8", "replace")[-120:]))
+    return tmp, tmp
+
+
 def register_voice(name, audio_path, transcript, overwrite=False, timeout_s=300):
-    """注册/更新参考音色。audio_path 0.5-30s wav/mp3（服务自动转 44.1k mono）；
-    transcript=参考音频的逐字稿，必须与 spoken 内容一字不差。"""
+    """注册/更新参考音色。audio_path 0.5-30s；wav/mp3 直传，其余格式自动转 wav
+    （服务侧再归一 44.1k mono）。transcript=参考音频的逐字稿，必须与 spoken 内容一字不差。"""
     ensure_server()
+    audio_path, _tmp = _reg_wav(audio_path)
     import uuid
     b = uuid.uuid4().hex
     fname = os.path.basename(audio_path)
@@ -145,6 +169,9 @@ def register_voice(name, audio_path, transcript, overwrite=False, timeout_s=300)
         return r
     except urllib.error.HTTPError as e:
         raise RuntimeError("Audio8 注册音色失败 [%s]: %s" % (e.code, e.read()[:200]))
+    finally:
+        if _tmp:
+            os.unlink(_tmp)
 
 
 if __name__ == "__main__":

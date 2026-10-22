@@ -153,8 +153,9 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
   摘除旧音频，`POST /api/render-start` 前置自动 `tts.synth` + vadwords 量词轨，失败不开渲；
   无需再走 `--dub` CLI。
   换音色=先注册参考音色再改配置：
-  `python3 autocut3/tts_audio8.py register <名字> <参考音频.wav> "<逐字稿>"`——
+  `python3 autocut3/tts_audio8.py register <名字> <参考音频> "<逐字稿>"`——
   **硬契约：参考音频 0.5–30s 且逐字稿一字不差**，否则克隆出来的是哑嗓子；
+  格式不限（wav/mp3 直传，m4a/flac/aac/ogg 等自动 ffmpeg 转码，2026-10-22 起）；
   注册后 `tts.py synth --text "..." --voice <名字>` 验证音色可用再跑 draft --dub。
   云端 minimax 同理走 `tts` 段 provider 切换。
 - **耗时预期**：起草是一次长上下文 LLM 调用，实测约 4–11 分钟属正常区间——不要中途判死重跑。

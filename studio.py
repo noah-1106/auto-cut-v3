@@ -503,7 +503,12 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n <= 0 or n > 50 << 20:
                 return self._json({"err": "bad size %d（参考音频 ≤50MB，0.5-30s）" % n}, 400)
-            fd, tmp = tempfile.mkstemp(suffix=".wav")
+            # 临时文件保留真实扩展名——register_voice 按扩展名决定直传 wav/mp3 还是
+            # ffmpeg 转码（曾恒命名 .wav：m4a 字节顶 .wav 后缀发给服务，解码必炸，2026-10-22 用户实锤）
+            _ext = os.path.splitext(urllib.parse.unquote((_q.get("fname") or [""])[0]))[1].lower()
+            if not re.fullmatch(r"\.[a-z0-9]{2,5}", _ext or ""):
+                _ext = ".bin"
+            fd, tmp = tempfile.mkstemp(suffix=_ext)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(self.rfile.read(n))
             try:
