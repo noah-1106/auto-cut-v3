@@ -122,7 +122,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 9 | Gates | qc (R1-R11) + dubgate + G1/G2t | qc-report + gate reports | delivery verdict |
 | 10 | Delivery | loudnorm + release naming | release cut | human final review |
 
-Above is the conceptual 10-stage map; the machine-checkable stage-status source of truth is the orchestrator's `STEPS` in `orchestrate.py` (15 steps — the extra granularity is audit and reserved slots like mount/digest/proofread/dossier/aigen). All automatic. Hardware encoders preferred (mac=videotoolbox / win=nvenc·qsv, fallback libx264); dub fitting runs "envelope locate → trim head/tail → ASR closed loop", and a dubgate failure means no render; **cover generation + check run BEFORE render** (2026-09-18 ruling: a failed cover exits 1 without burning a render; output-frame is the only post-render strategy = frame from the finished cut). Five strategies: first-frame (default) / beat-frame (beat no. + seconds) / ai-generated (representative frame as base + prompt via image-01 preserving subject; **a base image with a real face is always blocked by platform review (error 1026)** — the only fidelity route for people covers = frame grab + locally composited title_text) / output-frame / upload. Titles are always deterministic local drawtext (AI-drawn CJK = fake glyphs). Covers are normalized to the project format (landscape-shot vertical-crop footage auto-conforms). Standalone cover: `python3 autocut3/pipeline.py cover <proj> <story>`; the Studio "Build cover" button is the same path.
+Above is the conceptual 10-stage map; the machine-checkable stage-status source of truth is the orchestrator's `STEPS` in `orchestrate.py` (15 steps — the extra granularity is audit and reserved slots like mount/digest/proofread/dossier/aigen). All automatic. Hardware encoders preferred (mac=videotoolbox / win=nvenc·qsv, fallback libx264); dub fitting runs "envelope locate → trim head/tail → ASR closed loop", and a failing dubgate step halts `--advance` before render; **cover generation + check run BEFORE render** (2026-09-18 ruling: a failed cover exits 1 without burning a render; output-frame is the only post-render strategy = frame from the finished cut). Five strategies: first-frame (default) / beat-frame (beat no. + seconds) / ai-generated (representative frame as base + prompt via image-01 preserving subject; **a base image with a real face is always blocked by platform review (error 1026)** — the only fidelity route for people covers = frame grab + locally composited title_text) / output-frame / upload. Titles are always deterministic local drawtext (AI-drawn CJK = fake glyphs). Covers are normalized to the project format (landscape-shot vertical-crop footage auto-conforms). Standalone cover: `python3 autocut3/pipeline.py cover <proj> <story>`; the Studio "Build cover" button is the same path.
 
 **Pipeline orchestrator**: `autocut3/orchestrate.py` derives every stage's status from files (including the reserved aigen slot) — one entry point for human and agent:
 ```bash
@@ -151,18 +151,19 @@ AI cover images go through image_gen.py (MiniMax image-01, `image` section of se
 studio.py            # all backend routes (equal-rights HTTP for human/agent)
 studio/index.html    # single-page frontend (pipeline bar / registry drawers / live render progress + notifications)
 autocut3/            # pipeline modules: orchestrate(orchestrator) process(material pipeline·ingest first choice) asr(provider adapter + word-track normalization)
-                     #   transcribe(ASR) understand(vision) digest(pack digest) draft(AI drafting) disposition(defect log)
+                     #   transcribe(ASR) understand(vision) vision(vision provider adapter) digest(pack digest) draft(AI drafting) disposition(defect log)
                      #   pipeline(cover/render) qc(QC R1-R11) proofread(proofreading) vadwords(VAD word track)
-                     #   dubfit(dub fitting) dubgate(dub gate) dossier(material dossier) tts(dub synthesis) tts_audio8(local TTS runtime)
-                     #   video_meta(geometry probe) flock(cross-platform lock) video_gen/image_gen(AI-gen reserved) library(v1 cuts legacy layer)
+                     #   dubfit(dub fitting) dubgate(dub gate) dossier(material dossier) tts(dub synthesis) tts_audio8(local TTS runtime) tts_idlekill(TTS idle watchdog)
+                     #   video_meta(geometry probe) flock(cross-platform lock) image_gen(AI cover production dep)/video_gen(AI video reserved) library(v1 cuts legacy layer)
 registry/            # registries: single source of truth for the effect system (*.json pure data)
-                     #   bgm/subtitles/transitions/sfx/stickers = effects; enums/formats = semantic enums (read-only)
+                     #   bgm/subtitles/transitions/sfx/stickers = effects; video_types/platforms = editing-method archives
+                     #   (type → draft prompt + render defaults + R11 duration range; platform → loudness anchor — maintainable via Studio drawers); enums/formats = semantic enums (read-only)
 assets/              # effect asset files (registry `file` fields point here)
 materials/packs/     # user footage store (large files, not in git)
 projects/<name>/     # project workspace: storylines/, out-*.mp4 finals, qc-report.json (not in git, .gitkeep placeholder)
-config/              # services.json (service keys) lexicon.json (proofread lexicon) qc_rules.json
+config/              # services.json (service keys) lexicon.json (proofread lexicon) qc_rules.json defects-policy.json (v2 disposition rules · design-era material)
 docs/                # design docs (pipeline-v2.md = pipeline automation design; archive/ = retired material; README.md = doc map + glossary)
-tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor) domsim.js (frontend execution-sim template, T64) browser_smoke.html (real-browser smoke harness, T67)
+tests/               # e2e.py (end-to-end) rmw_smoke.py (concurrency) audit.py (code auditor) fixtures.py (e2e fixtures) domsim.js (frontend execution-sim template, T64) browser_smoke.html (real-browser smoke harness, T67)
 bin/                 # ffmpeg 6.0+ (bring your own, not in git)
 ```
 
@@ -178,7 +179,7 @@ python3 autocut3/vadwords.py    myproj --story main       # regenerate VAD word 
 python3 autocut3/dubfit.py      myproj --story main       # automated dub fitting (dub beats)
 python3 autocut3/dubgate.py     myproj --story main       # dub fitting gate
 python3 autocut3/proofread.py   myproj --dry              # proofread rehearsal, nothing written
-python3 autocut3/pipeline.py    myproj beat 2 main        # single-beat proof (seconds, 540p; for self-check after edits & human review)
+python3 autocut3/pipeline.py    beat myproj 2 main        # single-beat proof (seconds, 540p; for self-check after edits & human review)
 python3 tests/e2e.py                                       # full regression (count = the trailing "N passed / M failed" line)
 python3 tests/audit.py                                     # code auditor
 ```
@@ -189,10 +190,10 @@ python3 tests/audit.py                                     # code auditor
 
 | Symptom | Check first |
 |---|---|
-| Upload Broken pipe / 000 | does materials/packs/<pack>/ exist (auto-created as fallback); is the file >500MB |
+| Upload Broken pipe / 000 | does materials/packs/<pack>/ exist (auto-created as fallback); is the file >1GiB |
 | "bad filename" | filename contains `/` `\` `..` or starts with `.` (Chinese names are allowed) |
 | Transcribe 401/timeout | keys in config/services.json; minimax cloud limits ≤50MB/≤500s |
-| Render stuck at ffmpeg | the `tail` field of projects/<proj>/render.status holds the last 8 stderr lines |
+| Render stuck at ffmpeg | the `tail` field of projects/<proj>/render.status holds the last 400 stderr chars |
 | Subtitles not paginating/overlapping | was subtitle-*.ass generated; is the words track empty (failed transcription silently drops subtitles) |
 | Subtitles offset from speech | word-track source narration.words: transcript tier=word (measured) takes the direct channel; tier=vad/sent — see vad-report spans; for window offsets set narration.window_local (hand-picked window spread over story) |
 | Residual noise at dub head | did dubgate run; was the audio head-trimmed (energy-envelope 0.1s-level locating, never trust ASR word times) |
@@ -218,7 +219,7 @@ Every push to main runs the full e2e on GitHub Actions windows-latest + ubuntu-l
 2. **Word-track black zones**: on-set calls/mumbles are missed by ASR — detect "energy has speech, word track has no text" and cut them (incident: the call "three-two-one-go" made it into the final cut)
 3. **concat must pad**: skipped intervals (silence holes etc.) must be padded with equal-length silence, or later segments shift forward (incident: the tail started 4s early with no BGM)
 4. **Serialization fidelity**: the frontend must pass through unknown fields when saving — whitelist rebuilding = silent data loss (incident: hand-made word tracks all lost, subtitles degraded to even spreading)
-5. **Dub-fit closed loop**: cut dub audio must be re-checked by dubgate (first word = story first char / last word covers sentence tail / similarity ≥0.9); no pass, no render
+5. **Dub-fit closed loop**: cut dub audio must be re-checked by dubgate (first word = story first char / last word covers sentence tail / similarity ≥0.9); gate topology = the dubgate step of orchestrate `--advance` halts the advance (render never starts) — `pipeline.py render` itself does not run dubgate; direct CLI renders rely on the human having passed the gate first
 6. **Three gate domains**: text (G1 what was said) + timing (G2t when it was said) + hearing (loudness/silence holes) — "text correct" ≠ "timing correct" (incident: 46% of characters misaligned >1s still passed the text gate)
 7. **Fix closure**: fixing A exposing B is normal; a fix converges only when gates re-run to all-green; every fix must land a regression anchor in tests/e2e.py — no anchor = not fixed
 8. **Cross-platform discipline (Mac/Windows)**: file locks only via `autocut3/flock.py` (POSIX=flock / Windows=msvcrt, never import fcntl directly); ffmpeg resolution via `ffmpeg_path()` (env → bin/ffmpeg(.exe) → PATH, never bare `"bin/ffmpeg"` relative paths); render encoding via `hw_encoder()` (platform probe, software libx264 only as fallback)

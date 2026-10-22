@@ -432,7 +432,9 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 const $=id=>document.getElementById(id);
 const nz=(v,d)=>(v===undefined||v===null||v==='')?d:v;
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // 单引号转义：inline onclick 单引号拼接断串/XSS 根（Claude P1-①）
-const cssbg=st=>'background:'+String(st.bg||'0xFFD400').replace('0x','#')+';color:'+String(st.fg||'0x111').replace('0x','#')+';border:2px solid '+String(st.stroke||'0x000').replace('0x','#');  // 贴纸文字模板 swatch（drawtext 的 0xRRGGBB → CSS）
+const cssbg=st=>{  // 贴纸文字模板 swatch（drawtext 的 0xRRGGBB → CSS）；2026-10-22 安全批：值过白名单——注册表投毒值经此裸进 style 属性曾是存储型 XSS 面（服务端 registry-save 值校验是第一道，此为纵深）
+  const c=(v,d)=>{v=String(v||'');return /^0x[0-9A-Fa-f]{6}$/.test(v)?v.replace('0x','#'):d;};
+  return 'background:'+c(st.bg,'#FFD400')+';color:'+c(st.fg,'#111')+';border:2px solid '+c(st.stroke,'#000');};
 
 /* ═══ i18n（2026-10-15 双语化）：DOM 模板保留中文原文+data-i18n 属性，渲染后 applyLang() 统一改写；
    非 DOM 文案（alert/confirm/prompt/setStatus）走 t()。语言存 localStorage，默认 zh 与历史行为一致。
@@ -463,8 +465,9 @@ zh:{
 'cr.beats':'幕序列 · 每幕是多轨上的一刀',
 'cr.beatsnote':'最左一张是<b class="k">封面收口</b>（第 0 张，永远钉在最左侧）。横向即时间轴方向。<b class="k">A 轨</b>主画定时长，<b class="k">B 轨</b>叠加。贴纸按<b class="k">词点</b>触发，音效按<b class="k">幕内时刻</b>混入。改动即结论——<b class="k">自动落盘</b>（停顿 1 秒后保存，右上角芯片可见状态）；金线上的 <b class="k">＋</b> 可在任意幕间插入新幕。',
 'cr.cover':'封面收口','cr.cover.hint':'第 0 张 · 钉在最左',
-'meta.stitle':'故事线标题','meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量',
+'meta.stitle':'故事线标题','meta.type':'视频类型','meta.persona':'人设','meta.platform':'平台','meta.format':'画幅','meta.format.t':'故事线级画幅覆盖——留空=跟随项目画幅；选项来自 formats.json 注册表','meta.format.inherit':'（跟随项目）','meta.subtitle':'字幕风格','meta.bgm':'BGM','meta.bgmseg':'BGM 段落','meta.bgmloop':'BGM 循环','meta.bgmvol':'BGM 音量',
 'meta.persona.t':'讲述者人设——AI 起草时注入提示词，台词与叙事口吻贴合它',
+'meta.voice':'配音音色','meta.voice.t':'AI 旁白（配音）幕的合成音色——声纹库注册音色（注册表页「声纹」卡管理）；默认=服务当前默认音色。换音色后旧配音自动失效、下次渲染重配','meta.voice.default':'（默认音色）',
 'meta.bgm.t':'全片底乐，注册表选曲；（无）= 不配乐。Agent 起草用的是同一张注册表','meta.bgmseg.t':'贯穿曲默认段落；幕级音乐轨可再覆盖','meta.bgmloop.t':'段/曲短于所需时长时：自动=按曲长、循环=强制 aloop、不循环=播完补静音','meta.bgmvol.t':'BGM 相对音量 0–1（默认 0.22）','cov.strategy.t':'首帧封面/指定幕帧=素材代表帧+标题本地合成（含真人脸封面的唯一保真路线）/ AI 生成封面=代表帧底图+提示词保主体生成（底图含真人脸会被平台审核拦）/ 成片抽帧=渲染后从成片抽（封面=发布产物本体）/ 外部上传=设计稿直传','cov.title.t':'核心故事标题——管线本地 drawtext 合成到封面上部（确定性渲染，无假字风险）','cov.beat.t.ai':'AI 底图取自该幕','cov.beat.t.frame':'封面取自该幕','msg.badresp':'服务返回异常','view.words':' 词 · ','view.beats2':' 幕 · ','mus.bgm.t':'幕级换曲（注册表）','meta.nobgm':'（无 BGM）','meta.auto':'自动','meta.loop':'循环','meta.noloop':'不循环',
 'cov.strategy':'封面策略','cov.title':'封面标题','cov.beat':'底图幕号','cov.at':'幕内秒','cov.prompt':'提示词',
 'cov.prompt.ph':'保持参考图场景不变，暖色自然光，背景轻微虚化，上半部分留白',
@@ -505,7 +508,7 @@ zh:{
 'msg.delproj.confirm':'删除项目「%s」？整个工程目录归档到 projects/_attic/；素材包是独立资产（materials/packs/），不受影响。',
 'msg.delbeat.confirm':'删除幕 #%s？自动落盘后不可找回（整条幕的轨道/贴纸/音效一并消失）',
 'msg.deltrack.confirm':'删除该 B 轨叠加？自动落盘后不可找回',
-'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？','msg.delcutdef.confirm':'删除这条缺陷标记？',
+'msg.deldef.confirm':'删除这条缺陷标记（%s @ %ss）？',
 'msg.newstory.p':'新故事线 id（字母/数字/中文/下划线/中划线）：\n例：koubo2 / 口播二版','msg.badid':'id 只允许字母、数字、中文、下划线、中划线',
 'msg.save.fail':'✗ 保存失败：%s——DIRTY 保持，点右上角芯片重试',
 'msg.draft.p':'给 AI 一句起草意图：\n例：用开场钩子和空镜起一条 3 幕口播线，总长 40 秒',
@@ -528,7 +531,7 @@ zh:{
 'msg.pk.count':'%s 条','pack.text.t':'转写文本（%s）· 可直接校对，失焦即落盘','pack.mark':'标记',
 'msg.pack.savefail':'✗ 拍摄层保存失败','def.type.d':'说错',
 'msg.tr.busy':'⟳ 转写中…','msg.tr.done':'✓ 转写完成 %s','msg.tr.fail':'转写失败','msg.un.busy':'⟳ 识别中…','msg.un.done':'✓ 画面识别完成 %s','msg.un.fail':'识别失败','msg.un.none':'没有待识别素材','msg.un.progress':'识别 %s/%s…','msg.unknown':'未知原因','msg.un.doneall':'✓ 本次识别 %s 条','msg.un.failpart':' · ✗ 失败 %s 条：%s','msg.tr.none':'没有待转写素材','msg.tr.progress':'转写 %s/%s…','msg.tr.doneall':'✓ 本次转写 %s 条','msg.tr.failpart':' · ✗ 失败 %s 条：%s',
-'cut.waste':'废','cut.pf':'校对 · ','cut.vi.t':'切片为源片窗口，不做独立画面识别','msg.cut.savefail':'✗ 切片档案保存失败','msg.pf.done':'✓ 校对已落盘 %s（文字校对 ✓）','msg.pf.fail':'✗ 校对保存失败：','msg.pf.done2':'%s 校对已落盘',
+'cut.waste':'废','cut.pf':'校对 · ','cut.vi.t':'切片为源片窗口，不做独立画面识别','msg.pf.done':'✓ 校对已落盘 %s（文字校对 ✓）','msg.pf.fail':'✗ 校对保存失败：','msg.pf.done2':'%s 校对已落盘',
 'msg.nr.done':'✓ 渲染完成 · %s','msg.nr.donebody':'监视器已自动刷新，可回来验收','msg.nr.donetitle':'✓ 渲染完成——AutoCut','msg.nr.donestatus':'✓ 渲染完成（后台任务）· 监视器已刷新','msg.nr.fail':'✗ 渲染失败 · %s','msg.nr.failbody':'见终端/日志','msg.nr.failstatus':'✗ 后台渲染失败（见终端/日志）','msg.sync.data':'↻ 检测到数据更新（Agent/后台），素材库与列表已同步',
 },
 en:{
@@ -556,8 +559,9 @@ en:{
 'cr.beats':'Beat sequence · each beat is one cut on the timeline',
 'cr.beatsnote':'The leftmost card is the <b class="k">cover</b> (card 0, always pinned first). Horizontal = timeline direction. <b class="k">A track</b> is the main picture and sets duration; <b class="k">B track</b> overlays. Stickers trigger on <b class="k">words</b>, SFX mix at <b class="k">beat-relative times</b>. Edits are conclusions — <b class="k">autosaved</b> (1s after you pause; watch the chip top-right); the <b class="k">＋</b> on the gold line inserts a beat anywhere.',
 'cr.cover':'Cover','cr.cover.hint':'Card 0 · pinned left',
-'meta.stitle':'Storyline title','meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume',
+'meta.stitle':'Storyline title','meta.type':'Video type','meta.persona':'Persona','meta.platform':'Platform','meta.format':'Aspect','meta.format.t':'Storyline-level aspect override — empty = follow the project aspect; options come from the formats.json registry','meta.format.inherit':'(follow project)','meta.subtitle':'Subtitle style','meta.bgm':'BGM','meta.bgmseg':'BGM segment','meta.bgmloop':'BGM loop','meta.bgmvol':'BGM volume',
 'meta.persona.t':'Narrator persona — injected into the AI drafting prompt; lines and tone follow it',
+'meta.voice':'Dub voice','meta.voice.t':'Voice for AI narration (dub) beats — from the registered voice library (managed via the Voices card on the Registries page); Default = server default voice. Changing it invalidates old dub audio; next render re-synthesizes','meta.voice.default':'(default voice)',
 'meta.bgm.t':'Whole-film bed music from the registry; (none) = no music. The drafting agent reads the same registry','meta.bgmseg.t':'Default segment of the through-track; beat-level music can override','meta.bgmloop.t':'When segment/track is shorter than needed: Auto = by track length, Loop = force aloop, No loop = pad silence','meta.bgmvol.t':'BGM relative volume 0-1 (default 0.22)','cov.strategy.t':'first-frame/beat-frame = representative material frame + locally composited title (the only real-face route for people covers) / ai-generated = base frame + prompt preserving subject (real faces in base get blocked by platform review) / output-frame = frame from the rendered cut / upload = uploaded image','cov.title.t':'Core story title — composited onto the upper area by local drawtext (deterministic, no fake glyphs)','cov.beat.t.ai':'AI base image taken from this beat','cov.beat.t.frame':'Cover taken from this beat','msg.badresp':'service returned an error','view.words':' words · ','view.beats2':' beats · ','mus.bgm.t':'Beat-level track override (registry)','meta.nobgm':'(No BGM)','meta.auto':'Auto','meta.loop':'Loop','meta.noloop':'No loop',
 'cov.strategy':'Cover strategy','cov.title':'Cover title','cov.beat':'Base beat','cov.at':'Offset (s)','cov.prompt':'Prompt',
 'cov.prompt.ph':'Keep the reference scene unchanged, warm natural light, slight background blur, leave the top empty',
@@ -598,7 +602,7 @@ en:{
 'msg.delproj.confirm':'Delete project "%s"? The whole workspace is archived to projects/_attic/; material packs are standalone assets (materials/packs/) and unaffected.',
 'msg.delbeat.confirm':'Delete beat #%s? Unrecoverable after autosave (its tracks/stickers/SFX go with it)',
 'msg.deltrack.confirm':'Delete this B-track overlay? Unrecoverable after autosave',
-'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?','msg.delcutdef.confirm':'Delete this defect mark?',
+'msg.deldef.confirm':'Delete this defect mark (%s @ %ss)?',
 'msg.newstory.p':'New storyline id (letters/digits/Chinese/underscore/dash):\ne.g. koubo2 / cut-2','msg.badid':'id allows only letters, digits, Chinese characters, underscore, dash',
 'msg.save.fail':'✗ Save failed: %s — DIRTY kept, click the chip top-right to retry',
 'msg.draft.p':'Give the AI a one-line intent:\ne.g. draft a 3-beat narration line with a hook opener and b-roll, ~40s total',
@@ -621,7 +625,7 @@ en:{
 'msg.pk.count':'%s items','pack.text.t':'Transcript (%s) · proofread directly, saves on blur','pack.mark':'marks',
 'msg.pack.savefail':'✗ Failed to save shoot-level flag','def.type.d':'misspoke',
 'msg.tr.busy':'⟳ Transcribing…','msg.tr.done':'✓ Transcribed %s','msg.tr.fail':'transcribe failed','msg.un.busy':'⟳ Identifying…','msg.un.done':'✓ Identified %s','msg.un.fail':'identify failed','msg.un.none':'No materials pending identification','msg.un.progress':'Identifying %s/%s…','msg.unknown':'unknown reason','msg.un.doneall':'✓ Identified %s this round','msg.un.failpart':' · ✗ %s failed: %s','msg.tr.none':'No materials pending transcription','msg.tr.progress':'Transcribing %s/%s…','msg.tr.doneall':'✓ Transcribed %s this round','msg.tr.failpart':' · ✗ %s failed: %s',
-'cut.waste':'rej','cut.pf':'Proofread · ','cut.vi.t':'Cuts are windows of the source — no separate visual identification','msg.cut.savefail':'✗ Failed to save cut archive','msg.pf.done':'✓ Proofread saved %s (proofread ✓)','msg.pf.fail':'✗ Proofread save failed: ','msg.pf.done2':'%s proofread saved',
+'cut.waste':'rej','cut.pf':'Proofread · ','cut.vi.t':'Cuts are windows of the source — no separate visual identification','msg.pf.done':'✓ Proofread saved %s (proofread ✓)','msg.pf.fail':'✗ Proofread save failed: ','msg.pf.done2':'%s proofread saved',
 'msg.nr.done':'✓ Render complete · %s','msg.nr.donebody':'Monitor refreshed automatically — come back to review','msg.nr.donetitle':'✓ Render complete — AutoCut','msg.nr.donestatus':'✓ Render complete (background task) · monitor refreshed','msg.nr.fail':'✗ Render failed · %s','msg.nr.failbody':'see terminal/logs','msg.nr.failstatus':'✗ Background render failed (see terminal/logs)','msg.sync.data':'↻ Data updated by agent/background — library and lists synced',
 }};
 let LANG=localStorage.getItem('ac3-lang')||'zh';
@@ -658,6 +662,7 @@ function updateSaveChip(){
   c.textContent=DIRTY?t('chip.dirty'):t('chip.saved');  // 旧文案「自动保存中…」在 debounce 等待/保存失败时均属撒谎（2026-10-15 体检）
 }
 let PULSE=null, CLI_RENDER_SHOWN=null;  // PULSE: /api/pulse 基线；CLI 渲染已展示到的百分比
+let VOICES=[];  // 已注册声纹名缓存（loadConfig 刷新）——创作台「配音音色」下拉消费
 let PV_BUSY=false;  // 幕预览渲染中：抑制 PULSE 数据热重载（重建 DOM 会把预览条/滚动位置顶掉——维护者 #9 渲染跳动实锤）
 
 function setStatus(s,tone){const el=$('status');el.textContent=s;el.style.color=(tone==='bad')?'var(--bad)':'';}  // tone='bad' 错误红（原第二参静默丢弃——1163/1164 实锤漂移）
@@ -774,6 +779,7 @@ async function loadConfig(){
   const items=rn=>Object.keys(P0.registry[rn]||{}).filter(k=>!k.startsWith('_'));
   const names=rn=>items(rn).map(k=>(P0.registry[rn][k].name||k)).join(' · ');
   const vlist=(P0._voices.voices||[]);
+  VOICES=vlist.map(v=>v.name||v);  // 全局缓存：创作台配音音色下拉消费（注册音色后 voiceRegister 会重跑 loadConfig 刷新）
   const vnames=vlist.map(v=>v.name||v).join(' · ');
   $('reggrid').innerHTML=
     /* 封面策略/旁白模式卡片已撤（2026-10-17 用户裁定）：那是管线代码能力枚举——enums.json
@@ -799,7 +805,9 @@ async function openProj(name,story,silent){
   const lib=await(await fetch('/api/library/'+name)).json();P.library=lib;
   P.registry={};
   const _rn=['bgm','subtitles','transitions','sfx','stickers','video_types','platforms'];
-  const _rv=await Promise.all(_rn.map(rn=>fetch('/api/registry/'+rn).then(r=>r.json())));  // 并发（openProj 关键路径原串行白多 4 个 RTT）
+  const _jobs=_rn.map(rn=>fetch('/api/registry/'+rn).then(r=>r.json()));  // 并发（openProj 关键路径原串行白多 4 个 RTT）
+  if(!Object.keys(FMTS).length)_jobs.push(fetch('/api/formats').then(r=>r.json()).then(f=>{FMTS=f;}));  // 创作台画幅下拉消费（2026-10-22）
+  const _rv=await Promise.all(_jobs);
   _rn.forEach((rn,i)=>P.registry[rn]=_rv[i]);
   go('proj');renderTabs();buildCreator();buildViews();
   renderPack();renderCuts();
@@ -908,7 +916,7 @@ async function voiceTest(name){
   try{
     const text=prompt(t('msg.voice.test.p'),t('msg.voice.test.d'))||'';
     if(!text)return;
-    const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text))).json();
+    const r=await(await fetch('/api/voice-test/'+encodeURIComponent(name)+'?text='+encodeURIComponent(text),{method:'POST'})).json();
     if(r.ok){$('voice-hint').textContent=t('voice.testready');
       try{if(VOICE_AUDIO)VOICE_AUDIO.pause();}catch(e){}  // 连续试听：先停上一条
       VOICE_AUDIO=new Audio(r.url);
@@ -1212,7 +1220,9 @@ function buildCreator(){
     '<div class="mf"><label data-i18n="meta.stitle">'+esc(t('meta.stitle'))+'</label><input type="text" value="'+esc(DRAFT.title||'')+'" oninput="DRAFT.title=this.value"></div>'+
     '<div class="mf"><label data-i18n="meta.type">'+esc(t('meta.type'))+'</label><select onchange="onTypeChange(this.value)">'+optHtml(en.video_types,m.type)+'</select><span id="vtype-hint" style="font-size:10px;color:var(--faint)">'+esc(vtypeHint(m.type))+'</span></div>'+
     '<div class="mf"><label data-i18n="meta.persona">'+esc(t('meta.persona'))+'</label><input type="text" value="'+esc(m.persona)+'" oninput="DRAFT.meta.persona=this.value" title="'+esc(t('meta.persona.t'))+'"></div>'+
+    '<div class="mf"><label data-i18n="meta.voice">'+esc(t('meta.voice'))+'</label><select onchange="DRAFT.meta.voice=this.value" title="'+esc(t('meta.voice.t'))+'">'+optHtml([{id:'',name:t('meta.voice.default')}].concat(VOICES.map(v=>({id:v,name:v}))),m.voice||'')+'</select></div>'+
     '<div class="mf"><label data-i18n="meta.platform">'+esc(t('meta.platform'))+'</label><select onchange="onPlatformChange(this.value)">'+optHtml(en.platforms,m.platform)+'</select><span id="plat-hint" style="font-size:10px;color:var(--faint)">'+esc(platformHint(m.platform))+'</span></div>'+
+    '<div class="mf"><label data-i18n="meta.format">'+esc(t('meta.format'))+'</label><select onchange="DRAFT.meta.format=this.value||null" title="'+esc(t('meta.format.t'))+'">'+optHtml([{id:'',name:t('meta.format.inherit')}].concat(Object.keys(FMTS).map(k=>({id:k,name:FMTS[k].name+' '+FMTS[k].width+'×'+FMTS[k].height}))),m.format||'')+'</select></div>'+
     '<div class="mf"><label data-i18n="meta.subtitle">'+esc(t('meta.subtitle'))+'</label><select onchange="DRAFT.meta.style.subtitle=this.value">'+optHtml(regList('subtitles'),m.style.subtitle)+'</select></div>'+
     '<div class="mf"><label data-i18n="meta.bgm">'+esc(t('meta.bgm'))+'</label><select onchange="DRAFT.meta.audio.bgm_id=this.value||null;renderBeats()" title="'+esc(t('meta.bgm.t'))+'">'+optHtml([{id:'',name:t('meta.nobgm')}].concat(regList('bgm')),m.audio.bgm_id||'')+'</select></div>'+
     (m.audio.bgm_id?'<div class="mf"><label data-i18n="meta.bgmseg">'+esc(t('meta.bgmseg'))+'</label><select onchange="DRAFT.meta.audio.bgm_segment=this.value||null;renderBeats()" title="'+esc(t('meta.bgmseg.t'))+'">'+segOptsHtml(m.audio.bgm_id,m.audio.bgm_segment)+'</select></div>':'')+
@@ -1497,7 +1507,7 @@ async function aiDraft(){
   setStatus(t('msg.draft.busy2'));
   try{
     const r=await(await fetch('/api/draft/'+P.name,{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent,type:(DRAFT.meta||{}).type||null,persona:(DRAFT.meta||{}).persona||null})})).json();
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({intent:intent,type:(DRAFT.meta||{}).type||null,persona:(DRAFT.meta||{}).persona||null,voice:(DRAFT.meta||{}).voice||null})})).json();
     if(r.ok){setStatus(t('msg.draft.done',r.sid+'（'+r.beats+'）',String(r.title||'')));
       await openProj(P.name,r.sid);showTab('create');}
     else alert(t('msg.draft.fail')+(r.err||''));
@@ -1787,28 +1797,15 @@ async function transcribeAll(){
 function renderCuts(){
   const cuts=(P.library&&P.library.cuts)||[];
   $('cutgrid').innerHTML=cuts.map((c,i)=>{
-    const defs=(c.defects||[]).map((d,k)=>'<div class="defect"><span class="tag">'+esc(d.type||t('cut.waste'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span><button class="x" onclick="delCutDefect('+i+','+k+')">✕</button></div>').join('');
-    return '<div class="mcard'+(c.usable?'':' usable-false')+'" style="animation-delay:'+Math.min(i*0.03,0.3)+'s">'+
+    // 纯档案展示（2026-10-22 裁定）：usable 徽标/缺陷删改曾可点可存但渲染/起草全链零消费=假门禁，已撤；
+    // 转写校对保留（proofread-cut 有真实消费：遗产线 vadwords 词轨）。usable/defects 是 v1 遗产数据，只读展示。
+    const defs=(c.defects||[]).map(d=>'<div class="defect"><span class="tag">'+esc(d.type||t('cut.waste'))+'</span><span class="mono">'+esc(nz(d.at,'?'))+'s</span><span>'+esc(d.note||'')+'</span></div>').join('');
+    return '<div class="mcard" style="animation-delay:'+Math.min(i*0.03,0.3)+'s">'+
       '<div class="mhead2"><span class="mid">cut#'+esc(c.cut_index)+'</span>'+
-      '<span class="mt">'+fmtT(nz(c.in,'?'))+' → '+fmtT(nz(c.out,'?'))+' · '+fmtD(c.duration)+'</span>'+
-      '<span class="usebadge '+(c.usable?'usable':'waste')+'" onclick="toggleCut('+i+')">'+(c.usable?t('pack.usable'):t('pack.waste'))+'</span></div>'+
+      '<span class="mt">'+fmtT(nz(c.in,'?'))+' → '+fmtT(nz(c.out,'?'))+' · '+fmtD(c.duration)+'</span></div>'+
       '<textarea class="tedit" placeholder="'+esc(t('cut.text.ph'))+'" onblur="saveCutText('+i+',this.value)">'+esc(c.text||'')+'</textarea>'+defs+
       '<div class="audit"><span class="achip done">'+esc(t('pack.tr.ok'))+'</span><span class="achip'+(((c.audit||{}).proofread==='done')?' done':'')+'">'+esc(t('cut.pf'))+((((c.audit||{}).proofread==='done'))?'✓':t('pack.pf.edit'))+'</span><span class="achip" title="'+esc(t('cut.vi.t'))+'">'+esc(t('pack.vi.dash'))+'</span></div></div>';
   }).join('')||'<div class="empty" style="grid-column:1/-1">'+esc(t('cut.empty'))+'</div>';
-}
-async function saveCut(c){
-  const r=await(await fetch('/api/library/'+P.name+'/usable',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cut_index:c.cut_index,usable:c.usable,defects:c.defects||[]})})).json();
-  if(!r.ok)setStatus(t('msg.cut.savefail'),'bad');
-}
-async function toggleCut(i){
-  const c=P.library.cuts[i];c.usable=!c.usable;await saveCut(c);renderCuts();
-}
-async function delCutDefect(i,k){
-  const c=P.library.cuts[i];
-  if(!confirm(t('msg.delcutdef.confirm')))return;
-  c.defects.splice(k,1);await saveCut(c);renderCuts();
 }
 async function savePackText(mid,val){
   const f=findPack(mid);if(!f)return;

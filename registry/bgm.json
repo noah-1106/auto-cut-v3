@@ -1,5 +1,5 @@
 {
- "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：PUT /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。segments（2026-09-15）：可选曲段落 [{name,in,out,desc}]，out=null=到曲尾；幕级 music.segment / 全局 meta.audio.bgm_segment 引用段落名，配合 loop 标志做段落循环。当前各曲默认只有「整条」，细段落待试听审计后补（不虚构音乐结构）。",
+ "_comment": "BGM 注册表——storyline.meta.audio.bgm_id 存 id；null/缺省=不上 BGM。bgm_default（路径字符串）为旧字段，读取时兼容。导入：POST /api/registry-upload/bgm/<id>（mp3/wav/m4a/flac），或手工放 assets/music/ + 本文件加条目。segments（2026-09-15）：可选曲段落 [{name,in,out,desc}]，out=null=到曲尾；幕级 music.segment / 全局 meta.audio.bgm_segment 引用段落名，配合 loop 标志做段落循环。当前各曲默认只有「整条」，细段落待试听审计后补（不虚构音乐结构）。",
  "bgm_n001": {
   "file": "assets/music/bgm_n001.mp3",
   "name": "轻快民谣",

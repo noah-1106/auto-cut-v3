@@ -4,7 +4,8 @@
 
 契约（下游 R3 dub 唯一依赖）：
   synth(text, model=None, voice_id=None, speed=None, out=None) → out 路径
-  voice_id 可以是系统音色，也可以是声纹克隆音色（voiceclone 子命令产物，7 天内用一次即永久）。
+  voice_id 可以是系统音色，也可以是声纹克隆音色（voiceclone 子命令产物，7 天内用一次即永久——
+  该"7 天"是云端 MiniMax 声纹的供应商规则；本地 Audio8 注册音色无此限制）。
 
 供应商事实（2026-09-11 冒烟实测，minimax t2a_v2）：
   - 与 ASR/LLM 同域同 key（api.minimaxi.com/v1）

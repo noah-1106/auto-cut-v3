@@ -20,7 +20,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
   <pack>/pack.json     materials/library.json    beats[] = 幕
 
 > 记法：`<pid>`=项目 id，`<pack>`=素材包 id，`<sid>`=故事线 id，`<fid>`=包内素材 id——勿混。
-  19 条 MP4+元数据     dossier.json 素材档案       每幕 = 口播词 + 画面轨 + 转场 + 效果
+  N 条 MP4+元数据     dossier.json 素材档案       每幕 = 口播词 + 画面轨 + 转场 + 效果
   （转写/视觉/digest）  disposition.json 缺陷台账    plan → ASS 字幕 → 成片 out-<sid>.mp4
 ```
 
@@ -45,8 +45,8 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
      （proofread 等长替换，保字符-时间对齐）；改 story/转写/窗口后必须重跑 vadwords。
    - **分页由标点驱动（2026-09-20 结构分页）**：句末标点（。！？；）=换页点；超页宽
      的句在句内标点（，、：）处切，快说慢说不影响切点。写 story 的操作含义：
-     **标点就是分页遥控器**——想让哪句整句一页，控制整句 ≤ 页宽（kaiti-warm 14 字，
-     其余样式 12）；想在某处换页，放个逗号；**别写超过页宽的无标点长句**——无结构
+     **标点就是分页遥控器**——想让哪句整句一页，控制整句 ≤ 页宽（kaiti-warm/plain-white/
+     zcool-pop 14 字，其余样式 12）；想在某处换页，放个逗号；**别写超过页宽的无标点长句**——无结构
      切点只能在任意字位硬切=劈词（「几年后我在舟山装了几百套房子。」15 字无内部
      标点，实锤劈成「几｜百套」）。
 3. **时间源=实测**（2026-09-18 勘误）：转写 tier=word（MiniMax timestamp_level=word 实测，
@@ -73,7 +73,8 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 
 编排器 `autocut3/orchestrate.py <project>` 从文件推导状态，人机同一判据。**先跑
 `python3 autocut3/orchestrate.py <pid>` 看状态表，再决定干什么**；`--advance` 自动推进
-（素材段 mount→disposition 自动；storyline 门二选一：`--intent` 触发 AI 起草，或手写
+（素材段 transcribe→disposition 自动；**mount 只提示不自动**（§4.4）——挂载永远由人/Agent
+显式决定；storyline 门二选一：`--intent` 触发 AI 起草，或手写
 `storylines/<名字>.json` 落盘即过门；vadwords→qc 自动）。
 
 | # | 环节 | done 判据（文件事实） | 通常谁跑 |
@@ -114,7 +115,7 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 - **放行判据**：挂载 done + 清点一致 + 兜底假设（画幅/平台/时长/风格）已登记并注明依据。
 
 ### 阶段 2 · 素材审核（transcribe → understand → digest → proofread → dossier/disposition）
-首选 `process.py` 一条流水线跑完前两步（每条素材 ASR 完立即链发视觉，§6 模块表有参数），
+首选 `process.py` 一条流水线跑完前两步（每条素材 ASR 完立即链发视觉，§4.1 模块表有参数），
 分步重跑/排障才用单模块。依次跑，每步核对 done 判据：
 ```bash
 python3 autocut3/process.py <pid>               # 首选：转写+画面识别流水线（ASR 完一条即链发视觉）
@@ -147,12 +148,19 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
   （Studio 创作台 / `POST /api/storyline` / 直接写文件）即过门，编排器不问出处；
   手写线同样吃 vadwords→dubfit→渲染全链。传给 LLM 的结构化通道：`--intent` 自由文本
   + `--type` 类型档案 + `--persona` 人设（outline 是 LLM 输出字段，不是输入）。
-- **配音音色**：`--dub` 逐幕调 `tts.synth(story)`，音色取 services.json `tts` 段配置
+- **配音音色**：`--dub` 逐幕调 `tts.synth(story)`。音色=故事线级 `meta.voice`
+  （2026-10-22 起）：`draft.py --voice <声纹库注册名>` 落盘 meta.voice，`--dub` 合成、
+  Studio 渲染前 `_dub_ensure` 重配均按它选音色；不设=服务默认音色。
+  Studio 人侧等价：创作台 meta 面板「配音音色」下拉（选项=声纹库注册音色，注册表页「声纹」卡管理）。
+  **音色变更=旧配音失效**：`synth_voice` 留痕与 meta.voice 不符即摘除 audio/synth_text/synth_voice/words
+  （ storyline POST 保存时摘；透传/不透传旧键两路径同判），下次渲染自动用新音色重配——
+  与台词变更失效同套机制。存量老线（无 synth_voice）不溯及，渲染链兜底。
+  音色缺省取 services.json `tts` 段配置
   （本地 audio8 音色按需注册，现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准）。
   **人侧等价链（2026-10-17 补）**：Studio 幕卡切「配音」+写台词即可——保存时台词变更自动
   摘除旧音频，`POST /api/render-start` 前置自动 `tts.synth` + vadwords 量词轨，失败不开渲；
   无需再走 `--dub` CLI。
-  换音色=先注册参考音色再改配置：
+  换音色=先注册参考音色再在故事线选音色（或改配置换全局默认）：
   `python3 autocut3/tts_audio8.py register <名字> <参考音频> "<逐字稿>"`——
   **硬契约：参考音频 0.5–30s 且逐字稿一字不差**，否则克隆出来的是哑嗓子；
   格式不限（wav/mp3 直传，m4a/flac/aac/ogg 等自动 ffmpeg 转码，2026-10-22 起）；
@@ -188,7 +196,7 @@ python3 autocut3/draft.py <pid> --intent "<一句话意图>" --save
    python3 autocut3/pipeline.py beat <pid> <幕号> [sid]
    # 产物 projects/<pid>/previews/beat_<sid>_<幕号>.mp4（540p 降质提速版）
    ```
-   或 Studio `GET /api/beat/<proj>/<幕号>?story=<sid>`。逐幕看：画面对吗？字幕跟人声同步吗？
+   或 Studio `POST /api/beat/<proj>/<幕号>?story=<sid>`。逐幕看：画面对吗？字幕跟人声同步吗？
    静音洞/截半句吗？**有问题改 storylines/<sid>.json 再试渲该幕**，不要直接全片渲染。
 - **放行判据**：每幕审过 + 重点幕试渲看过 + 修改已落盘。
 
@@ -253,7 +261,7 @@ python3 autocut3/qc.py <pid> --story <sid>
 - **视频类型/平台档案（registry/video_types.json、registry/platforms.json，2026-10-15）**：
   类型=剪辑方法参数包（rhythm/draft_prompt 进起草提示词、defaults 作渲染回退、qc.duration_range 供 R11）；
   平台=响度锚（qc R6 与渲染后 loudnorm 精修都按故事线 meta.platform 查）。Studio 抽屉或直接改 JSON 维护，
-  起草传类型：`draft.py --type knowledge-koubo` / POST /api/draft body 加 "type"（人设同理：--persona / body "persona"）。
+  起草传类型：`draft.py --type knowledge-koubo` / POST /api/draft body 加 "type"（人设同理：--persona / body "persona"；配音音色同理：--voice / body "voice"，落盘 meta.voice）。
   R3 静音洞≤0.8s / R4 冻结帧<2s / R5 字幕页≥0.5s / R6 响度锚 -16±3 LUFS /
   R7 听觉（洞>1.5s、相邻段差>8dB）/ R8 填充词 7 个+呃嗯 / R9 重说（4 字 ngram×12s 窗）/
   R10 页同步偏移≤0.5s。**warn 不拦交付但要在交付说明里如实列出**。
@@ -326,7 +334,7 @@ body `{prompt, beat_no, at}` 出 cover/sample.jpg 预览，满意再保存正式
 ### 4.2 创作段
 | 命令 | 参数 | 产出 | 何时用 |
 |---|---|---|---|
-| `draft.py <pid>` | `--intent（必填）--packs --save --dub` | storylines/aidraft*.json | 素材段全绿后；--dub 逐幕 TTS→materials/dub/<sid>-b<n>.mp3 |
+| `draft.py <pid>` | `--intent（必填）--packs --save --dub --type --persona --voice` | storylines/aidraft*.json | 素材段全绿后；--dub 逐幕 TTS→materials/dub/<sid>-b<n>.mp3；--voice 落盘 meta.voice |
 | `vadwords.py <pid>` | `--story <sid>` | 每幕 narration.words 写回故事线 + vad-report.json | 故事线定稿/修改后必跑（字幕时间源） |
 | `dubfit.py <pid>` | `--story` | materials/dub/fit-*.mp3 + dubfit-report.json | dub 线配音裁剪闭环；不过 exit 1 |
 | `dubgate.py <pid>` | `--story` | dubgate-report.json | dub 线门禁 D1-D3；不过 exit 1 |
@@ -373,11 +381,12 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
 `cuts[]` 档案（含 usable 拍摄层决策/audit，时间 0.1s 量化）。原则：usable 只评拍摄层
 （说错/卡等/重复/气口），创作取用仍在 storyline。
 
-相关路由（新 packs 项目用不到，别混）：`GET /api/library/<proj>/clip/<cut_index>`
-（cut 预览 mp4）、`POST /api/proofread-cut/<proj>`（cut 台词人工校对，等长替换）、
-`POST /api/library/<proj>/usable`（cut 级废片，body `{"cut_index":0,"usable":false,
-"defects":[...]}`）。**packs 与 cuts 是两条素材轨，一个项目里通常只有一套在役**——
-先看 `materials/library.json` 有 `packs` 还是有 `cuts`。
+相关路由（新 packs 项目用不到，别混）：`POST /api/proofread-cut/<proj>`（cut 台词人工校对，
+等长替换）。cut 预览路由 `GET /api/library/<proj>/clip/<cut_index>` 已于 2026-10-22 撤
+（创作台切片区改纯档案展示后零消费）。
+（cut 级 usable/defects 写口 2026-10-22 撤：落盘字段是 v1 遗产留档，渲染/起草全链
+零消费=假门禁，Studio 切片区同步改为纯档案展示。）**packs 与 cuts 是两条素材轨，
+一个项目里通常只有一套在役**——先看 `materials/library.json` 有 `packs` 还是有 `cuts`。
 
 ---
 
@@ -392,7 +401,7 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
     "story": "可直接朗读的口播台词（≤120 字）",
     "tracks": [{"role": "A", "source_id": "M0167", "src_in": 3.2, "duration": 4.0},
                {"role": "B", "source_id": "M0181", "src_in": 0, "duration": 4.0,
-                "op": "overlay-pip", "pos": "br", "scale": 0.3}],
+                "op": "overlay-pip", "pos": "bottom-right", "scale": 0.3}],
     "narration": {"mode": "original", "words": [{"t": "字", "s": 0.12, "e": 0.35}]},
     "transition_out": "fade-black",
     "effects": {"stickers": [{"asset": "candy-sky", "text": "得房率高", "at_word": "得房率", "duration": 1.0, "pos": "top-center"}],
@@ -404,35 +413,49 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
 ```
 - `narration.words` **由 vadwords 生成，不要手写**（手写字时间不准=字幕错位）。
   改字幕文本=改素材转写（original 幕）或 story（dub 幕）后重跑 vadwords。
+- `subtitle.style`（2026-10-22 起真生效）：幕级字幕样式覆盖，注册表 id；未注册=渲染硬失败。
+  有幕级覆盖时字幕按幕分页（页不跨幕，各幕 max_chars 独立），留空=继承全局 `meta.style.subtitle`。
 - `words[].s/e` 是相对**幕起点**的秒。
-- 兼容顶层键（手写也可用）：`subtitle_style`、`audio.{bgm_id,bgm,bgm_segment,bgm_loop,bgm_volume,loudnorm}`。
+- 兼容顶层键（手写也可用）：`subtitle_style`。**`audio.*` 必须写在 `meta.audio` 下**
+  （`meta.audio.{bgm_id,bgm,bgm_segment,bgm_loop,bgm_volume,loudnorm}`）——渲染链只读
+  meta.audio（pipeline.py build_plan），顶层 `audio` 键零消费：手写了不报错、BGM 静默丢失
+  （2026-10-22 审查实锤后修正，此前本手册写反）。
+  `meta.format`（画幅）：故事线级画幅覆盖（formats.json 注册表 id），不设=跟随项目画幅；
+  Studio 创作台 meta 面板「画幅」下拉同口径（2026-10-22 补人侧控件）。
   **BGM 用法约定**：不用 BGM=**不写 `bgm_id` 键**（写 null 虽同效，统一删键别两式混用）；
   用时 id 必须已在 `registry/bgm.json` 登记——拼错不存在的 id 渲染直接 SystemExit 拦。
-- B 轨仅视频素材、无音频通道、禁说话画面；`op:"overlay-pip"` + pos（tl/tr/bl/br）+ scale。
+- B 轨仅视频素材、无音频通道、禁说话画面；`op:"overlay-pip"` + pos + scale。
+  **pos 只认长名**（pos_xy 表驱动）：top-left / top-center / top-right / center / bottom-left /
+  bottom-right——写 tl/br 等缩写不报错，**静默回退 top-left**（2026-10-22 审查实锤后修正）。
 - **"当前故事线"= `storylines/*.json` 里 mtime 最新的那条**（qc.py `--story` 省略、
   编排器取当前线、Studio 默认展示，全按这个规则）。副作用：你改了一条旧线，
   它就变成"当前线"——多线并存时**渲染/QC 永远显式带 `--story`**，别靠默认值。
+  另有 `project.json.active`：Studio 打开/切换故事线时回写，只作首页海报墙封面
+  偏好（当前线→首线→main），**不参与**渲染/QC 的当前线判定（那是 mtime 的领地）。
 
 ---
 
 ## 6. 注册表：怎么用、怎么维护
 
-六个注册表在 `registry/*.json`，是**素材/风格/转场的唯一白名单**。draft 只从这里选，
-渲染只认这里登记的 id。Agent 可以维护（新增爆款音效/BGM/字幕风格），但必须走
-Studio API（带校验+落盘一致），**禁止手编 JSON**：
+九个注册表在 `registry/*.json`（bgm/subtitles/transitions/sfx/stickers 五效果件 +
+video_types/platforms 两剪辑档案 + enums/formats 两语义枚举），是**素材/风格/转场的唯一白名单**。
+draft 只从这里选，渲染只认这里登记的 id。Agent 可以维护（新增爆款音效/BGM/字幕风格/类型与平台档案），
+但必须走 Studio API（带校验+落盘一致），**禁止手编 JSON**：
 
 | 注册表 | 条目字段 | 用途 |
 |---|---|---|
 | `sfx.json` | `{name, desc, file}` | 音效：draft 选→渲染混音（现存仅 ding/success；引用已删 id 渲染自动跳过，别选表外 id） |
 | `bgm.json` | `{file, name, desc, loop, segments:[{name,in,out,desc}]}` | BGM：整曲或段落（segments 供幕级选段） |
-| `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id）。`max_chars`=分页页宽（kaiti-warm 14，其余未写吃默认 12；页严格不超宽）。**加宽前必须实测帧宽**：size×字数+左右 margin 160px ≤1080px（pop-round 实锤 78px 下 12 字已 936px 裁边，收敛至 70） |
+| `subtitles.json` | `{font, size, primary, secondary, outline_col, border, marginv, max_chars, karaoke}` | 字幕样式（style id）。`max_chars`=分页页宽（kaiti-warm/plain-white/zcool-pop 14，pop-round/karaoke-gold 12，未写吃默认 12；页严格不超宽）。**加宽前必须实测帧宽**：size×字数+左右 margin 160px ≤1080px（pop-round 实锤 78px 下 12 字已 936px 裁边，收敛至 70） |
 | `transitions.json` | `{type: xfade\|flash, preset, duration, ...}` | 幕间转场（transition_out） |
-| `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容）。**v2 词根**（2026-09-18 现代·活泼批 12 款：胶囊/多巴胺四色/荧光夜光/荧光笔/白环贴纸/漫画爆点/玻璃拟态/极简墨条）：`font`=wenkai/smiley/kuaile、`radius` 圆角(≥半高=胶囊)、`shadow`+`shadow_c` 硬投影(可带@alpha)、`ring`+`ring_c` 白边环；带任一 v2 词根走紧裁画布（宽随文字自适应）。样式样张：`GET /api/sticker-preview/<id>`（走渲染同一实现，改样式换哈希自动重画） |
-| `enums.json` | 五个枚举数组（video_types/cover_strategies/narration_modes/platforms/positions） | 全局词汇表（前端/后端同源；不开放编辑） |
+| `stickers.json` | `{type:"text", text_style{bg,fg,stroke,font_size…}, default_text, pos, duration}` | 贴纸=**样式模板**（文字模板制）：渲染时 drawtext 现画，短语来自故事线 `effects.stickers[].text`（**≤6 字硬门**，draft 从本幕口播蒸馏；缺省回退 default_text；缓存 materials/.sticker_cache/）。无 text_style 的条目按老路径读 file（静态 PNG 兼容）。**v2 词根**（现存 7 款：candy 四色/diecut 两款/comic-pop——2026-09-19 Noah 终审删减后）：`font`=wenkai/smiley/kuaile、`radius` 圆角(≥半高=胶囊)、`shadow`+`shadow_c` 硬投影(可带@alpha)、`ring`+`ring_c` 白边环；带任一 v2 词根走紧裁画布（宽随文字自适应）。样式样张：`GET /api/sticker-preview/<id>`（走渲染同一实现，改样式换哈希自动重画） |
+| `video_types.json` | `{desc, rhythm, draft_prompt, defaults, qc}` | 视频类型档案：节奏/起草要求进 AI 提示词，defaults 作渲染回退，qc.duration_range 供 R11（2026-10-15 档案化） |
+| `platforms.json` | `{desc, lufs_target, lufs_tol}` | 发布平台档案：响度锚——qc R6 与渲染后 loudnorm 精修按故事线 meta.platform 查 |
+| `enums.json` | 三个枚举数组（cover_strategies/narration_modes/positions） | 全局词汇表（前端/后端同源；不开放编辑。video_types/platforms 已于 2026-10-15 提升为上面两个注册表档案） |
 
 Studio 路由（http://127.0.0.1:8765）：
 - 读：`GET /api/registry/<name>`、`GET /api/enums`
-- 写：`POST /api/registry-save/<name>`（整体替换，白名单=上表前五）、
+- 写：`POST /api/registry-save/<name>`（整体替换，白名单=上表前七）、
   `POST /api/registry-delete/<name>/<id>`
 - 上传素材入册：`POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=`
   （自动存 assets/music|sfx|stickers 并加条目）
@@ -456,14 +479,14 @@ Studio 路由（http://127.0.0.1:8765）：
   失败不开渲**）或 `POST /api/render/<proj>?story=<sid>`（同步 600s）；
   进度轮询 `GET /api/render-progress/<proj>?story=<sid>`（CLI 渲染也可见——读 render.status）
 - 幕试渲：`POST /api/beat/<proj>/<beat_no>?story=<sid>`（同步 300s。**是 POST 不是 GET**）
-- 素材：`POST /api/transcribe/<pack>/<fid>`、`POST /api/understand/<pack>/<fid>`、
-  `POST /api/digest/<pid>`（项目级盘点）、
+- 素材：`POST /api/transcribe/<pack>?material=<fid>`、`POST /api/understand/<pack>?material=<fid>`、
+  `POST /api/digest/<pack>`（包级盘点——fid 走 query 不走路径，2026-10-22 审查修正；路径里塞 fid 必 400）、
   `POST /api/proofread-pack/<pack>/<fid>`（人工校对单条转写）
 - AI 起草：`POST /api/draft/<proj>` body `{"intent": "..."}`
 - 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`、
   `POST /api/cover-make/<proj>?story=<sid>`（本地合成收口=CLI `pipeline.py cover`）
 - 声纹：`GET /api/voices?wake=1`（唤醒闲置自停的 Audio8 服务，数秒）、
-  `GET /api/voice-test/<name>?text=...`（试听合成）、`POST /api/voice-delete/<name>`
+  `POST /api/voice-test/<name>?text=...`（试听合成）、`POST /api/voice-delete/<name>`
 - 项目/包：`POST /api/project-create/`、`POST /api/project-delete/<name>`（归档 _attic）、
   `POST /api/pack-mount/<pid>/<pack>/mount|unmount`、`POST /api/pack-delete/<pack>`（归档+摘挂载）、
   `POST /api/pack-upload/<pack>?filename=`、`POST /api/pack-create/`
@@ -526,24 +549,23 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
 | `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
 | `POST /api/pack-mount/<pid>/<pack>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
-| `POST /api/draft/<proj>` | `{"intent":"..."}` | AI 起草（等价 draft.py --intent --save） |
-| `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。dub 幕台词变更会自动摘除旧配音音频（render-start 前置重合成）；original 幕改 beats 后记得重跑 vadwords |
+| `POST /api/draft/<proj>` | `{"intent":"..."}`（可选 type/persona/voice） | AI 起草（等价 draft.py --intent --save） |
+| `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。dub 幕台词/音色变更会自动摘除旧配音音频（render-start 前置重合成）；original 幕改 beats 后记得重跑 vadwords |
 | `POST /api/storyline-delete/<proj>?story=<sid>` | 无 body | 删线 |
 | `POST /api/render-start/<proj>?story=&duration=&hold=&grain=&flash=` | 无 body | 异步渲染；四个旋钮见阶段 5；同线渲染中=409；**另一进程在渲同项目也 409**（render.status 磁盘双检，2026-09-18）。**前置自动补 dub 幕配音+词轨，失败不开渲** |
 | `POST /api/render/<proj>?story=&...` | 无 body | 同步渲染（600s 超时），长片用 render-start |
 | `GET  /api/render-progress/<proj>?story=<sid>` | 无 body | 渲染进度轮询；CLI/Agent 渲染也可见（读 render.status，5 分钟新鲜窗） |
 | `POST /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
-| `POST /api/pack/<pid>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
-| `POST /api/library/<proj>/usable` | `{"cut_index":0,"usable":false,"defects":[...]}` | cut 级废片（cuts 形态项目） |
-| `POST /api/proofread-pack/<pid>/<fid>` | 词轨等长替换结构（走 Studio 界面更稳） | 人工校对单条转写 |
+| `POST /api/pack/<pack>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
+| `POST /api/proofread-pack/<pack>/<fid>` | 词轨等长替换结构（走 Studio 界面更稳） | 人工校对单条转写 |
 | `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
 | `GET  /api/voices?wake=1` | 无 body | 列音色；`wake=1`=唤醒闲置自停的 Audio8 服务（数秒）。响应 `sleeping` 仅在已安装但闲置时为 true |
-| `GET  /api/voice-test/<name>?text=...` | 无 body | 试听合成（自动拉起休眠服务），产物 assets/preview/voicetest-<name>.mp3 |
+| `POST /api/voice-test/<name>?text=...` | 无 body | 试听合成（自动拉起休眠服务），产物 assets/preview/voicetest-<name>.mp3 |
 | `POST /api/voice-delete/<name>` | 无 body | 删音色（无该音色=404） |
 | `POST /api/project-delete/<name>` | 无 body | 删项目（归档 _attic，可找回） |
 | `POST /api/pack-delete/<pack>` | 无 body | 删包（归档 materials/_attic + 所有项目摘挂载） |
 | `POST /api/cover-make/<proj>?story=<sid>` | 无 body | 封面本地合成收口（=CLI `pipeline.py cover` 同实现） |
-| `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers |
+| `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers/video_types/platforms |
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
 | `POST /api/pack-upload/<pid>?filename=<名>` | 原始字节（文件字节） | **导入素材**（文件名中文/`#`/空格均允许）。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |
 | `GET  /api/sticker-preview/<id>` | 无 body | 贴纸样式真渲染样张（走渲染同一实现，PNG URL） |

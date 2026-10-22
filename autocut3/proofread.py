@@ -10,7 +10,7 @@ v2（2026-09-12）：①词表注入——PROMPT 读 config/lexicon.json（行�
 （projects/<pid>/review-queue.json），不落词轨（"放可以了→方可以了"这类二次猜错有人把关）；
 ③find/replace 超过 6 字一律 needs-human（词级修正才可机判）。
 用法: python3 proofread.py <pid> [--dry]   ；复核：编辑 review-queue.json 的 status 字段"""
-import argparse, json, os, sys, urllib.request
+import argparse, json, os, sys
 try:
     import flock as fcntl  # 跨平台锁：POSIX=flock，Windows=msvcrt（autocut3/flock.py）
 except ImportError:

@@ -204,12 +204,15 @@ def build_digest(pid):
     if not isinstance(d, dict):
         raise RuntimeError("digest LLM 未返回合法 JSON")
     d["at"] = asr.datetime_iso()
-    with open(pp + ".lock", "w") as _lf:
+    with open(os.path.join(os.path.dirname(pp), ".lock"), "w") as _lf:
+        # 安全批 A5（2026-10-22）：锁曾用 pp+".lock"（=pack.json.lock）——与全仓纪律
+        # <packdir>/.lock 不是同一把，对并发 upload/transcribe/proofread 的互斥形同虚设；
+        # 写盘顺带换 flock.write_json 原子写（原 json.dump 直写，崩溃半截文件）
         import flock as _f
         _f.flock(_lf, _f.LOCK_EX)
         pk2 = json.load(open(pp, encoding="utf-8"))
         pk2["digest"] = d
-        json.dump(pk2, open(pp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        _f.write_json(pp, pk2)
     return d
 
 

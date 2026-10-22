@@ -440,13 +440,8 @@ def check_page_sync(pdir, sid, rules):
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import pipeline
-        style = (plan.get("meta") or {}).get("style", {}) or {}
-        regs = json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8"))
-        st = regs.get(plan.get("subtitle_style", ""), {})
-        pages = pipeline.build_pages(
-            pipeline.char_level(plan.get("words") or []),
-            int(st.get("max_chars", 12)))
-        expected = [pg[0][1] for pg in pages]
+        pages = pipeline.plan_pages(plan)  # 分页单一事实源：幕级样式覆盖时按幕分页，与出片同源
+        expected = [pg[0][1] for pg, _st in pages]
         actual = []
         for ln in open(ass_path, encoding="utf-8"):
             m = re.match(r"Dialogue: 0,([\d:.]+),", ln.strip())

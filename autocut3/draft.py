@@ -11,7 +11,7 @@
   · 人接受后在创作台继续改；渲染由人触发
 
 原料（全部来自已落盘的审计产物）：
-  transcript{text,words} —— 台词与句段时间戳（vad：句边界准）
+  transcript{text,words} —— 台词与词轨时间戳（tier=word 实测首选；sent/vad=合成均分，禁作锚）
   visual{desc,ocr,usage} —— 画面描述/画面文字/用途建议（understand.py 产物）
   usable/defects         —— 拍摄层判断（人的结论优先于 AI 判断）
 
@@ -78,13 +78,14 @@ def build_dossier(packs):
         pk = json.load(open(pp, encoding="utf-8"))
         dg = pk.get("digest")
         if dg:
-            rows.append("【素材包盘点（导演视角，digest 生成于 %s）】题材：%s｜可作A轨：%s｜B-roll池：%s｜旁白音轨源：%s｜空镜：%s%s"
+            rows.append("【素材包盘点（导演视角，digest 生成于 %s）】题材：%s｜可作A轨：%s｜B-roll池：%s｜旁白音轨源：%s｜空镜：%s%s%s"
                         % (dg.get("at", "?")[:10], dg.get("theme", ""),
                            ",".join(dg.get("inventory", {}).get("a_roll_candidates", [])) or "无",
                            ",".join(dg.get("inventory", {}).get("broll_pool", [])) or "无",
                            ",".join(dg.get("inventory", {}).get("voiceover_sources", [])) or "无",
                            ",".join(dg.get("inventory", {}).get("ambient", [])) or "无",
-                           ("｜缺口：" + dg["inventory"]["gaps"] if dg.get("inventory", {}).get("gaps") else "")))
+                           ("｜缺口：" + dg["inventory"]["gaps"] if dg.get("inventory", {}).get("gaps") else ""),
+                           ("｜叙事支撑：" + dg["narrative_assets"] if dg.get("narrative_assets") else "")))
             for r_ in dg.get("roles", []):
                 rows.append("  · 定位 %s：%s" % (r_.get("id"), r_.get("suggest", "")))
             rows.append("——以下为逐条明细——")
@@ -446,7 +447,7 @@ def validate(draft, mats, transitions):
     return beats
 
 
-def save_storyline(pid, draft, beats, vtype=None):
+def save_storyline(pid, draft, beats, vtype=None, voice=None):
     pdir = os.path.join(ROOT, "projects", pid)
     sl = {}
     sp = os.path.join(pdir, "storylines")
@@ -472,15 +473,18 @@ def save_storyline(pid, draft, beats, vtype=None):
         sl.setdefault("meta", {}).setdefault("audio", {})["bgm_id"] = str(_au["bgm_id"])
     if vtype:  # 显式指定类型压过继承（Studio/CLI --type 传入；qc R11 与渲染默认值都读它）
         sl.setdefault("meta", {})["type"] = vtype
+    if voice:  # 显式指定音色压过继承（Studio/CLI --voice 传入；_dub_ensure/下方 --dub 合成读它）
+        sl.setdefault("meta", {})["voice"] = voice
     # 原子落盘（实证 2026-09-17：超时幸存进程 + Agent 重跑并存，非原子 dump 会交错写坏故事线）
     flock.write_json(os.path.join(sp, sid + ".json"), sl)
     return sid
 
 
-def run(project, intent, packs=None, save=True, vtype=None, persona=None):
+def run(project, intent, packs=None, save=True, vtype=None, persona=None, voice=None):
     """主入口（Studio 与 CLI 共用）。返回 (sid or None, draft, beats)。
     vtype：视频类型档案 id（registry/video_types.json）——注入起草提示词 + 落盘 meta.type。
-    persona：讲述者人设（故事线 meta.persona）——注入起草提示词；落盘靠 meta 继承链。"""
+    persona：讲述者人设（故事线 meta.persona）——注入起草提示词；落盘靠 meta 继承链。
+    voice：配音音色（声纹库注册名）——落盘 meta.voice，--dub/_dub_ensure 合成时读。"""
     packs = packs or project_packs(project)
     if not packs:
         raise RuntimeError("项目未挂载任何素材包")
@@ -504,7 +508,7 @@ def run(project, intent, packs=None, save=True, vtype=None, persona=None):
         print("  视频类型档案：%s（%s）" % (profile.get("name"), profile.get("rhythm")), flush=True)
     messages = [{"role": "user", "content": build_prompt(dossier, intent, transitions, profile, persona=persona)}]
     # nohup 重定向=全缓冲：不刷这句，后台跑全程日志 0 字节，Agent 只能瞎轮询（2026-09-18 张亮翔快线实锤）
-    print("  档案 %d 字 → LLM 起草中（1-3 分钟无输出属正常）…" % len(dossier), flush=True)
+    print("  档案 %d 字 → LLM 起草中（4-11 分钟无输出属正常）…" % len(dossier), flush=True)
     text = None
     draft = None
     for attempt in (1, 2):  # M3 偶发 JSON 截断（实测不稳）——重试一次，末次失败如实抛
@@ -519,7 +523,7 @@ def run(project, intent, packs=None, save=True, vtype=None, persona=None):
     beats = validate(draft, mats, transitions)
     if not beats:
         raise RuntimeError("草稿校验后无有效幕（素材 id 都对不上？）")
-    sid = save_storyline(project, draft, beats, vtype=vtype) if save else None
+    sid = save_storyline(project, draft, beats, vtype=vtype, voice=voice) if save else None
     return sid, draft, beats
 
 
@@ -532,14 +536,18 @@ def main():
     ap.add_argument("--dub", action="store_true", help="逐幕 AI 配音（TTS，narration.mode=dub）")
     ap.add_argument("--type", help="视频类型档案 id（registry/video_types.json——结构化节奏引导）")
     ap.add_argument("--persona", help="讲述者人设（注入起草提示词；等同故事线 meta.persona）")
+    ap.add_argument("--voice", help="配音音色（声纹库注册名；落盘 meta.voice，--dub 合成用）")
     a = ap.parse_args()
-    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save, vtype=a.type, persona=a.persona)
+    sid, draft, beats = run(a.project, a.intent, packs=a.packs.split(",") if a.packs else None, save=a.save, vtype=a.type, persona=a.persona, voice=a.voice)
     if a.dub and sid and beats:
         # R3：逐幕配音（story=口播词）→ narration.mode=dub + audio 路径写回故事线
         import tts
         pdir = a.project if os.path.isdir(a.project) else os.path.join(ROOT, "projects", a.project)
         ddir = os.path.join(pdir, "materials", "dub")
         os.makedirs(ddir, exist_ok=True)
+        # 音色单一事实源=落盘后的 meta.voice（--voice 压继承链之后的最终值，与 _dub_ensure 同口径）
+        _sl0 = json.load(open(os.path.join(pdir, "storylines", sid + ".json"), encoding="utf-8"))
+        _voice = ((_sl0.get("meta") or {}).get("voice") or "").strip() or None
         ok_n = 0
         for idx, bt in enumerate(beats):  # beats 元素无 no 字段——按列表序=幕序对齐
             words = (bt.get("story") or "").strip()
@@ -547,8 +555,9 @@ def main():
                 continue
             af = "materials/dub/%s-b%d.mp3" % (sid, idx + 1)
             try:
-                tts.synth(words, out=os.path.join(ddir, os.path.basename(af)))
-                bt["narration"] = {"mode": "dub", "audio": af}
+                tts.synth(words, voice_id=_voice, out=os.path.join(ddir, os.path.basename(af)))
+                bt["narration"] = {"mode": "dub", "audio": af,
+                                   "synth_text": words, "synth_voice": _voice or ""}  # 留痕成对：台词+音色变更检测基准
                 bt["no"] = idx + 1
                 ok_n += 1
             except Exception as e:

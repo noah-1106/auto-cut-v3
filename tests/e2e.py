@@ -759,7 +759,8 @@ def t26_voiceover_orchestration():
                 "digest": {"at": "2026-09-14T07:00:00", "theme": "测试题材",
                            "inventory": {"a_roll_candidates": ["A01"], "broll_pool": ["B01"],
                                          "voiceover_sources": ["M0269"], "ambient": [], "gaps": "缺成果镜头"},
-                           "roles": [{"id": "M0269", "suggest": "旁白音轨源，词轨铺broll"}]},
+                           "roles": [{"id": "M0269", "suggest": "旁白音轨源，词轨铺broll"}],
+                           "narrative_assets": "老房翻新避坑"},
                 "files": [
                     {"id": "M0269", "kind": "video", "usable": True, "duration": 19.0,
                      "transcript": {"text": "测试台词", "scripted_dup": 23, "words": []},
@@ -772,8 +773,9 @@ def t26_voiceover_orchestration():
             c1 = "素材包盘点" in dos and "旁白音轨源：M0269" in dos and "缺成果镜头" in dos
             c2 = "🎙voiceover" in dos and "词轨=旁白音轨源" in dos and "validate 硬剔除" in dos
             c3 = "逐条明细" in dos and "M0269" in mats and mats["M0269"].get("transcript", {}).get("scripted_dup") == 23
-            check("T26c digest 消费链（盘点头/voiceover表述/明细降级无digest也可用）", c1 and c2 and c3,
-                  "盘点头=%s voiceover标注=%s mats穿透=%s" % (c1, c2, c3))
+            c4 = "叙事支撑：老房翻新避坑" in dos  # narrative_assets 消费（2026-10-22 接通，此前 LLM 产出零读取）
+            check("T26c digest 消费链（盘点头/voiceover表述/明细降级无digest也可用/narrative_assets）", c1 and c2 and c3 and c4,
+                  "盘点头=%s voiceover标注=%s mats穿透=%s 叙事支撑=%s" % (c1, c2, c3, c4))
         finally:
             D.ROOT = old_root
             shutil.rmtree(tmp, ignore_errors=True)
@@ -2979,6 +2981,10 @@ def main():
     t67_browser_smoke()
     t68_persona_prompt()
     t69_voice_format_transcode()
+    t70_dub_voice_invalidation()
+    t71_beat_subtitle_style()
+    t72_active_storyline_write()
+    t73_security_batch()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3213,6 +3219,205 @@ def t69_voice_format_transcode():
     except RuntimeError:
         c = True
     check("T69c 坏音频转码失败如实抛错（不静默注册空音色）", c, "")
+
+
+# ---------------------------------------------------------------- T70 配音音色失效链（2026-10-22）
+def t70_dub_voice_invalidation():
+    # 锚：故事线级配音音色（meta.voice）落地后的失效语义——音色变更与台词变更同套机制：
+    # 旧配音 audio/synth_text/synth_voice/words 摘除（防旧音色音频静默残留），渲染前 _dub_ensure 重配。
+    # 四态：a) 客户端透传旧键+音色变更→摘  b) 音色不变→迁移保留（含 synth_voice）
+    #       c) 客户端不透传+音色变更→迁移拒绝（不留旧音）  d) 存量线无 synth_voice→不溯及
+    sid = "e2evoice"
+    sfx = os.path.join(ROOT, "projects", PROJ, "storylines", sid + ".json")
+    api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")  # 清残
+    nar0 = {"mode": "dub", "audio": "materials/dub/%s-b1.mp3" % sid,
+            "synth_text": "台词甲", "synth_voice": "xiaoxiao",
+            "words": [{"text": "台", "start": 0, "end": 1}]}
+    mk = lambda text, nar: {"no": 1, "id": "b1", "story": text, "narration": nar,
+                            "tracks": [], "music": {"inherit": True},
+                            "effects": {"stickers": [], "sfx": []}, "subtitle": {}, "transition_out": None}
+    KEYS = ("audio", "synth_text", "synth_voice", "words")
+    post = lambda meta, beats: api("/api/storyline/" + PROJ + "?story=" + sid, method="POST",
+                                   body={"meta": meta, "beats": beats})
+    read_nar = lambda: (json.load(open(sfx, encoding="utf-8")).get("beats") or [{}])[0].get("narration") or {}
+    try:
+        # 建线：voice=xiaoxiao + 已合成 dub 幕
+        st, _ = post({"voice": "xiaoxiao"}, [mk("台词甲", dict(nar0))])
+        assert st == 200
+        # a) 音色改 yunxi，客户端透传旧 narration → 四键摘除
+        post({"voice": "yunxi"}, [mk("台词甲", dict(nar0))])
+        nar = read_nar()
+        check("T70a dub 音色变更→旧音频失效（透传旧键路径）",
+              nar.get("mode") == "dub" and all(k not in nar for k in KEYS), "narration=%r" % nar)
+        # b) 重建后音色不变（客户端不透传音频）→ 按文本配对迁移保留，synth_voice 随行
+        post({"voice": "xiaoxiao"}, [mk("台词甲", dict(nar0))])
+        post({"voice": "xiaoxiao"}, [mk("台词甲", {"mode": "dub"})])
+        nar = read_nar()
+        check("T70b dub 音色不变→迁移保留（synth_voice 随行）",
+              nar.get("audio") == nar0["audio"] and nar.get("synth_voice") == "xiaoxiao"
+              and nar.get("words") == nar0["words"], "narration=%r" % nar)
+        # c) 音色改 yunxi，客户端不透传旧键 → 音色不符的旧配音迁移拒绝（渲染前必重配，不留旧音）
+        post({"voice": "yunxi"}, [mk("台词甲", {"mode": "dub"})])
+        nar = read_nar()
+        check("T70c dub 音色变更→迁移拒绝（不透传路径同样不留旧音）",
+              nar.get("mode") == "dub" and all(k not in nar for k in KEYS), "narration=%r" % nar)
+        # d) 存量线（synth_voice 缺失的老产物）音色变更 → POST 不溯及（渲染链 _dub_ensure 兜底重配）
+        nar_old = {k: v for k, v in nar0.items() if k != "synth_voice"}
+        post({"voice": "xiaoxiao"}, [mk("台词甲", dict(nar_old))])
+        post({"voice": "yunxi"}, [mk("台词甲", dict(nar_old))])
+        nar = read_nar()
+        check("T70d 存量线无 synth_voice→不溯及（audio 保留，渲染链兜底）",
+              nar.get("audio") == nar0["audio"] and nar.get("synth_text") == "台词甲",
+              "narration=%r" % nar)
+    finally:
+        api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")
+
+
+# ---------------------------------------------------------------- T71 幕级字幕样式渲染链（2026-10-22）
+def t71_beat_subtitle_style():
+    """锚：幕级字幕样式（beat.subtitle.style）曾四通一断——提示词 schema/validate/UI/落盘全通，
+    渲染链零消费（voice_id 同型半成品）。接通后钉四态：无覆盖零漂移 / 覆盖→按幕分页+多样式表 /
+    分页与出片同源（QC R10 也吃 plan_pages）/ 幕级未注册硬失败。离线不打 ffmpeg。"""
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import pipeline, tempfile, shutil
+    regs = json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8"))
+    gids = sorted(regs)
+    g1 = "karaoke-gold" if "karaoke-gold" in regs else gids[0]
+    g2 = next((k for k in gids if k != g1), None)
+    if not g2:
+        check("T71 幕级字幕样式渲染链", False, "注册表字幕样式不足两款，无法锚幕级覆盖")
+        return
+    mk_plan = lambda seg2style: {
+        "subtitle_style": g1, "width": 1080, "height": 1920, "duration": 10.0,
+        "segments": [{"tl_in": 0.0, "dur": 5.0, "narration": "original"},
+                     {"tl_in": 5.0, "dur": 5.0, "narration": "original", "subtitle_style": seg2style}],
+        "words": [{"t": "完了。", "s": 0.5, "e": 2.0}, {"t": "开始。", "s": 5.5, "e": 7.0}]}
+    tmp = tempfile.mkdtemp(prefix="t71_")
+    try:
+        # a) 无覆盖：与全局 build_pages 逐页一致（存量零漂移），ASS 单样式 Karaoke
+        p1 = mk_plan(None)
+        p1["segments"][1].pop("subtitle_style")
+        pages1 = pipeline.plan_pages(p1)
+        ref = pipeline.build_pages(pipeline.char_level(p1["words"]),
+                                   (regs.get(g1) or {}).get("max_chars", 12))
+        a_same = [pg for pg, _ in pages1] == ref and all(st == g1 for _, st in pages1)
+        ass1, n1 = pipeline.build_ass(p1, tmp, "a1.ass")
+        ass1t = open(ass1, encoding="utf-8").read()
+        check("T71a 无覆盖零漂移（全局面分页+单 Karaoke 样式行）",
+              a_same and "Style: Karaoke," in ass1t and ("Style: " + g1) not in ass1t,
+              "pages=%d ref=%d" % (len(pages1), len(ref)))
+        # b) 幕级覆盖：按幕分页（全局会并成 1 页的两短句拆成 2 页）+ 多样式表 + Dialogue 用注册表 id
+        p2 = mk_plan(g2)
+        pages2 = pipeline.plan_pages(p2)
+        ass2, n2 = pipeline.build_ass(p2, tmp, "a2.ass")
+        ass2t = open(ass2, encoding="utf-8").read()
+        b_ok = (len(pages2) == 2 and [st for _, st in pages2] == [g1, g2]
+                and ("Style: " + g1 + ",") in ass2t and ("Style: " + g2 + ",") in ass2t
+                and ass2t.count("Dialogue: 0,") == 2
+                and (",%s,," % g2) in ass2t.split("Dialogue: 0,")[2])
+        check("T71b 幕级覆盖→按幕分页+ASS 多样式表", b_ok,
+              "pages=%d styles=%s" % (len(pages2), [st for _, st in pages2]))
+        # c) 分页与出片同源：Dialogue 行数 == plan_pages 页数（R10 重放同吃 plan_pages，不会假 warn）
+        check("T71c 分页单一事实源（plan_pages==出片页数）", n1 == len(pages1) and n2 == len(pages2),
+              "n1=%s/%s n2=%s/%s" % (n1, len(pages1), n2, len(pages2)))
+        # d) 幕级未注册样式 → SystemExit 硬失败（与全局同纪律）
+        p3 = mk_plan("no-such-style")
+        try:
+            pipeline.build_ass(p3, tmp, "a3.ass")
+            d_ok = False
+        except SystemExit:
+            d_ok = True
+        check("T71d 幕级未注册样式硬失败", d_ok, "")
+    except Exception as e:
+        check("T71 幕级字幕样式渲染链", False, str(e)[:160])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- T72 当前线 active 写端（2026-10-22）
+def t72_active_storyline_write():
+    """锚：海报墙封面偏好「当前线→首线→main」的读端早在（studio /api/projects cover 解析），
+    写端此前只有删线兜底——切线从不写 active，读端恒落空。接通后：GET /api/project?story=<sid>
+    即回写 project.json active。"""
+    sid = "e2eactive"
+    sfx = os.path.join(ROOT, "projects", PROJ, "storylines", sid + ".json")
+    pjf = os.path.join(ROOT, "projects", PROJ, "project.json")
+    api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")  # 清残
+    mk = {"no": 1, "id": "b1", "story": "锚", "narration": {"mode": "inherit"},
+          "tracks": [], "music": {"inherit": True},
+          "effects": {"stickers": [], "sfx": []}, "subtitle": {}, "transition_out": None}
+    try:
+        st, _ = api("/api/storyline/" + PROJ + "?story=" + sid, method="POST",
+                    body={"title": "active 锚线", "beats": [mk]})
+        assert st == 200 and os.path.exists(sfx)
+        st2, d = api("/api/project/%s?story=%s" % (PROJ, sid))
+        pj = json.load(open(pjf, encoding="utf-8"))
+        check("T72 切线回写 active（海报墙封面跟当前线）",
+              st2 == 200 and d.get("story") == sid and pj.get("active") == sid,
+              "st=%s active=%r" % (st2, pj.get("active")))
+    finally:
+        api("/api/storyline-delete/" + PROJ + "?story=" + sid, method="POST")
+
+
+# ---------------------------------------------------------------- T73 安全批（2026-10-22）
+def t73_security_batch():
+    """锚：安全审查五件的回归钉——
+    a) 路径校验漏网：/api/beat/ 漏校 name、/api/render/ 漏校 sid（曾 `..%2F` 逃逸项目目录）
+    b) GET 不再分发状态变更声纹路由（CSRF 面：任意网页 <img> 可删声纹），POST 通道完好
+    c) registry-save 值校验：filtergraph 危险字符拒绝且不落盘 / 合法原样放行
+    d) Host 白名单（DNS 重绑定）+ Content-Length 非法 400（原 int() 裸断/负值挂线程）
+    e) build_digest 锁=全仓纪律 <packdir>/.lock（曾用 pack.json.lock 互斥失效，离线源码锚）"""
+    # a) 穿越拒绝
+    st1, _ = api("/api/beat/..%2F..%2Ftmp%2Fx/3", method="POST", body={})
+    st2, _ = api("/api/render/%s?story=..%%2Fx" % PROJ, method="POST", body={})
+    check("T73a 路径穿越拒绝（beat name / render sid）", st1 == 400 and st2 == 400,
+          "st=%s/%s" % (st1, st2))
+    # b) GET 摘除状态变更：GET voice-delete/voice-test 不再分发；POST 通道完好；GET /api/voices 只读保留
+    stg1, dg1 = api("/api/voice-delete/__no_such__")
+    stg2, _ = api("/api/voice-test/__no_such__")
+    stp, dp = api("/api/voice-delete/__no_such__", method="POST")
+    stv, _ = api("/api/voices")
+    ok_b = (stv == 200
+            and "no such voice" not in json.dumps(dg1)  # GET 落到通用 404，不进 _handle_voice
+            and stg2 in (404, 501)
+            and stp == 404 and "no such voice" in json.dumps(dp))  # POST 通道完好（不存在的音色=业务 404）
+    check("T73b 状态变更声纹路由撤出 GET（POST 完好）", ok_b,
+          "get_del=%s get_test=%s post_del=%s voices=%s" % (stg1, stg2, stp, stv))
+    # c) registry 值校验：危险 preset 拒且文件不动；原样值放行
+    tp = os.path.join(ROOT, "registry", "transitions.json")
+    old = open(tp, encoding="utf-8").read()
+    try:
+        reg = json.loads(old)
+        first = next(k for k in reg if not k.startswith("_"))
+        reg[first]["preset"] = "fade,movie=/etc/passwd"
+        stb, _ = api("/api/registry-save/transitions", method="POST", body=reg)
+        unchanged = open(tp, encoding="utf-8").read() == old
+        stok, _ = api("/api/registry-save/transitions", method="POST", body=json.loads(old))
+        check("T73c registry-save 值校验（危险字符拒+合法放行+拒绝不落盘）",
+              stb == 400 and unchanged and stok == 200, "st=%s/%s unchanged=%s" % (stb, stok, unchanged))
+    finally:
+        open(tp, "w", encoding="utf-8").write(old)
+    # d) Host 白名单 + Content-Length 非法
+    import http.client
+    port = int(urllib.parse.urlparse(BASE).port or 8765)
+    c1 = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c1.request("GET", "/api/projects", headers={"Host": "evil.example.com"})
+    st_h = c1.getresponse().status
+    c1.close()
+    c2 = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c2.putrequest("POST", "/api/draft/" + PROJ)
+    c2.putheader("Content-Length", "abc")
+    c2.endheaders(b"{}")
+    st_cl = c2.getresponse().status
+    c2.close()
+    check("T73d Host 白名单 403 + 非法 Content-Length 400", st_h == 403 and st_cl == 400,
+          "host=%s cl=%s" % (st_h, st_cl))
+    # e) build_digest 锁纪律（离线源码锚）
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import understand, inspect
+    src = inspect.getsource(understand.build_digest)
+    check("T73e build_digest 锁=<packdir>/.lock 纪律",
+          'os.path.join(os.path.dirname(pp), ".lock")' in src and 'pp + ".lock"' not in src, "")
 
 
 

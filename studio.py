@@ -35,6 +35,45 @@ def _filename(s):
 def _safe_id(s):
     """素材 id：ASCII 白名单 + 中文（CJK）——id 可能从中文文件名生成，query 传参 urlencode 后合法。"""
     return bool(s) and re.fullmatch(r"[A-Za-z0-9_\-\.\u4e00-\u9fff]{1,40}", s) and ".." not in s
+
+
+_REG_FG_SAFE = re.compile(r"^[A-Za-z0-9#@._]+$")  # \u8fdb filtergraph/drawtext \u7684\u503c\uff1a\u7981\u7a7a\u683c/\u9017\u53f7/\u5206\u53f7/\u62ec\u53f7/\u5f15\u53f7/\u53cd\u659c\u6760
+_REG_COLOR = re.compile(r"^0x[0-9A-Fa-f]{6}(@[0-9.]+)?$")
+
+
+def _registry_value_err(rname, obj):
+    """registry-save \u503c\u7ea7\u6821\u9a8c\uff082026-10-22 \u5b89\u5168\u6279 A3\uff09\uff1a\u6b64\u524d\u53ea\u6821\u6761\u76ee id\u2014\u2014transitions \u7684
+    color/preset \u88f8\u8fdb filtergraph\uff08pipeline build_cmd \u6ee4\u955c\u56fe\u62fc\u63a5\uff09\uff0cstickers text_style \u88f8\u8fdb
+    drawtext \u53c2\u6570\u4e0e\u524d\u7aef cssbg \u7684 style \u5c5e\u6027\u2014\u2014\u6295\u6bd2\u6ce8\u518c\u8868\uff08\u542b CSRF \u5199\u5165\uff09= \u6ee4\u955c\u56fe\u6ce8\u5165 +
+    \u5b58\u50a8\u578b XSS \u540c\u6839\u3002\u6309\u57df\u767d\u540d\u5355\u5b57\u7b26\u96c6\uff0c\u62d2\u7edd\u5df2\u77e5\u5b89\u5168\u5f62\u6001\u5916\u7684\u4e00\u5207\u3002\u8fd4\u56de\u9519\u8bef\u63cf\u8ff0\u6216 None\u3002"""
+    for k, v in obj.items():
+        if k.startswith("_") or not isinstance(v, dict):
+            continue
+        if rname == "transitions":
+            for fk in ("preset", "color"):
+                if v.get(fk) is not None and not _REG_FG_SAFE.match(str(v[fk])):
+                    return "transitions.%s.%s \u542b\u975e\u6cd5\u5b57\u7b26\uff08\u7981\u7a7a\u683c/\u9017\u53f7/\u5206\u53f7/\u62ec\u53f7/\u5f15\u53f7\uff09" % (k, fk)
+            for nk in ("duration", "hold", "noise"):
+                if v.get(nk) is not None and not isinstance(v[nk], (int, float)):
+                    return "transitions.%s.%s \u5fc5\u987b\u662f\u6570\u5b57" % (k, nk)
+        if rname == "stickers":
+            ts = v.get("text_style") or {}
+            for ck in ("bg", "fg", "stroke", "ring_c", "shadow_c"):
+                if ck in ts and not _REG_COLOR.match(str(ts[ck])):
+                    return "stickers.%s.%s \u989c\u8272\u987b\u4e3a 0xRRGGBB\uff08\u53ef\u5e26 @alpha\uff09: %r" % (k, ck, str(ts[ck])[:30])
+            if "font" in ts and not _REG_FG_SAFE.match(str(ts["font"])):
+                return "stickers.%s.font \u542b\u975e\u6cd5\u5b57\u7b26" % k
+        if rname in ("bgm", "sfx", "stickers") and v.get("file") is not None:
+            fp = str(v["file"])
+            if ".." in fp or fp.startswith(("/", "\\")) or "\x00" in fp or "\\" in fp:
+                return "%s.%s.file \u5fc5\u987b\u662f\u4ed3\u5185\u76f8\u5bf9\u8def\u5f84\uff08\u7981\u7edd\u5bf9\u8def\u5f84/../\u7a7f\u8d8a/\u53cd\u659c\u6760\uff09" % (rname, k)
+        if rname == "subtitles":
+            for ck in ("primary", "secondary", "outline_col"):
+                if ck in v and not re.match(r"^&H[0-9A-Fa-f]{8}$", str(v[ck])):
+                    return "subtitles.%s.%s \u987b\u4e3a &HAABBGGRR \u989c\u8272" % (k, ck)
+            if "font" in v and not re.match(r"^[^,{};:'\"\\]+$", str(v["font"])):
+                return "subtitles.%s.font \u542b\u975e\u6cd5\u5b57\u7b26\uff08\u7981\u9017\u53f7/\u62ec\u53f7/\u5f15\u53f7\uff09" % k
+    return None
 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
 import flock  # write_json 原子落盘（Agent 轮询故事线与人保存并发，读者不读半截）
@@ -53,13 +92,15 @@ def _dub_ensure(pdir, sid, job):
     原声，界面还显示"渲染完成"）——渲染前自动合成缺失/过期 dub 幕：tts 适配层（供应商
     =config/services.json tts 段，与 draft --dub 同实现同契约），随后 vadwords 量词轨
     （与 orchestrate「渲染前自动 vadwords」同哲学）。
-    过期判据：台词 ≠ narration.synth_text（台词变更时 storyline POST 已先摘除 audio，
-    走到这里=缺失）；无 synth_text 的存量线（Agent 老产物）不强制重合成——不花冤枉钱。
+    过期判据：台词 ≠ narration.synth_text（台词/音色变更时 storyline POST 已先摘除 audio，
+    走到这里=缺失）；音色 ≠ meta.voice（synth_voice 留痕比对）；无 synth_text 的存量线
+    （Agent 老产物）不强制重合成——不花冤枉钱。
     合成失败=渲染前置失败：ok=False + tail 可见，不开渲（不过闸不渲染）。"""
     sf = os.path.join(pdir, "storylines", "%s.json" % sid) if sid else os.path.join(pdir, "storyline.json")
     if not os.path.exists(sf):
         return
     sl = jload(sf, {})
+    voice = ((sl.get("meta") or {}).get("voice") or "").strip()  # 故事线级配音音色（2026-10-22）
     todo = []
     for i, b in enumerate(sl.get("beats") or []):
         nar = b.get("narration") or {}
@@ -69,8 +110,11 @@ def _dub_ensure(pdir, sid, job):
         if not text:
             continue  # 无台词可合成——留给渲染期原声回退警告
         af = nar.get("audio")
-        if af and os.path.exists(os.path.join(pdir, af)) and nar.get("synth_text", text) == text:
-            continue  # 新鲜：音频在场且台词未变
+        # 新鲜判据：音频在场 + 台词未变 + 音色未变（音色维度只约束本链产物——synth_text 在
+        # 即说明走过合成、必然同期写了 synth_voice；无 synth_text 的存量 Agent 老线不溯及）
+        if af and os.path.exists(os.path.join(pdir, af)) and nar.get("synth_text", text) == text \
+                and ("synth_text" not in nar or (nar.get("synth_voice") or "") == voice):
+            continue
         todo.append((i, b, nar, text))
     if not todo:
         return
@@ -83,9 +127,10 @@ def _dub_ensure(pdir, sid, job):
         try:
             job["tail"].append("幕%d 配音合成中…" % no); del job["tail"][:-6]
             af = "materials/dub/%s-b%d.mp3" % (sid or "main", no)
-            tts.synth(text, out=os.path.join(pdir, af))
+            tts.synth(text, voice_id=voice or None, out=os.path.join(pdir, af))
             nar["audio"] = af
             nar["synth_text"] = text  # 留痕：台词变更检测的基准（draft --dub 老产物无此键，不溯及）
+            nar["synth_voice"] = voice  # 留痕：音色变更检测的基准（与 synth_text 成对写）
             b["narration"] = nar
         except Exception as e:
             fails.append("幕%d: %s" % (no, str(e)[:160]))
@@ -138,6 +183,8 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(d)
 
     def do_GET(self):
+        if not re.match(r"^(localhost|127\.0\.0\.1|\[?::1\]?)(:\d+)?$", self.headers.get("Host") or ""):
+            return self._json({"err": "bad host"}, 403)  # Host 白名单（2026-10-22 安全批 A4：DNS 重绑定收口——本服务只面本机）
         # 先 urlparse 再解码 path 段（顺序是硬规矩，2026-09-19 井号素材根修）：
         # 若先 unquote 整条，query 里的 %23/%3F/%26 被提前还原成 #/?/&，urlparse 再把
         # # 后当锚点截断——正确 encode 的客户端也必炸 bad filename。query 的解码
@@ -333,16 +380,17 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "no such story: %s" % sid}, 404)  # 显式指定即严格——静默换成别的线是错幕事故源
             if not sid and sids_all:
                 sid = max(sids_all, key=lambda s: os.path.getmtime(f"{sdir}/{s}.json"))
+            # 当前线留痕（2026-10-22）：海报墙封面偏好「当前线→首线→main」的写端——
+            # 打开/切换故事线即回写 project.json active（此前写端只有删线兜底，读端恒落空）
+            if sid:
+                _pjp = f"{p}/project.json"
+                _pj = jload(_pjp, {})
+                if _pj and _pj.get("active") != sid:
+                    _pj["active"] = sid
+                    flock.write_json(_pjp, _pj)
             sfx = f"-{sid}" if sid else ""
             sp = (f"{sdir}/{sid}.json" if sid and os.path.exists(f"{sdir}/{sid}.json")
                   else (f"{p}/storyline.json" if not sids_all else f"{sdir}/{sids_all[0]}.json"))
-            grid_dir = f"{ROOT}/docs/archive/poc/studio-grid"  # 2026-10-15 归位：docs/poc → docs/archive/poc
-            gvs = sorted(f"/files/docs/archive/poc/studio-grid/{f}" for f in os.listdir(grid_dir)
-                         if f.endswith(".mp4")) if os.path.isdir(grid_dir) else []
-            imgs = [f"/files/{rel}" for rel in
-                    ("docs/archive/poc/studio-grid.png", "docs/archive/poc/v3-loop-v2.png", "docs/archive/poc/v3-loop-verify.png")
-                    if os.path.exists(os.path.join(ROOT, rel))]
-            mlt = f"/files/projects/{name}/manual/{name}.mlt"
             enums = _enums()  # video_types/platforms 从档案注册表派生（2026-10-15）
             transition_ids = list((jload(f"{ROOT}/registry/transitions.json", {}) or {}).keys())
             enums["stickers"] = [{"id": k, **{kk: vv for kk, vv in v.items() if kk in ("desc", "pos", "duration")}}
@@ -363,13 +411,10 @@ class H(BaseHTTPRequestHandler):
                 "outs": [s for s in ([f[:-5] for f in sorted(os.listdir(f"{p}/storylines")) if f.endswith(".json")] if os.path.isdir(f"{p}/storylines") else []) if os.path.exists(f"{p}/out-{s}.mp4")],
                 "storyline": jload(sp, {}),
                 "plan": jload(f"{p}/plan{sfx}.json", {}),
-                "ass": open(f"{p}/subtitle{sfx}.ass", encoding="utf-8").read() if os.path.exists(f"{p}/subtitle{sfx}.ass") else "",
-                "params": jload(f"{p}/params.json", {}),
                 "enums": enums, "library": library, "pack_files": pack_files,
                 "project": jload(f"{p}/project.json", {}),
                 "transition_ids": transition_ids,
                 "files": {"out": f"/files/projects/{name}/out{sfx}.mp4",
-                          "grid_videos": gvs, "images": imgs, "mlt": mlt,
                           "cover": f"/files/projects/{name}/cover/cover{sfx}.jpg"},
             })
         elif u.path.startswith("/api/sub-preview/"):
@@ -430,8 +475,9 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "preview render failed"}, 500)
             rel = os.path.relpath(png, ROOT).replace(os.sep, "/")
             return self._json({"ok": True, "url": f"/files/{rel}"})
-        elif u.path == "/api/voices" or u.path.startswith("/api/voice-register") \
-                or u.path.startswith("/api/voice-delete/") or u.path.startswith("/api/voice-test/"):
+        elif u.path == "/api/voices":
+            # 2026-10-22 安全批：register/delete/test 移出 GET（状态变更走 GET=任意网页 <img> 可跨站触发）——
+            # 三个全部只在 do_POST 分发；GET 仅留只读的 /api/voices
             return self._handle_voice(u)
         elif u.path.startswith("/files/"):
             fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
@@ -552,9 +598,27 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": True, "url": "/files/assets/preview/voicetest-%s.mp3?t=%d" % (name, int(time.time()))})
 
     def do_POST(self):
+        if not re.match(r"^(localhost|127\.0\.0\.1|\[?::1\]?)(:\d+)?$", self.headers.get("Host") or ""):
+            return self._json({"err": "bad host"}, 403)  # Host 白名单（同 do_GET，2026-10-22 安全批 A4）
+        # body 入口闸（同批）：Content-Length 非法/负数在此 400（下游 int() 裸断/rfile.read(-1) 挂线程）；
+        # JSON 端点统一 2MB 上限（上传类端点自带白名单上限——pack-upload 1GiB 等，放行）
+        if self.headers.get("Transfer-Encoding"):
+            return self._json({"err": "chunked 不受理"}, 400)
+        _cl = self.headers.get("Content-Length")
+        if _cl is not None:
+            try:
+                _n = int(_cl)
+            except (TypeError, ValueError):
+                return self._json({"err": "bad Content-Length"}, 400)
+            if _n < 0:
+                return self._json({"err": "bad Content-Length"}, 400)
+            if _n > (2 << 20) and not any(self.path.startswith(p) for p in
+                    ("/api/pack-upload", "/api/registry-upload", "/api/cover-upload", "/api/voice-register")):
+                return self._json({"err": "body too large（JSON 端点上限 2MB）"}, 413)
         u0 = urlparse(self.path)
         u = u0._replace(path=unquote(u0.path, encoding="utf-8"))  # 先 parse 再解 path（同 do_GET：%23 不能提前还原，2026-09-19）
-        if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/"):
+        if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/") \
+                or u.path.startswith("/api/voice-test/"):
             return self._handle_voice(u)
         if u.path.startswith("/api/cover-gen/"):
             name = u.path.split("/")[3]
@@ -572,8 +636,11 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "no such project"}, 404)
             try:
                 import image_gen, pipeline as PL
+                _story = body.get("story") or None
+                if _story and not _safe_name(_story):  # 安全批 A1（2026-10-22）：story 进 build_plan 拼路径
+                    return self._json({"err": "bad story id"}, 400)
                 # 底图=素材代表帧（2026-09-18 封面新流程：AI 封面=代表帧底图+提示词保主体生成）
-                plan, _rs = PL.build_plan(pd, body.get("story") or None)
+                plan, _rs = PL.build_plan(pd, _story)
                 cdir = os.path.join(pd, "cover"); os.makedirs(cdir, exist_ok=True)
                 base = PL._cover_frame(plan, {"beat_no": body.get("beat_no"), "at": body.get("at") or 0},
                                        os.path.join(cdir, ".base-sample.jpg"))
@@ -590,6 +657,8 @@ class H(BaseHTTPRequestHandler):
             sid = (qs.get("story") or [None])[0]
             if not _safe_name(name):
                 return self._json({"err": "bad project"}, 400)
+            if sid and not _safe_name(sid):  # 安全批 A1（2026-10-22）：sid 进 cover 产物拼名
+                return self._json({"err": "bad story id"}, 400)
             try:
                 r = subprocess.run([sys.executable, PIPE, "cover", f"{ROOT}/projects/{name}"] + ([sid] if sid else []),
                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
@@ -597,30 +666,6 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": str(e)[:200]}, 500)
             lines = [l for l in (r.stdout or "").strip().splitlines() if l.startswith(("COVER OK", "COVER FAIL"))]
             return self._json({"ok": r.returncode == 0, "line": lines[-1] if lines else "无输出"})
-        if u.path.startswith("/api/library/") and "/clip/" in u.path:
-            # v1 切片层（2026-10-15 注）：cuts 预览视频切片用，创作台「项目素材」区仍在用
-            parts = u.path.split("/")
-            name, ci = parts[3], parts[-1]  # 修复：/clip/0 的编号在末段（此前误取 parts[4]="clip"）
-            if not (_safe_name(name) and ci.isdigit()):
-                return self._json({"err": "bad id"}, 400)
-            pd = f"{ROOT}/projects/{name}"
-            lib = jload(f"{pd}/materials/library.json", {})
-            cut = next((c for c in lib.get("cuts", []) if str(c.get("cut_index")) == str(ci)), None)
-            if not cut:
-                return self._json({"err": "no such cut"}, 404)
-            pv = f"{pd}/materials/previews"; os.makedirs(pv, exist_ok=True)
-            out = f"{pv}/cut_{ci}.mp4"
-            if not os.path.exists(out):
-                subprocess.run([FF, "-y", "-hide_banner", "-loglevel", "error",
-                                "-ss", str(cut.get("in")), "-t", str(cut.get("duration") or 5),
-                                "-i", f"{pd}/materials/src.mp4",
-                                "-vf", "scale=360:-2", "-c:v", "libx264", "-crf", "26",
-                                "-c:a", "aac", "-b:a", "96k", out],
-                               capture_output=True, timeout=120)
-            if not os.path.exists(out):
-                return self._json({"err": "clip 生成失败"}, 500)
-            return self._json({"ok": True, "video": f"/files/projects/{name}/materials/previews/cut_{ci}.mp4?t={int(os.path.getmtime(out))}",
-                               "dur": cut.get("duration")})
         if u.path.startswith("/api/pack-mount/"):
             # 挂载/卸载：library.json packs 是唯一事实源
             parts = u.path.split("/")
@@ -656,7 +701,6 @@ class H(BaseHTTPRequestHandler):
             os.makedirs(f"{pk_dir}/thumbs", exist_ok=True)
             # 初建写，锁豁免注记（rmw_smoke 守卫）：目录刚建、files=[]、无并发对象——锁无竞争可解
             json.dump({"id": pid, "name": str(body.get("name") or pid),
-                       "shot_at": str(body.get("shot_at") or ""),
                        "time_rule": "0.1s 量化（与词级时间戳规范一致）",
                        "separation": "拍摄层 usable/defects 归素材包；创作取用归各项目 storyline",
                        "files": []},
@@ -1059,7 +1103,8 @@ class H(BaseHTTPRequestHandler):
                 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
                 import draft as D
                 sid, draft, beats = D.run(name, intent, save=True, vtype=str(body.get("type") or "").strip() or None,
-                                          persona=str(body.get("persona") or "").strip() or None)
+                                          persona=str(body.get("persona") or "").strip() or None,
+                                          voice=str(body.get("voice") or "").strip() or None)
             except SystemExit as e:
                 return self._json({"err": "起草前置缺失（LLM key 未配置？）：%s" % (str(e.code) if e.code else "")[:180]}, 500)  # sys.exit 在 HTTP 线程里会打穿请求（Claude P2-②）
             except Exception as e:
@@ -1165,36 +1210,12 @@ class H(BaseHTTPRequestHandler):
                     json.dump(pj2, f, ensure_ascii=False, indent=1)
             tgt = next((f for f in pj2["files"] if f.get("id") == fid), None)
             return self._json({"ok": True, "file": tgt})
-        if u.path.startswith("/api/library/") and u.path.endswith("/usable"):
-            # v1 切片层（2026-10-15 注）：创作台「项目素材」区切换切片 usable 在用
-            # 拍摄层废片决策：usable 只评拍摄层（说错/卡等/重复/气口），不评创作取用
-            name = u.path.split("/")[3]
-            if not _safe_name(name):
-                return self._json({"err": "bad id"}, 400)
-            lp = f"{ROOT}/projects/{name}/materials/library.json"
-            lib = jload(lp, {})
-            if not lib:
-                return self._json({"err": "library 未建"}, 404)
-            try:
-                n = int(self.headers.get("Content-Length", 0))
-                body = json.loads(self.rfile.read(n) or b"{}")
-            except Exception:
-                return self._json({"err": "bad json"}, 400)
-            try:
-                ci = int(body.get("cut_index", -1))
-            except (TypeError, ValueError):
-                return self._json({"err": "bad cut_index"}, 400)
-            for c in lib.get("cuts", []):
-                if c.get("cut_index") == ci:
-                    c["usable"] = bool(body.get("usable", True))
-                    c["defects"] = body.get("defects", [])
-            with open(lp, "w", encoding="utf-8") as f:
-                json.dump(lib, f, ensure_ascii=False, indent=1)
-            return self._json({"ok": True, "cut": next((c for c in lib["cuts"] if c["cut_index"] == ci), None)})
         if u.path.startswith("/api/beat/"):
             # 幕级预览渲染：反馈半径缩小到一幕（秒级），绝低压力快速剪辑的核心
             parts = u.path.split("/")
             name, beat_no = parts[3], parts[4]
+            if not _safe_name(name):  # 安全批 A1（2026-10-22）：name 曾漏校——全仓唯一穿越洞
+                return self._json({"err": "bad id"}, 400)
             if not beat_no.isdigit():
                 return self._json({"err": "bad beat no"}, 400)
             _q = parse_qs(urlparse(self.path).query)
@@ -1245,9 +1266,10 @@ class H(BaseHTTPRequestHandler):
                     else:
                         story["meta"][k] = v
             if isinstance(body.get("beats"), list):
-                # dub 台词变更失效（2026-10-17 等价审查）：台词变了而旧配音音频残留=渲染静默用旧音
-                # 唱新词。只凭实锤证据摘除——synth_text 与台词不符，或同一 audio 在旧线里配的是
-                # 别的台词；台词不变则按文本配对迁移旧音频/词轨（插幕调序不误伤）；
+                # dub 失效摘除（2026-10-17 台词维度 + 2026-10-22 音色维度）：台词或配音音色变了而旧
+                # 配音音频残留=渲染静默用旧音唱新词/旧音色。只凭实锤证据摘除——synth_text 与台词不符、
+                # synth_voice 与 meta.voice 不符，或同一 audio 在旧线里配的是别的台词；台词+音色都不变
+                # 则按文本配对迁移旧音频/词轨（插幕调序不误伤）；
                 # 无证据的新线/新幕信任调用方（Agent 手造线自带预制音频合法，T12 实锤）
                 pool = {}
                 audio_text = {}
@@ -1256,28 +1278,37 @@ class H(BaseHTTPRequestHandler):
                     if on.get("mode") == "dub" and on.get("audio"):
                         pool.setdefault((ob.get("story") or "").strip(), []).append(on)
                         audio_text[on["audio"]] = (ob.get("story") or "").strip()
+                cur_voice = (story.get("meta") or {}).get("voice") or ""  # meta 已在上方先行合并
                 for nb in body["beats"]:
                     nn = nb.get("narration") or {}
                     if nn.get("mode") != "dub":
                         continue
                     text = (nb.get("story") or "").strip()
                     stale = (nn.get("synth_text") is not None and nn.get("synth_text") != text) or \
+                            (nn.get("synth_voice") is not None and (nn.get("synth_voice") or "") != cur_voice) or \
                             (nn.get("audio") and audio_text.get(nn["audio"], text) != text)
                     cand = pool.get(text)
+                    old = None
                     if cand and not stale:
-                        old = cand.pop(0)
-                        for k in ("audio", "synth_text", "words"):
+                        while cand:
+                            _o = cand.pop(0)
+                            if _o.get("synth_voice") is not None and (_o.get("synth_voice") or "") != cur_voice:
+                                continue  # 音色不符的旧配音迁移无意义（渲染前必重配）——不迁，与台词变更失效同套语义
+                            old = _o
+                            break
+                    if old is not None:
+                        for k in ("audio", "synth_text", "synth_voice", "words"):
                             if old.get(k) is not None:
                                 nn[k] = old[k]
                     elif stale:
-                        for k in ("audio", "synth_text", "words"):
+                        for k in ("audio", "synth_text", "synth_voice", "words"):
                             nn.pop(k, None)
                     nb["narration"] = nn
                 story["beats"] = body["beats"]  # 幕序列整体替换（编号幕，编辑器持有全文）
             flock.write_json(sp, story)  # 多故事线=storylines/<sid>.json，旧版=storyline.json
             return self._json({"ok": True, "storyline": story})
         if u.path.startswith("/api/registry-save/"):
-            # 注册表整体保存（前端管理面板编辑后 PUT）：白名单五件套，enums/formats 语义枚举不开放
+            # 注册表整体保存（前端管理面板编辑后 POST）：白名单七件套，enums/formats 语义枚举不开放
             rname = u.path.split("/")[3]
             if rname not in ("bgm", "subtitles", "transitions", "sfx", "stickers", "video_types", "platforms"):
                 return self._json({"err": "registry 不可编辑: " + rname}, 400)
@@ -1295,6 +1326,9 @@ class H(BaseHTTPRequestHandler):
                     continue
                 if k != k.strip() or not _safe_id(k.strip()):
                     return self._json({"err": "非法条目 id: %r（允许中文/字母/数字/_-，禁引号/尖括号/首尾空格）" % str(k)[:20]}, 400)  # key 白名单（Claude P1-①服务端层）
+            _verr = _registry_value_err(rname, obj)
+            if _verr:
+                return self._json({"err": _verr}, 400)  # 值白名单（2026-10-22 安全批：filtergraph/drawtext/前端 CSS 注入面收口）
             with open(f"{ROOT}/registry/{rname}.json", "w", encoding="utf-8") as f:
                 json.dump(obj, f, ensure_ascii=False, indent=1)
             return self._json({"ok": True, "count": len([k for k in obj if not k.startswith("_")])})
@@ -1372,6 +1406,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "no such project"}, 404)
             qs = parse_qs(u.query)
             sid = (qs.get("story") or [None])[0]
+            if sid and not _safe_name(sid):  # 安全批 A1（2026-10-22）：sid 拼产物文件名，漏校=项目外任意路径写
+                return self._json({"err": "bad story id"}, 400)
             params = {}
             for k in ("flash", "hold", "duration"):
                 if k in qs:

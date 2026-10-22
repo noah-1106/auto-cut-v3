@@ -13,7 +13,7 @@ silencedetect 0.25s 粒度）——ASR 实测与 VAD 物理测量互证。
   3. tier=sent/vad → 全素材 VAD 语音段 + 全文本比例铺轨 + 窗口切片（历史路径）
   4. 窗口无词（空镜/未转写）→ story 字符按窗口 VAD 铺
 dub 幕：VAD 对 dub 音频全长铺 story 台词（dubfit 随后以 ASR 闭环词覆写）。
-产物：storylines/<sid>.json 每幕 narration.words + <pid>.vad-report.json
+产物：storylines/<sid>.json 每幕 narration.words + vad-report.json（项目根，无前缀）
 （report.text_from 标注每幕走了哪条通道：word-ts/window-local/transcript/story）。
 """
 import argparse, json, os, re, subprocess, sys

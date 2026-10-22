@@ -9,7 +9,7 @@ autocut3 管线核心 v0.1 —— 最小闭环
   - 双视图：本模块只生产 JSON/命令（AI 操作台），渲染产物交 Studio 监视器（人眼/视觉模型）
   - 组件四件套：输入契约 / 生成器 / 校验器(最小) / 后续加缓存
 """
-import json, os, re, shutil, subprocess, sys
+import json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asr  # noqa: E402  speech_tail（转场预留的词尾判定，D1 单一事实源）
@@ -65,7 +65,8 @@ def _ass_spec(ass_path):
 # ---------------------------------------------------------------- 解说轨
 def remap_words(cuts, acts, segs, total, packpool=None):
     """词级时间戳 → 成片时间轴（0.1s 量化规范）。源: cuts.json（n001）或素材包转写词轨（source_id 优先）。
-    dub 幕：字幕词轨 = 配音文案按配音音频实测时长均分（画面字幕必须跟配音走，不跟原声）。"""
+    dub 幕：字幕词轨首选配音音频本体 ASR 实测（narration.words，与音频同源零偏移）；
+    均分只作无实测词轨时的最后兜底（画面字幕必须跟配音走，不跟原声）。"""
     packpool = packpool or {}
     out, drops = [], []  # drops=转场重叠钳没的词（ruxuan-02 实锤：静默丢词→字幕页合并零告警）
     for i, act in enumerate(acts):
@@ -76,7 +77,8 @@ def remap_words(cuts, acts, segs, total, packpool=None):
         tl1 = float(segs[i + 1]["tl_in"]) if i + 1 < len(segs) else float(total) + 0.3
         seg_words = []
         # 显式词轨最优先（2026-09-15）：narration.words（VAD 物理测量/音频本体 ASR），
-        # dub/original 统一通道——素材 ASR 词轨绝对时间漂移 0~3s 实锤后，物理测量是唯一可信时间源
+        # dub/original 统一通道——旧叙事"素材词轨漂移 0~3s"真相=当时 ASR 未传 timestamp_level
+        # 的合成均分时间（2026-09-18 勘误）；tier=word 实测词轨可信，VAD 物理测量仍是兜底源
         ow = s.get("owords")
         if ow:
             for w in ow:
@@ -102,7 +104,8 @@ def remap_words(cuts, acts, segs, total, packpool=None):
             seg_words = []
             # 词轨三级优先（2026-09-15 15s 错位根因复盘）：
             # ① narration.words 显式词轨=配音音频本体 ASR——与音频同源零偏移（首选）
-            # ② words_from 素材词轨平移——已实锤素材 ASR 绝对时间偏移 0.15~3s 不等，只作旧线兼容
+            # ② words_from 素材词轨平移——tier=vad/sent 老包是合成均分时间（旧"漂移 0.15~3s"
+            #    实锤的真相，2026-09-18 勘误），只作旧线兼容；tier=word 实测词轨可直用
             # ③ 均分——最后兜底
             rw = dubp.get("words") or []
             if rw:
@@ -249,6 +252,35 @@ def build_pages(chars, max_chars=12):
                 pages.append(piece)
     return pages
 
+
+def plan_pages(plan):
+    """字幕分页单一事实源（build_ass 出片与 QC R10 重放共用，2026-10-22 抽）。
+    幕级样式覆盖（beat.subtitle.style → seg["subtitle_style"]）存在时按幕分页——
+    页不跨幕（各幕样式 max_chars/字号可不同，跨幕页无法归属），词按 [lo,hi) 半开窗
+    顺序划归各幕（转场预留保证幕尾词 < 本幕窗尾、幕头词 ≥ 窗尾，见 build_plan）；
+    无覆盖时全局面分页，与 2026-09-20 结构信号分页逐字节一致（存量零漂移）。
+    返回 [(page, style_id)]，page=[(ch,s,e)...]。"""
+    regs = load(f"{ROOT}/registry/subtitles.json")
+    gid = plan["subtitle_style"]
+    chars = char_level(plan.get("words") or [])
+    segs = plan.get("segments") or []
+    if not any(s.get("subtitle_style") for s in segs):
+        return [(pg, gid) for pg in
+                build_pages(chars, (regs.get(gid) or {}).get("max_chars", 12))]
+    pages, ci = [], 0
+    for s in segs:
+        st = s.get("subtitle_style") or gid
+        mc = (regs.get(st) or {}).get("max_chars", 12)
+        lo, hi = float(s["tl_in"]), float(s["tl_in"]) + float(s["dur"])
+        seg_chars = []
+        while ci < len(chars) and chars[ci][1] < hi:
+            if chars[ci][1] >= lo - 0.05:
+                seg_chars.append(chars[ci])
+            ci += 1
+        for pg in build_pages(seg_chars, mc):
+            pages.append((pg, st))
+    return pages
+
 def fmt_ts(sec):
     cs = max(0, int(round(sec * 100)))
     return f"{cs//360000}:{cs%360000//6000:02d}:{cs%6000//100:02d}.{cs%100:02d}"
@@ -257,8 +289,17 @@ def build_ass(plan, project_dir, ass_name="subtitle.ass"):
     regs = load(f"{ROOT}/registry/subtitles.json")
     if plan["subtitle_style"] not in regs:
         print(f"ASS FAIL: 字幕风格 '{plan['subtitle_style']}' 未注册，可用: {list(regs)}"); sys.exit(1)
-    style = regs[plan["subtitle_style"]]
-    pages = build_pages(char_level(plan["words"]), style.get("max_chars", 12))
+    gid = plan["subtitle_style"]
+    style = regs[gid]
+    pages = plan_pages(plan)  # [(page, style_id)]——幕级覆盖走按幕分页
+    for _pg, _stid in pages:
+        if _stid not in regs:  # 幕级未注册=硬失败，与全局同纪律（draft validate/前端下拉已先过滤）
+            print(f"ASS FAIL: 幕级字幕风格 '{_stid}' 未注册，可用: {list(regs)}"); sys.exit(1)
+    used = []
+    for _pg, _stid in pages:
+        if _stid not in used:
+            used.append(_stid)
+    multi = used != [gid]  # 有幕级覆盖 → ASS 多样式表（Style Name=注册表 id）
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {plan['width']}
@@ -268,24 +309,34 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Karaoke,{style['font']},{style['size']},{style['primary']},{style['secondary']},{style['outline_col']},&H00000000,0,0,0,0,100,100,1,0,1,{style['border']},2,2,80,80,{style['marginv']},1
-
+"""
+    if multi:
+        for _sid_ in used:
+            _st = regs[_sid_]
+            head += (f"Style: {_sid_},{_st['font']},{_st['size']},{_st['primary']},{_st['secondary']},"
+                     f"{_st['outline_col']},&H00000000,0,0,0,0,100,100,1,0,1,{_st['border']},2,2,80,80,{_st['marginv']},1\n")
+    else:
+        head += (f"Style: Karaoke,{style['font']},{style['size']},{style['primary']},{style['secondary']},"
+                 f"{style['outline_col']},&H00000000,0,0,0,0,100,100,1,0,1,{style['border']},2,2,80,80,{style['marginv']},1\n")
+    head += """
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [head]
-    for i, pg in enumerate(pages):
+    for i, (pg, stid) in enumerate(pages):
+        pstyle = regs[stid]
+        sname = stid if multi else "Karaoke"
         start = pg[0][1]
         end = min(pg[-1][2] + 0.25, plan["duration"])
         if i + 1 < len(pages):
-            end = min(end, pages[i + 1][0][1])  # 页间钳制（2026-09-11 回看：尾缓冲压过下页起点=上下两行同屏）
-        if style.get("karaoke", True):
+            end = min(end, pages[i + 1][0][0][1])  # 页间钳制（2026-09-11 回看：尾缓冲压过下页起点=上下两行同屏）
+        if pstyle.get("karaoke", True):
             text = ""
             for ch, s, e in pg:  # \kf 厘秒；已读=Primary(金) 未读=Secondary(白)
                 text += r"{\kf" + str(max(1, round((e - s) * 100))) + "}" + ch
         else:  # 无卡拉OK：整页白字
             text = "".join(ch for ch, _s, _e in pg)
-        lines.append(f"Dialogue: 0,{fmt_ts(start)},{fmt_ts(end)},Karaoke,,0,0,0,,{text}\n")
+        lines.append(f"Dialogue: 0,{fmt_ts(start)},{fmt_ts(end)},{sname},,0,0,0,,{text}\n")
     ass = os.path.join(project_dir, ass_name)
     with open(ass, "w", encoding="utf-8") as f:
         f.writelines(lines)
@@ -294,6 +345,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 # ---------------------------------------------------------------- EDL
 def story_file(project_dir, sid):
     """故事线文件解析：storylines/<sid>.json 优先，旧单故事线 storyline.json 兼容。"""
+    if sid and (".." in sid or "/" in sid or "\\" in sid):
+        raise FileNotFoundError(f"非法 story id: {sid!r}")  # 纵深防御（2026-10-22 安全批：API 层 _safe_name 已拦，此兜 CLI/库直调）
     if sid:
         f = os.path.join(project_dir, "storylines", f"{sid}.json")
         if os.path.exists(f):
@@ -543,7 +596,8 @@ def build_plan(project_dir, sid=None):
                          "bgm": (b.get("music") or {}).get("bgm"),
                          "segment": (b.get("music") or {}).get("segment"),
                          "loop": (b.get("music") or {}).get("loop")},  # 幕级 BGM 声明（2026-09-14 接通前端音乐轨开关；segment/loop 2026-09-15）
-               "narration": (b.get("narration") or {}).get("mode") or "original"}
+               "narration": (b.get("narration") or {}).get("mode") or "original",
+               "subtitle_style": (b.get("subtitle") or {}).get("style") or None}  # 幕级字幕样式（2026-10-22 接通渲染链；None=继承全局）
         tr_id = b.get("transition_out")
         pending_head = 0.0  # 本幕边界算出后传给下一幕的头预留
         if tr_id and i < len(beats) - 1 and m.get("duration"):
@@ -622,7 +676,7 @@ def build_plan(project_dir, sid=None):
     fmt = (load(f"{ROOT}/registry/formats.json").get(fmt_id)
            or {"width": 1080, "height": 1920})
     plan = {
-        "version": "0.5", "story": real_sid, "fps": 30,
+        "story": real_sid, "fps": 30,
         "width": int(fmt["width"]), "height": int(fmt["height"]),
         "format": fmt_id, "sticker_w": int(fmt.get("sticker_w", 500)), "sticker_h": int(fmt.get("sticker_h", 140)),
         "sticker_top": int(fmt.get("sticker_top", 30)),   # 顶行贴纸 y（2026-09-19 Noah 定：留白140；角位仍 margin 30）

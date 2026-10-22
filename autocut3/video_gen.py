@@ -143,7 +143,7 @@ def retrieve(project, task_id, file_id):
     pp = os.path.join(pk_dir, "pack.json")
     pk = json.load(open(pp, encoding="utf-8")) if os.path.exists(pp) else {
         "id": GEN_PACK, "name": "AI 生成素材（video_gen 产物）",
-        "shot_at": "", "time_rule": "0.1s 量化（与词级时间戳规范一致）",
+        "time_rule": "0.1s 量化（与词级时间戳规范一致）",
         "separation": "拍摄层 usable/defects 归素材包；创作取用归各项目 storyline", "files": []}
     mid = "G%s" % task_id.replace("-", "")[-7:]
     fname = os.path.basename(mp4)

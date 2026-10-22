@@ -7,8 +7,9 @@
   · transcribe._dup_len 产物   transcript.scripted_dup ≥12 = 念稿/重录指纹
   · vision defects            visual.defects（blur/shake/exposure/framing/still）
   · 黑区检测                   asr.vad_speech_spans（物理测量）vs 词轨覆盖——能量有语音、
-                              词轨无文本 = 口令/嘟囔黑区（词窗±0.8s 漂移容差，v5 实锤漂移 0~3s
-                              的教训：容差不够会误报，容差过了会漏报——0.8s 是 VAD 页级精度的保守折中）
+                              词轨无文本 = 口令/嘟囔黑区（词窗±0.8s 容差——v5 时代"漂移 0~3s"
+                              实为合成均分时间之锅（2026-09-18 勘误）；tier=word 实测词轨下容差
+                              仍是防误报/漏报的保守折中）
 
 产物：projects/<pid>/disposition.json
   {materials: {mid: {verdict: clean/flag/avoid, items: [{type, t, evidence, suggestion}]}}, ...}
@@ -27,7 +28,7 @@ import asr
 import dossier
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DRIFT_TOL = 0.8  # 词轨漂移容差（v5 实锤素材 ASR 偏移 0.15~3s；黑区判定只要求"无词覆盖"且能量为语音）
+DRIFT_TOL = 0.8  # 词轨覆盖容差（旧"v5 实锤 ASR 偏移 0.15~3s"实为合成均分时间（2026-09-18 勘误）；黑区判定只要求"无词覆盖"且能量为语音）
 
 
 def _jload(p, default=None):

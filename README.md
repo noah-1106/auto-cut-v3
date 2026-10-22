@@ -122,7 +122,7 @@ curl -X POST "localhost:8765/api/render-start/myproj?story=aidraft"
 | 9 | 门禁 | qc(R1-R11) + dubgate + G1/G2t | qc-report + 门禁报告 | 交付裁决 |
 | 10 | 交付 | loudnorm + 发布命名 | 发布成片 | 人终审 |
 
-下方是 10 个概念环节的地图；机器可核对的环节状态口径=编排器 `orchestrate.py` 的 `STEPS`（15 环节，多出的粒度=mount/digest/proofread/dossier/aigen 等审计与预留槽位）。全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，不过 dubgate 不渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
+下方是 10 个概念环节的地图；机器可核对的环节状态口径=编排器 `orchestrate.py` 的 `STEPS`（15 环节，多出的粒度=mount/digest/proofread/dossier/aigen 等审计与预留槽位）。全部自动。渲染硬解优先（mac=videotoolbox / win=nvenc·qsv，回退 libx264）；dub 裁剪走"包络定位→掐头掐尾→ASR 闭环"，dubgate 环节不过 advance 停步不推进到渲染；**封面生成+体检前置于渲染**（2026-09-18 Noah 裁定：cover 不过 exit 1 不耗渲染；output-frame 策略唯一后置=成片抽帧）。五策略：first-frame（默认）/ beat-frame（幕号+秒）/ ai-generated（代表帧底图+提示词走 image-01 保主体；**底图含真人脸必被平台审核拦 1026**——含人封面唯一保真路线=帧截图+title_text 本地合成）/ output-frame / upload。标题一律确定性 drawtext 本地合成（AI 画中文=假字）。封面归一成片画幅（横拍竖裁素材自动收口）。单独出封面：`python3 autocut3/pipeline.py cover <proj> <story>`；Studio「出封面」按钮同源。
 
 **管线编排器**：`autocut3/orchestrate.py` 从文件推导全部环节状态（含 aigen 预留槽位），人/Agent 同一个入口——
 ```bash
@@ -151,19 +151,19 @@ AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）�
 studio.py            # 后端全部路由（人/Agent 同权 HTTP）
 studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
 autocut3/            # 流水线模块：orchestrate(编排器) process(素材级流水线·入库首选) asr(供应商适配+词轨归一)
-                     #   transcribe(转写) understand(画面识别) digest(包级盘点) draft(AI起草) disposition(缺陷台账)
+                     #   transcribe(转写) understand(画面识别) vision(视觉供应商适配) digest(包级盘点) draft(AI起草) disposition(缺陷台账)
                      #   pipeline(封面/成片渲染) qc(质检R1-R11) proofread(校对) vadwords(VAD词轨)
-                     #   dubfit(配音裁剪) dubgate(配音门禁) dossier(素材档案) tts(配音合成) tts_audio8(本地TTS运行时)
-                     #   video_meta(几何探针) flock(跨平台锁) video_gen/image_gen(AI生成预留口) library(v1切片遗产层)
+                     #   dubfit(配音裁剪) dubgate(配音门禁) dossier(素材档案) tts(配音合成) tts_audio8(本地TTS运行时) tts_idlekill(TTS闲置看门狗)
+                     #   video_meta(几何探针) flock(跨平台锁) image_gen(AI封面生产依赖)/video_gen(AI视频预留口) library(v1切片遗产层)
 registry/            # 注册表：效果系统的单一事实源（*.json 纯数据）
                      #   bgm/subtitles/transitions/sfx/stickers=效果；video_types/platforms=剪辑方法档案
                      #   （类型→起草提示词+渲染默认值+R11时长域；平台→响度锚——Studio 抽屉可维护）；enums/formats=语义枚举(只读)
 assets/              # 效果素材本体（registry 的 file 字段指向这里）
 materials/packs/     # 用户素材仓（大文件，不入 git）
 projects/<name>/     # 项目工作区：storylines/ 故事线、out-*.mp4 成片、qc-report.json（不入 git，留 .gitkeep 占位）
-config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json
-docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计）
-tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器) domsim.js(前端执行模拟模板,T64) browser_smoke.html(真浏览器冒烟,T67)
+config/              # services.json(服务key) lexicon.json(校对词表) qc_rules.json defects-policy.json(v2处置规则·设计史料)
+docs/                # 设计文档（pipeline-v2.md=管线自动化改造设计；archive/=退役史料；README.md=文档地图+词汇表）
+tests/               # e2e.py(端到端) rmw_smoke.py(并发) audit.py(代码审计器) fixtures.py(e2e夹具) domsim.js(前端执行模拟模板,T64) browser_smoke.html(真浏览器冒烟,T67)
 bin/                 # ffmpeg 6.0+（自备，不入 git）
 ```
 
@@ -179,7 +179,7 @@ python3 autocut3/vadwords.py    myproj --story main       # VAD 词轨重生成
 python3 autocut3/dubfit.py      myproj --story main       # 配音裁剪自动化（dub 幕）
 python3 autocut3/dubgate.py     myproj --story main       # 配音裁剪门禁
 python3 autocut3/proofread.py   myproj --dry              # 校对预演不落盘
-python3 autocut3/pipeline.py    myproj beat 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
+python3 autocut3/pipeline.py    beat myproj 2 main        # 单幕样张（秒级·540p；改幕后自检/人审参考都用它）
 python3 tests/e2e.py                                       # 全量回归（项数以输出尾部计数为准）
 python3 tests/audit.py                                     # 代码审计器
 ```
@@ -190,10 +190,10 @@ python3 tests/audit.py                                     # 代码审计器
 
 | 症状 | 先看什么 |
 |---|---|
-| 上传 Broken pipe / 000 | materials/packs/<包>/ 目录是否存在（已自动兜底建）；文件是否 >500MB |
+| 上传 Broken pipe / 000 | materials/packs/<包>/ 目录是否存在（已自动兜底建）；文件是否 >1GiB |
 | "bad filename" | 文件名含 `/` `\` `..` 或以 `.` 开头（中文名是允许的） |
 | 转写 401/超时 | config/services.json 的 key；minimax 云端限制 ≤50MB/≤500s |
-| 渲染卡在 ffmpeg | projects/<proj>/render.status 的 tail 字段有最后 8 行 stderr |
+| 渲染卡在 ffmpeg | projects/<proj>/render.status 的 tail 字段有 stderr 末 400 字符 |
 | 字幕不换页/叠字 | subtitle-*.ass 是否生成；words 词轨是否为空（转写失败会让字幕静默消失） |
 | 字幕与语音错位 | 词轨来源 narration.words：转写 tier=word（实测）走直通道；tier=vad/sent 看 vad-report 的 spans；窗口错位可设 narration.window_local（手选窗口铺 story） |
 | 配音开头有残留杂音 | dubgate 是否跑过；音频是否掐头（按能量包络 0.1s 级定位，不信 ASR 词轨） |
@@ -219,7 +219,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 2. **词轨黑区**：拍摄口令/嘟囔 ASR 会漏转写——按"能量有语音、词轨无文本"检测并掐除（事故：口令"三二一走"进成片）
 3. **concat 拼接必占位**：跳过的区间（静音洞等）必须补等长静音段，否则后段整体前移（事故：片尾提前 4s 无 BGM）
 4. **序列化保真**：前端落盘必须透传未知字段——白名单重建=静默丢数据（事故：手工词轨全丢，字幕退化均分）
-5. **dub 裁剪闭环**：裁出音频必须 dubgate 复检（首词=story 首字 / 末词含句尾 / 相似≥0.9），不过闸不渲染
+5. **dub 裁剪闭环**：裁出音频必须 dubgate 复检（首词=story 首字 / 末词含句尾 / 相似≥0.9）；门禁拓扑=orchestrate `--advance` 的 dubgate 环节不过就停步（不推进到渲染）——`pipeline.py render` 本身不跑 dubgate，直接 CLI 渲染靠人自觉先过门禁
 6. **门禁三域**：文本域（G1 说了什么）+ 时间域（G2t 什么时候说的）+ 听觉域（响度/静音洞）——"文本对"≠"时间对"（事故：46% 字符错位>1s 照样过文本门禁）
 7. **修复闭环**：修 A 暴露 B 是常态，门禁复跑到全绿才算收敛；修复必须带回归锚进 tests/e2e.py，没锚=没修完
 8. **跨平台纪律（Mac/Windows）**：文件锁一律走 `autocut3/flock.py`（POSIX=flock / Windows=msvcrt，禁直接 import fcntl）；ffmpeg 解析走 `ffmpeg_path()`（env → bin/ffmpeg(.exe) → PATH，禁裸 `"bin/ffmpeg"` 相对路径）；渲染编码走 `hw_encoder()`（平台探测，软编 libx264 只做回退）
@@ -229,7 +229,7 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
 13. **封面前置闸门**：渲染前 build_cover+cover_check，不过 exit 1 不耗渲染（output-frame 唯一后置）；封面归一成片画幅；**含真人脸封面唯一保真路线=帧截图策略+title_text 本地合成**——AI 底图带真脸必被平台审核拦 1026（2026-09-18 隔离矩阵实证），AI 画中文=假字一律禁（T55 锚）
 14. **at_word 触发词门 + 词点两级匹配**：draft 校验 at_word 必须在本幕词轨文本（A 轨转写窗口+story）内否则剔贴纸；word_time 两级匹配（词项 substring→字符序列），不命中必打渲染日志 warn——静默回退 0.4s 零告警是事故（agent 实锤「低价」「评论区」永不命中，T56 锚）
-15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，90s 帽下素材预算≈86-87s（T59 锚）
+15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移，srcs 改读 segs 防绕过），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，90s 帽下素材预算≈86-87s（T59 锚）
 16. **并发纪律**（2026-09-18 加固，多 Agent/双 Studio 实例同机是常态）：渲染跨进程互斥——`render.status` running 且 <300s 新鲜即拒（pipeline 闸 + `/api/render-start` 磁盘双检，CLI/Agent/另一实例同权）；成片/幕预览/贴纸/音频缓存一律 tmp(pid)+`os.replace` 原子换名（**ffmpeg 按输出扩展名定封装，tmp 必须保留 `.wav`/`.mp4`/`.png` 尾缀**）；`orchestrate --advance` 项目锁 `.advance.lock` 非阻塞互斥；e2e 夹具名 `e2e-fixture-<pid>` 进程唯一（并行跑 e2e 互不踩，`fixtures.BASE` 跟 `E2E_BASE` 走）。pack.json 写者 flock 与故事线原子写是既有底盘（RMW 冒烟锚定）
 
 ---
