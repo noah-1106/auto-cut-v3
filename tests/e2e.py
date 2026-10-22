@@ -3139,9 +3139,19 @@ def t67_browser_smoke():
     # 锚：真浏览器冒烟（2026-10-19）。domsim 桩 DOM 不解析 HTML——pfField 断串裸显文本、
     # loadConfig/openProj 竞态（await 期间全局 P 被换）这类【渲染事故+异步竞态】只有真浏览器
     # 能拦。执行体 = tests/browser_smoke.html（iframe 同域驱动真实页面），--dump-dom 读回 JSON。
-    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    if not os.path.exists(chrome):
-        check("T67 真浏览器冒烟", False, "Chrome 不在 %s——本层门禁无法降级，请安装" % chrome)
+    # Chrome 跨平台发现（2026-10-22 CI 红根修：曾写死 mac 路径，ubuntu/windows runner 必红——
+    # T67 自 2026-10-19 落地起 CI 连红三轮）。GitHub runner 预装 Chrome：
+    # ubuntu=/usr/bin/google-chrome、windows=C:\Program Files\Google\Chrome\...；可用 CHROME_PATH 覆盖。
+    import shutil as _sh
+    _cands = [os.environ.get("CHROME_PATH"),
+              "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+              _sh.which("google-chrome"), _sh.which("google-chrome-stable"),
+              _sh.which("chromium"), _sh.which("chromium-browser"), _sh.which("chrome"),
+              r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"]
+    chrome = next((c for c in _cands if c and os.path.exists(c)), None)
+    if not chrome:
+        check("T67 真浏览器冒烟", False, "Chrome 未找到（mac/which/win 九路全空）——本层门禁无法降级，请安装")
         return
     url = "%s/files/tests/browser_smoke.html?proj=%s" % (BASE, PROJ)
     try:
