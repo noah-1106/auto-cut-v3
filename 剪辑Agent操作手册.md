@@ -65,7 +65,8 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
    数量+质量的幕完整讲完故事"——每幕必须有独立叙事功能，凑数/重复幕宁可砍，讲不完
    就加幕（常见 2-8 幕）。validate 对任意幕数**原样全量校验、不截断**（基线曾有
    `[:4]` 静默丢弃第 5 幕起的 bug，2026-09-16 已修，T48 锚）；渲染链不限幕数。
-   硬约束只剩两条：单幕 3-20 秒、总时长 20-90 秒。
+   硬约束只剩两条：单幕 3-20 秒、总时长 20-90 秒——这是 **draft 提示词文本约束**
+   （代码无强制）；交付期时长域=QC R11 按类型档案 `duration_range`（部分类型允许 >90s）。
 
 ---
 
@@ -110,8 +111,9 @@ materials/packs/     projects/<pid>/           projects/<pid>/storylines/<sid>.j
 - 清点：`pack.json.files[]` 数量与源目录一致；每条 MP4 大小与源一致；**源目录 mtime 前后各记一次**（零写入签字）。
 - **竖拍方向核对（2026-09-18 补，手机素材普遍"编码横放 + rotation=-90"）**：逐条 MP4 读
   ffprobe `side_data_list[].rotation` 核对真实方向；**rotation≠0 的素材 `pack.json` 该条
-  `geometry._rotation` 必须在场**（mount 走 video_meta.probe 自动落；手工挂载/复挂后人工核对）。
-  缺 _rotation 又不横竖对账 = 后续画幅/裁切全错。
+  `_rotation` 必须在场**（平铺字段，非 geometry 包装——geometry 包装只在 dossier.json；
+  pack-upload 入库时 video_meta.display_geometry 自动落；mount 只改 library.json 不探测，
+  手工挂载/复挂后人工核对）。缺 _rotation 又不横竖对账 = 后续画幅/裁切全错。
 - **放行判据**：挂载 done + 清点一致 + 兜底假设（画幅/平台/时长/风格）已登记并注明依据。
 
 ### 阶段 2 · 素材审核（transcribe → understand → digest → proofread → dossier/disposition）
@@ -249,7 +251,7 @@ python3 autocut3/pipeline.py make  <pid> [sid]      # 只产 plan+ASS 不渲（�
   `头预留`/`尾预留` 行）。推论：①`word_drops` 应恒空——再出现"落入转场重叠区被钳没"警告=
   窗口数据有 bleed（owords 超窗），修故事线窗口而不是调转场；②params.json 的 `duration` 只是
   上限，实际转场时长仍受边缘静音钳制；③时长预算：渲染总长 ≈ 素材合计 + Σ转场时长（每边界
-  +0.2~0.6s），90s 帽下素材窗口合计控制在 ~86s 内。
+  +0.2~0.6s），按 draft 提示词 90s 目标时素材窗口合计控制在 ~86s 内（类型档案 duration_range 更宽者从其域）。
 
 ### 阶段 6 · 质检与交付（qc）
 ```bash
@@ -403,10 +405,10 @@ duration,text}）→ `library.py seed <项目目录>` 种子化成 `materials/li
                {"role": "B", "source_id": "M0181", "src_in": 0, "duration": 4.0,
                 "op": "overlay-pip", "pos": "bottom-right", "scale": 0.3}],
     "narration": {"mode": "original", "words": [{"t": "字", "s": 0.12, "e": 0.35}]},
-    "transition_out": "fade-black",
+    "transition_out": "fadeblack",
     "effects": {"stickers": [{"asset": "candy-sky", "text": "得房率高", "at_word": "得房率", "duration": 1.0, "pos": "top-center"}],
                 "sfx": [{"asset": "x_xxx", "at": 1.2, "duration": 0.8}]},
-    "subtitle": {"style": "default"},
+    "subtitle": {"style": "karaoke-gold"},
     "music": {"inherit": true}
   }]
 }
@@ -470,6 +472,10 @@ Studio 路由（http://127.0.0.1:8765）：
 
 启动：`python3 studio.py [port]`（默认 8765，只绑 127.0.0.1）。**改 studio.py 后必须重启进程**。
 
+> **POST 硬契约（2026-10-23 CSRF 闸）**：所有 POST 请求必须带自定义头 `X-AutoCut: 1`，
+> 缺头一律 403（curl 示例：`-H 'X-AutoCut: 1'`）。另：`/api/voices` 的 `?wake=1` 唤醒已移 POST
+> （GET 纯只读）；`/files/config/` 不再提供下载（密钥面）。
+
 - 状态：`GET /api/status/<proj>`（15 环节，与 orchestrate 同源）、`GET /api/pulse`（全项目签名）、
   `GET /api/sync/<proj>?story=<sid>`（落库探针：先写后读自检）
 - 创作台数据：`GET /api/project/<proj>?story=<sid>`（故事线/plan/素材/参数全量）
@@ -479,13 +485,14 @@ Studio 路由（http://127.0.0.1:8765）：
   失败不开渲**）或 `POST /api/render/<proj>?story=<sid>`（同步 600s）；
   进度轮询 `GET /api/render-progress/<proj>?story=<sid>`（CLI 渲染也可见——读 render.status）
 - 幕试渲：`POST /api/beat/<proj>/<beat_no>?story=<sid>`（同步 300s。**是 POST 不是 GET**）
-- 素材：`POST /api/transcribe/<pack>?material=<fid>`、`POST /api/understand/<pack>?material=<fid>`、
-  `POST /api/digest/<pack>`（包级盘点——fid 走 query 不走路径，2026-10-22 审查修正；路径里塞 fid 必 400）、
+- 素材：`POST /api/transcribe/<pack>?material=<fid>`、`POST /api/understand/<pack>?material=<fid>`
+  （fid 走 query 不走路径，2026-10-22 审查修正；缺 ?material= 必 400）、
+  `POST /api/digest/<pack>`（包级盘点）、
   `POST /api/proofread-pack/<pack>/<fid>`（人工校对单条转写）
 - AI 起草：`POST /api/draft/<proj>` body `{"intent": "..."}`
 - 封面：`POST /api/cover-gen/<proj>`（AI）、`POST /api/cover-upload/<proj>`、
   `POST /api/cover-make/<proj>?story=<sid>`（本地合成收口=CLI `pipeline.py cover`）
-- 声纹：`GET /api/voices?wake=1`（唤醒闲置自停的 Audio8 服务，数秒）、
+- 声纹：`GET /api/voices`（列音色，只读）、`POST /api/voices?wake=1`（唤醒闲置自停的 Audio8 服务，数秒）、
   `POST /api/voice-test/<name>?text=...`（试听合成）、`POST /api/voice-delete/<name>`
 - 项目/包：`POST /api/project-create/`、`POST /api/project-delete/<name>`（归档 _attic）、
   `POST /api/pack-mount/<pid>/<pack>/mount|unmount`、`POST /api/pack-delete/<pack>`（归档+摘挂载）、
@@ -547,7 +554,7 @@ Studio 路由（http://127.0.0.1:8765）：
 |---|---|---|
 | `POST /api/project-create/` | `{"name":"myproj","title":"...","format":"vertical","note":"..."}` | format 取值 = formats.json 键：`vertical`(9:16) / `landscape`(16:9) / `square`(1:1)；name 允许字母/数字/中文/._-（禁路径分隔符与 `..`；故事线 sid 同口径）；**`projects/<name>/` 目录已存在（含手工残件）=409「项目已存在」**——确认是残件后删目录再走本 API 重建，不要手工 mkdir 冒充创建 |
 | `POST /api/pack-create/` | `{"id":"mypack","name":"我的素材"}` | 建空包 |
-| `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传 |
+| `POST /api/pack-upload/<pack>?filename=xx.MP4` | 原始字节（--data-binary @文件） | 入包+审计+缩略图；文件名禁 `/` `\` `..` 和点前缀，中文 OK；**>1GiB（1,073,741,824 字节）硬拒 400**，不是"易断"——超限素材用 `ffmpeg -i 源 -c copy -segment_time 60 -f segment 前缀_%03d.MP4` 按时长无损拆段（`-c copy` 不重编码），逐段上传。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |
 | `POST /api/pack-mount/<pid>/<pack>/mount|unmount` | 无 body | 挂载=创作决策，只走这个路由 |
 | `POST /api/draft/<proj>` | `{"intent":"..."}`（可选 type/persona/voice） | AI 起草（等价 draft.py --intent --save） |
 | `POST /api/storyline/<proj>?story=<sid>` | `{"title":"...","outline":"...","meta":{...},"beats":[...]}` | **整体替换**这些键（缺省键不动）；sid 不存在=新建故事线。dub 幕台词/音色变更会自动摘除旧配音音频（render-start 前置重合成）；original 幕改 beats 后记得重跑 vadwords |
@@ -557,9 +564,9 @@ Studio 路由（http://127.0.0.1:8765）：
 | `GET  /api/render-progress/<proj>?story=<sid>` | 无 body | 渲染进度轮询；CLI/Agent 渲染也可见（读 render.status，5 分钟新鲜窗） |
 | `POST /api/beat/<proj>/<幕号>?story=` | 无 body | 幕试渲（同步 300s），产物 previews/beat_<sid>_<幕号>.mp4 |
 | `POST /api/pack/<pack>/<fid>/usable` | `{"usable":false,"defects":[{"at":3.2,"type":"说错","note":"..."}],"review":"reviewed"}` | 素材级废片/复核切换（锁内 RMW，安全） |
-| `POST /api/proofread-pack/<pack>/<fid>` | 词轨等长替换结构（走 Studio 界面更稳） | 人工校对单条转写 |
-| `POST /api/voice-register` | 音色注册（audio8 硬契约见阶段 3） | dub 换音色前置 |
-| `GET  /api/voices?wake=1` | 无 body | 列音色；`wake=1`=唤醒闲置自停的 Audio8 服务（数秒）。响应 `sleeping` 仅在已安装但闲置时为 true |
+| `POST /api/proofread-pack/<pack>/<fid>` | `{"text": "校对后全文"}`（词轨等长替换结构由服务端推导；走 Studio 界面更稳） | 人工校对单条转写 |
+| `POST /api/voice-register?name=<音色名>&text=<逐字稿>&fname=<原始文件名>&overwrite=true` | 原始音频字节（wav/mp3 直通，m4a 等 ffmpeg 转码；≤50MB，0.5-30s） | 音色注册（audio8 硬契约见阶段 3；name/text 全在 query，body=音频本体） |
+| `GET  /api/voices` / `POST /api/voices?wake=1` | 无 body | GET=列音色（只读）；POST+wake=1=唤醒闲置自停的 Audio8 服务（数秒）。响应 `sleeping` 仅在已安装但闲置时为 true |
 | `POST /api/voice-test/<name>?text=...` | 无 body | 试听合成（自动拉起休眠服务），产物 assets/preview/voicetest-<name>.mp3 |
 | `POST /api/voice-delete/<name>` | 无 body | 删音色（无该音色=404） |
 | `POST /api/project-delete/<name>` | 无 body | 删项目（归档 _attic，可找回） |
@@ -567,12 +574,11 @@ Studio 路由（http://127.0.0.1:8765）：
 | `POST /api/cover-make/<proj>?story=<sid>` | 无 body | 封面本地合成收口（=CLI `pipeline.py cover` 同实现） |
 | `POST /api/registry-save/<name>` | 整个注册表 JSON（≤2MB） | 白名单=bgm/subtitles/transitions/sfx/stickers/video_types/platforms |
 | `POST /api/registry-upload/<bgm|sfx|stickers>/<id>?filename=` | 原始字节 | 上传素材入册+自动建条目 |
-| `POST /api/pack-upload/<pid>?filename=<名>` | 原始字节（文件字节） | **导入素材**（文件名中文/`#`/空格均允许）。⚠ `filename` 必须 percent-encode（`#`→`%23`、空格→%20）——裸 `#` 在 URL 里是锚点分隔符，客户端会把 `#` 后面整段截掉，服务端只见半截名报 400 bad filename（2026-09-19 井号素材实锤）。Python 用 `urllib.parse.quote(name)`、JS 用 `encodeURIComponent` |
 | `GET  /api/sticker-preview/<id>` | 无 body | 贴纸样式真渲染样张（走渲染同一实现，PNG URL） |
 | `GET  /api/projects` | 无 body | 项目列表（每条含故事线列表/封面 URL/成片计数）——选项目前先打这里 |
 | `GET  /api/packs` | 无 body | 素材包列表（pack.json 摘要） |
 | `GET  /api/formats` | 无 body | 画幅注册表（project-create 的 format 取值源） |
-| `GET  /api/health` | 无 body | 新鲜度探针：`fresh`=进程比仓库全部 .py 新。改完 studio.py/autocut3 先打这里，false=先重启再测 |
+| `GET  /api/health` | 无 body | 新鲜度探针：`fresh`=进程比 studio.py+autocut3/*.py 的最新 mtime 新（tests/ 改动不影响）。改完 studio.py/autocut3 先打这里，false=先重启再测 |
 
 **pack.json 字段口径**：`files[].size_mb` 是十进制显示值（字节数 ÷ 1e6，只用于人看）——
 **逐字节比对/完整性校验不要用 size_mb**，用 `os.path.getsize(文件)` 对字节数。

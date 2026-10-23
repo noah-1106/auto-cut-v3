@@ -281,6 +281,12 @@ def plan_pages(plan):
             pages.append((pg, st))
     return pages
 
+def _ass_char(ch):
+    """单字净化（2026-10-23 安全审查 P3-6）：词文本的换行曾产出残缺 Dialogue 孤行、
+    {} 覆盖标签裸进可执行 ASS 覆盖——换行→空格、半角大括号→全角（词轨/proofread 均可携带）。"""
+    return {"\n": " ", "\r": " ", "{": "（", "}": "）"}.get(ch, ch)
+
+
 def fmt_ts(sec):
     cs = max(0, int(round(sec * 100)))
     return f"{cs//360000}:{cs%360000//6000:02d}:{cs%6000//100:02d}.{cs%100:02d}"
@@ -333,9 +339,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if pstyle.get("karaoke", True):
             text = ""
             for ch, s, e in pg:  # \kf 厘秒；已读=Primary(金) 未读=Secondary(白)
-                text += r"{\kf" + str(max(1, round((e - s) * 100))) + "}" + ch
+                text += r"{\kf" + str(max(1, round((e - s) * 100))) + "}" + _ass_char(ch)
         else:  # 无卡拉OK：整页白字
-            text = "".join(ch for ch, _s, _e in pg)
+            text = "".join(_ass_char(ch) for ch, _s, _e in pg)
         lines.append(f"Dialogue: 0,{fmt_ts(start)},{fmt_ts(end)},{sname},,0,0,0,,{text}\n")
     ass = os.path.join(project_dir, ass_name)
     with open(ass, "w", encoding="utf-8") as f:
@@ -523,8 +529,20 @@ def build_plan(project_dir, sid=None):
         dub_f = None
         if (b.get("narration") or {}).get("mode") == "dub":
             df = (b.get("narration") or {}).get("audio")
-            if df and not os.path.isabs(df):
-                df = os.path.join(project_dir, df)
+            if df:
+                # 配音路径限项目目录内（2026-10-23 安全审查 P3-8）：绝对路径/../ 曾可把本机
+                # 任意媒体烤进成片——realpath+commonpath 收口，越界=回退原声并告警
+                _cand = df if os.path.isabs(df) else os.path.join(project_dir, df)
+                _cand = os.path.realpath(_cand)
+                try:
+                    _in = os.path.commonpath([_cand, os.path.realpath(project_dir)]) == os.path.realpath(project_dir)
+                except ValueError:
+                    _in = False
+                if not _in:
+                    print("警告: 幕%s dub 音频路径越出项目目录（%s）——回退原声" % (b.get("no", 0), df))
+                    df = None
+                else:
+                    df = _cand
             if df and not os.path.exists(df):
                 print("警告: 幕%s mode=dub 但配音音频不存在（%s）——回退原声" % (b.get("no", 0), df))
                 df = None

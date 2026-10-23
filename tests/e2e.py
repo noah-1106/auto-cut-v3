@@ -63,7 +63,7 @@ PASS, FAIL = [], []
 def api(path, method="GET", body=None, raw=None):
     req = urllib.request.Request(BASE + path, method=method,
                                  data=raw if raw is not None else (json.dumps(body).encode() if body is not None else None),
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json", "X-AutoCut": "1"})  # X-AutoCut=CSRF 闸硬契约（2026-10-23）
     try:
         with urllib.request.urlopen(req, timeout=300) as r:
             return r.status, json.loads(r.read() or b"{}")
@@ -1437,7 +1437,7 @@ def t41_registry():
                         "-i", "sine=frequency=440:duration=1", wav], check=True)
         req = urllib.request.Request(BASE + "/api/registry-upload/sfx/_t41up?filename=a.wav",
                                      method="POST", data=open(wav, "rb").read(),
-                                     headers={"Content-Type": "audio/x-wav"})
+                                     headers={"Content-Type": "audio/x-wav", "X-AutoCut": "1"})
         with urllib.request.urlopen(req, timeout=60) as rr:
             up = json.loads(rr.read() or b"{}")
         up_in = "_t41up" in json.load(open(sfxp, encoding="utf-8"))
@@ -2985,6 +2985,7 @@ def main():
     t71_beat_subtitle_style()
     t72_active_storyline_write()
     t73_security_batch()
+    t74_review_batch()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3430,8 +3431,111 @@ def t73_security_batch():
           'os.path.join(os.path.dirname(pp), ".lock")' in src and 'pp + ".lock"' not in src, "")
 
 
+# ---------------------------------------------------------------- T74 安全+资源审查修复批（2026-10-23）
+def t74_review_batch():
+    """锚：2026-10-23 三路审查（安全注入/资源溢出/文档）修复的回归钉——
+    a) CSRF 闸：POST 无 X-AutoCut 头 403（text/plain 简单请求形态实证），带头通畅
+    b) 注册表数值类型闸：subtitles.size 字符串（ASS 换行注入载荷）/bgm.segments.in 字符串/platforms
+       lufs_target 字符串全 400 不落盘；合法值放行
+    c) /files/：config 黑名单 404（services.json 密钥出口封死）+ NUL 400 + 畸形/倒挂 Range 416
+    d) 短路径 400 不崩：beat 缺幕号/pack-mount 缺段/proofread-pack 缺 fid
+    e) cover-upload/storyline 幽灵项目 404 且不落目录
+    f) build_ass 词文本净化：\n 不出孤行、{} 转全角不进覆盖标签位
+    g) 资源修复源码锚：渲染看门狗/start_new_session 进程组/上传截断校验/uuid 同名后缀/wake POST"""
+    import http.client
+    port = int(urllib.parse.urlparse(BASE).port or 8765)
+    # a) CSRF 闸
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("POST", "/api/storyline-delete/%s?story=__none__" % PROJ,
+              body="x=1", headers={"Content-Type": "application/x-www-form-urlencoded"})
+    st_no = c.getresponse().status
+    c.close()
+    st_yes, _ = api("/api/storyline-delete/%s?story=__none__" % PROJ, method="POST")
+    check("T74a CSRF 闸（无 X-AutoCut 头 403 / 带头通）",
+          st_no == 403 and st_yes != 403, "no=%s yes=%s" % (st_no, st_yes))
+    # b) 注册表数值类型闸（备份/还原纪律同 T73c）
+    def _try_save(rname, mutate):
+        p = os.path.join(ROOT, "registry", rname + ".json")
+        old = open(p, encoding="utf-8").read()
+        try:
+            reg = json.loads(old)
+            mutate(reg)
+            st, _ = api("/api/registry-save/" + rname, method="POST", body=reg)
+            unchanged = open(p, encoding="utf-8").read() == old
+            return st, unchanged
+        finally:
+            open(p, "w", encoding="utf-8").write(old)
+    st1, u1 = _try_save("subtitles", lambda r: r.__setitem__(next(k for k in r if not k.startswith("_")),
+                        {**r[next(k for k in r if not k.startswith("_"))], "size": "64\nDialogue: EVIL"}))
+    def _bgm_mut(r):
+        k = next(k for k in r if not k.startswith("_"))
+        r[k]["segments"] = [{"name": "x", "in": "0;rm", "out": None}]
+    st2, u2 = _try_save("bgm", _bgm_mut)
+    def _plat_mut(r):
+        k = next(k for k in r if not k.startswith("_"))
+        r[k]["lufs_target"] = "-16;evil"
+    st3, u3 = _try_save("platforms", _plat_mut)
+    st4, _ = api("/api/registry-save/subtitles", method="POST",
+                 body=json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8")))
+    check("T74b 注册表数值类型闸（注入载荷 400 不落盘/合法放行）",
+          st1 == 400 and u1 and st2 == 400 and u2 and st3 == 400 and u3 and st4 == 200,
+          "st=%s/%s/%s/%s unchanged=%s/%s/%s" % (st1, st2, st3, st4, u1, u2, u3))
+    # c) /files/ 三面
+    stc1, _ = api("/files/config/services.json")
+    stc2, _ = api("/files/%00studio.py")
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", "/files/studio.py", headers={"Range": "bytes=abc-"})
+    stc3 = c.getresponse().status
+    c.close()
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", "/files/studio.py", headers={"Range": "bytes=100-5"})
+    stc4 = c.getresponse().status
+    c.close()
+    check("T74c /files/ config 黑名单+NUL+Range 双畸形",
+          stc1 == 404 and stc2 in (400, 404) and stc3 == 416 and stc4 == 416,
+          "cfg=%s nul=%s range=%s/%s" % (stc1, stc2, stc3, stc4))
+    # d) 短路径 400 不崩（原 IndexError 连接重置）
+    std1, _ = api("/api/beat/" + PROJ, method="POST", body={})
+    std2, _ = api("/api/pack-mount/" + PROJ, method="POST", body={})
+    std3, _ = api("/api/proofread-pack/x", method="POST", body={})
+    check("T74d 短路径 400（beat/pack-mount/proofread-pack）",
+          std1 == 400 and std2 == 400 and std3 == 400, "st=%s/%s/%s" % (std1, std2, std3))
+    # e) cover-upload / storyline 幽灵项目
+    ghost = "__ghost_%d__" % os.getpid()
+    ste, _ = api("/api/cover-upload/" + ghost, method="POST", raw=b"\xff\xd8\xff")
+    ste2, _ = api("/api/storyline/" + ghost + "?story=s1", method="POST", body={"title": "t"})
+    check("T74e cover-upload/storyline 幽灵项目 404 不落目录",
+          ste == 404 and ste2 == 404 and not os.path.exists(os.path.join(ROOT, "projects", ghost)),
+          "st=%s/%s" % (ste, ste2))
+    # f) build_ass 净化（离线）
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    import pipeline, tempfile, shutil
+    tmp = tempfile.mkdtemp(prefix="t74_")
+    try:
+        plan = {"subtitle_style": "karaoke-gold", "width": 1080, "height": 1920, "duration": 5.0,
+                "segments": [{"tl_in": 0.0, "dur": 5.0, "narration": "original"}],
+                "words": [{"t": "正{\n}常", "s": 0.5, "e": 2.0}]}
+        if "karaoke-gold" not in json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8")):
+            plan["subtitle_style"] = sorted(json.load(open(os.path.join(ROOT, "registry", "subtitles.json"), encoding="utf-8")))[0]
+        ass, _n = pipeline.build_ass(plan, tmp, "f.ass")
+        at = open(ass, encoding="utf-8").read()
+        ev = at.split("[Events]", 1)[1]
+        bad_lines = [l for l in ev.splitlines()[2:] if l.strip() and not l.startswith("Dialogue: 0,")]
+        check("T74f build_ass 词文本净化（无孤行/{} 转全角）",
+              not bad_lines and "（" in at and "）" in at and "\n}正常" not in at,
+              "bad=%r" % bad_lines[:2])
+    except Exception as e:
+        check("T74f build_ass 词文本净化", False, str(e)[:120])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    # g) 资源修复源码锚
+    src = open(os.path.join(ROOT, "studio.py"), encoding="utf-8").read()
+    check("T74g 资源修复在场（看门狗/进程组/截断校验/uuid 后缀/wake POST）",
+          all(x in src for x in ("WATCHDOG", "start_new_session", "上传截断", "uuid4().hex",
+                                 'self.command == "POST"', "_run_pg")), "")
 
-# ---------------------------------------------------------------- T64 前端 DOM 执行模拟（2026-10-15）
+
+
 def t64_dom_execution_sim():
     # 锚：t 遮蔽 i18n t() 一族前端运行时崩溃（切页崩/抽屉空白/转写框空白）曾穿过
     # node --check + audit + e2e 全部门禁——因为没有任何测试真正【执行】过 index.html 的 JS。

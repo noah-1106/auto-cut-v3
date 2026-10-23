@@ -430,6 +430,10 @@ input.req{width:100%;font-size:11px;color:var(--txt);background:rgba(255,255,255
 'use strict';
 /* ═══ 基础 ═══ */
 const $=id=>document.getElementById(id);
+// CSRF 闸配套（2026-10-23 安全审查 P2-1）：服务端要求全部 POST 带 X-AutoCut:1（自定义头=跨源必预检，
+// 无 CORS 头预检必败=CSRF 全灭）。同源包装统一注入，28 个 POST 点与未来新增免逐点加头。
+const _fetch=(typeof window.fetch==='function'?window.fetch:fetch).bind(window);  // domsim 桩的 fetch 挂在 node global（window.fetch 可能不存在）——回退 bare fetch 保 T64 可执行
+window.fetch=(u,o)=>{o=o||{};if((o.method||'GET').toUpperCase()==='POST'){o.headers=Object.assign({'X-AutoCut':'1'},o.headers||{});}return _fetch(u,o);};
 const nz=(v,d)=>(v===undefined||v===null||v==='')?d:v;
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // 单引号转义：inline onclick 单引号拼接断串/XSS 根（Claude P1-①）
 const cssbg=st=>{  // 贴纸文字模板 swatch（drawtext 的 0xRRGGBB → CSS）；2026-10-22 安全批：值过白名单——注册表投毒值经此裸进 style 属性曾是存储型 XSS 面（服务端 registry-save 值校验是第一道，此为纵深）
@@ -876,7 +880,7 @@ async function renderVoiceMgr(){
 async function voiceWake(){
   $('voice-hint').textContent=t('voice.waking');
   let r=null;
-  try{r=await(await fetch('/api/voices?wake=1')).json();}catch(e){}
+  try{r=await(await fetch('/api/voices?wake=1',{method:'POST'})).json();}catch(e){}  // wake 已移 POST（GET 触发模型加载=<img> 可点的副作用，2026-10-23 P3-10）
   renderVoiceMgr();
   // 提示复位（2026-10-17：唤醒后 hint 曾永久挂"唤醒中…"）——仍休眠显休眠，醒来回默认提示
   $('voice-hint').textContent=(r&&r.sleeping)?t('voice.sleep'):t('voice.hint');

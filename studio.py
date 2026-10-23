@@ -73,6 +73,22 @@ def _registry_value_err(rname, obj):
                     return "subtitles.%s.%s \u987b\u4e3a &HAABBGGRR \u989c\u8272" % (k, ck)
             if "font" in v and not re.match(r"^[^,{};:'\"\\]+$", str(v["font"])):
                 return "subtitles.%s.font \u542b\u975e\u6cd5\u5b57\u7b26\uff08\u7981\u9017\u53f7/\u62ec\u53f7/\u5f15\u53f7\uff09" % k
+            # \u6570\u503c\u57df\u7c7b\u578b\u95f8\uff082026-10-23 \u5b89\u5168\u5ba1\u67e5 P2-2\uff09\uff1asize/border/marginv \u88f8 f-string \u8fdb ASS Style \u884c\u2014\u2014
+            # \u5b57\u7b26\u4e32\u503c\u53ef\u643a\u5e26\u6362\u884c\u6ce8\u5165\u5b8c\u6574 Dialogue \u4e8b\u4ef6\uff08\u5b9e\u8bc1\u70e7\u8fdb\u6210\u7247\uff09\uff0c\u6570\u5b57\u65e0\u6cd5\u643a\u5e26\u8f7d\u8377
+            for nk in ("size", "border", "marginv", "max_chars"):
+                if nk in v and not isinstance(v[nk], (int, float)):
+                    return "subtitles.%s.%s \u5fc5\u987b\u662f\u6570\u5b57" % (k, nk)
+            if "karaoke" in v and not isinstance(v["karaoke"], bool):
+                return "subtitles.%s.karaoke \u5fc5\u987b\u662f\u5e03\u5c14" % k
+        if rname == "bgm":  # segments in/out \u8fdb\u6ee4\u955c float()\u2014\u2014\u5b57\u7b26\u4e32\u503c\u5d29\u6e32\u67d3\uff08\u540c\u6279 P3-7\uff09
+            for sg in (v.get("segments") or []):
+                for sk in ("in", "out"):
+                    if isinstance(sg, dict) and sg.get(sk) is not None and not isinstance(sg[sk], (int, float)):
+                        return "bgm.%s.segments[].%s \u5fc5\u987b\u662f\u6570\u5b57" % (k, sk)
+        if rname == "platforms":  # lufs_* \u8fdb qc R6 \u6bd4\u8f83\u4e0e loudnorm float()\uff08\u540c\u6279 P3-7\uff09
+            for lk in ("lufs_target", "lufs_tol"):
+                if lk in v and not isinstance(v[lk], (int, float)):
+                    return "platforms.%s.%s \u5fc5\u987b\u662f\u6570\u5b57" % (k, lk)
     return None
 sys.path.insert(0, os.path.join(ROOT, "autocut3"))
 from video_meta import display_geometry as _display_geometry  # 入库几何探针：人机同权共享（rotation 必检）
@@ -141,7 +157,8 @@ def _dub_ensure(pdir, sid, job):
     flock.write_json(sf, sl)
     vw = subprocess.run([sys.executable, "-u", os.path.join(ROOT, "autocut3", "vadwords.py"),
                          pdir] + (["--story", sid] if sid else []),
-                        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
+                        timeout=600)  # 超时闸（2026-10-23 P2-4）：vadwords 挂死曾=渲染线程永久阻塞的放大器
     if vw.returncode != 0:  # 词轨量不出=卡拉OK字幕失源——同闸处理
         job["running"] = False; job["ok"] = False
         out = ((vw.stdout or "") + (vw.stderr or "")).strip().splitlines()
@@ -170,6 +187,29 @@ def _enums():
     e["video_types"] = _lst("video_types", ("name", "desc", "rhythm"))
     e["platforms"] = _lst("platforms", ("name", "desc"))
     return e
+
+def _run_pg(cmd, timeout, **kw):
+    """subprocess.run 的 timeout 只杀直接子进程——pipeline 内部的 ffmpeg 孙进程成孤儿
+    继续烧 CPU/写 tmp（2026-10-23 资源审查 P2-1）。Popen+start_new_session：超时 killpg
+    连锅端（posix；Windows 无 killpg 回退 p.kill）。TimeoutExpired 原样上抛（调用方已有处理）。"""
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=True, encoding="utf-8", errors="replace",
+                         start_new_session=(os.name == "posix"), **kw)
+    try:
+        out, err = p.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+    except subprocess.TimeoutExpired:
+        try:
+            if os.name == "posix":
+                import signal as _sig
+                os.killpg(os.getpgid(p.pid), _sig.SIGKILL)
+            else:
+                p.kill()
+        except Exception:
+            pass
+        p.communicate()
+        raise
+
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass  # 访问日志默认关（诊断期临时打开过，2026-10-15 声纹排查已撤）
@@ -480,22 +520,33 @@ class H(BaseHTTPRequestHandler):
             # 三个全部只在 do_POST 分发；GET 仅留只读的 /api/voices
             return self._handle_voice(u)
         elif u.path.startswith("/files/"):
-            fp = os.path.realpath(os.path.join(ROOT, urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")))  # path 段解码：中文名素材可达（试听/看图依赖）
+            _rel = urllib.parse.unquote(u.path[len("/files/"):], encoding="utf-8")
+            if "\x00" in _rel:  # NUL 字节崩 os.path.isfile（ValueError），前置拒（2026-10-23 安全审查 P3-4）
+                return self._json({"err": "bad path"}, 400)
+            fp = os.path.realpath(os.path.join(ROOT, _rel))  # path 段解码：中文名素材可达（试听/看图依赖）
             # commonpath 而非 startswith 前缀匹配：auto-cut-v3x 这类兄弟目录同样
             # 以 ROOT 字符串开头会被放行（2026-09-15 审计 P2-3），目录级比较才能真防穿越
             try:
                 in_root = os.path.commonpath([fp, os.path.realpath(ROOT)]) == os.path.realpath(ROOT)
+                # config/ 黑名单（2026-10-23 安全审查 P3-1）：services.json 真实密钥不该有 HTTP 出口
+                _in_cfg = in_root and os.path.commonpath(
+                    [fp, os.path.join(os.path.realpath(ROOT), "config")]) == os.path.join(os.path.realpath(ROOT), "config")
             except ValueError:  # 不同盘符（Win）/混用路径，必然不在仓内
                 in_root = False
-            if not in_root or not os.path.isfile(fp):
+                _in_cfg = False
+            if not in_root or _in_cfg or not os.path.isfile(fp):
                 return self._json({"err": "not found"}, 404)
             ctype = MIME.get(fp.rsplit(".", 1)[-1].lower(), "application/octet-stream")
             size = os.path.getsize(fp)
             rng = self.headers.get("Range")
             if rng:  # 视频拖动进度条必需
                 m = re.match(r"bytes=(\d*)-(\d*)", rng)
+                if not m:  # 畸形 Range（bytes=abc）——原 .group 崩请求线程（2026-10-23 P3-3）
+                    return self._json({"err": "bad range"}, 416)
                 start = int(m.group(1) or 0)
                 end = min(int(m.group(2)) if m.group(2) else size - 1, size - 1)
+                if start > end or start >= size:  # start>end 曾发出负 Content-Length
+                    return self._json({"err": "bad range"}, 416)
                 self.send_response(206)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
@@ -527,7 +578,8 @@ class H(BaseHTTPRequestHandler):
         import tts_audio8
         if u.path == "/api/voices":
             # sleeping=TTS 服务闲置自停（voices() 设计为不副作用启动）——前端据此显示「休眠中+唤醒」而非误报"暂无音色"（2026-10-15 用户实锤：以为声纹被清空）
-            if (parse_qs(u.query).get("wake") or ["0"])[0] == "1":
+            # wake=1 已移 POST（2026-10-23 安全审查 P3-10）：GET 触发模型加载=<img> 可点的副作用
+            if self.command == "POST" and (parse_qs(u.query).get("wake") or ["0"])[0] == "1":
                 tts_audio8.ensure_server()  # 显式唤醒（本地模型加载需数秒）
             # 未安装 ≠ 休眠（2026-10-17 等价审查实锤：_health() 对未安装也 False，
             # 前端曾"未安装"与"休眠中+唤醒"双横幅同挂，点唤醒白等）——休眠仅描述已安装但闲置自停
@@ -617,9 +669,14 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"err": "body too large（JSON 端点上限 2MB）"}, 413)
         u0 = urlparse(self.path)
         u = u0._replace(path=unquote(u0.path, encoding="utf-8"))  # 先 parse 再解 path（同 do_GET：%23 不能提前还原，2026-09-19）
+        # CSRF 闸（2026-10-23 安全审查 P2-1）：全部 POST 必须带 X-AutoCut 自定义头——跨源"简单请求"
+        # （form/text/plain 不预检直达）无法携带自定义头，带自定义头的跨源 fetch 必发预检而本服务
+        # 无 CORS 头=预检必败，两路全灭。此前 text/plain 可盲写故事线/归档项目/触发计费调用（实证）。
+        if self.headers.get("X-AutoCut") != "1":
+            return self._json({"err": "missing X-AutoCut header（CSRF 闸）"}, 403)
         if u.path.startswith("/api/voice-register") or u.path.startswith("/api/voice-delete/") \
-                or u.path.startswith("/api/voice-test/"):
-            return self._handle_voice(u)
+                or u.path.startswith("/api/voice-test/") or u.path == "/api/voices":
+            return self._handle_voice(u)  # /api/voices 在 POST 仅承接 wake=1 唤醒（GET 纯只读）
         if u.path.startswith("/api/cover-gen/"):
             name = u.path.split("/")[3]
             if not _safe_name(name):
@@ -660,8 +717,8 @@ class H(BaseHTTPRequestHandler):
             if sid and not _safe_name(sid):  # 安全批 A1（2026-10-22）：sid 进 cover 产物拼名
                 return self._json({"err": "bad story id"}, 400)
             try:
-                r = subprocess.run([sys.executable, PIPE, "cover", f"{ROOT}/projects/{name}"] + ([sid] if sid else []),
-                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+                r = _run_pg([sys.executable, PIPE, "cover", f"{ROOT}/projects/{name}"] + ([sid] if sid else []),
+                            timeout=300)
             except Exception as e:
                 return self._json({"err": str(e)[:200]}, 500)
             lines = [l for l in (r.stdout or "").strip().splitlines() if l.startswith(("COVER OK", "COVER FAIL"))]
@@ -669,6 +726,8 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/pack-mount/"):
             # 挂载/卸载：library.json packs 是唯一事实源
             parts = u.path.split("/")
+            if len(parts) < 6:  # 短路径守卫（2026-10-23 P3-2：缺段曾 IndexError 崩请求线程）
+                return self._json({"err": "bad path（/api/pack-mount/<proj>/<pack>/mount|unmount）"}, 400)
             name, pid, op = parts[3], parts[4], parts[5]  # mount / unmount
             if not (_safe_name(name) and _safe(pid)):
                 return self._json({"err": "bad id"}, 400)
@@ -758,21 +817,47 @@ class H(BaseHTTPRequestHandler):
             if rs and rs.get("running") and time.time() - os.path.getmtime(f"{p}/render.status") < 300:
                 return self._json({"ok": False, "err": "另一进程正在渲染该项目（render.status 新鲜 running）"}, 409)
             job = RENDER_JOBS.get(key)
-            if job and job.get("running"):
+            if job and job.get("running") and time.time() - job.get("t0", 0) < 1800:
                 return self._json({"ok": False, "err": "该故事线已有渲染在进行"}, 409)
+            # t0≥1800s 的 running job=看门狗漏网的挂死残留——放行新渲染（内存检查曾有讹无
+            # 陈旧窗：ffmpeg 挂死→_run 线程永堵→该故事线永久 409 只能重启，2026-10-23 P1-1）
             # 上限防胀（2026-10-15 体检）：长跑实例里已完成任务只留最近 20 条
             done_keys = [k for k, j in RENDER_JOBS.items() if not j.get("running")]
             for k in done_keys[:-20]:
                 del RENDER_JOBS[k]
             RENDER_JOBS[key] = {"running": True, "stage": "plan", "pct": 0, "tail": [], "ok": None, "t0": time.time()}
             def _run(job=RENDER_JOBS[key]):
+                proc = None
                 try:
                     _dub_ensure(p, sid, job)  # 人侧配音前置：合成失败会置 ok=False，不开渲
                     if job.get("ok") is False:
                         return
-                    r = subprocess.Popen([sys.executable, "-u", PIPE, "render", p] + ([sid] if sid else []),
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=1)
-                    for line in r.stdout:
+                    # start_new_session=进程组组长：看门狗 killpg 连 ffmpeg 孙进程一起杀
+                    # （裸 kill 只杀 pipeline 子进程，ffmpeg 孤儿继续烧 CPU，2026-10-23 P2-1）
+                    proc = subprocess.Popen([sys.executable, "-u", PIPE, "render", p] + ([sid] if sid else []),
+                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                            encoding="utf-8", errors="replace", bufsize=1,
+                                            start_new_session=(os.name == "posix"))
+                    job["last"] = time.time()  # 看门狗心跳：任何输出行都续命
+                    def _watchdog(proc=proc, job=job):
+                        while job.get("running"):
+                            time.sleep(15)
+                            if not job.get("running"):
+                                return
+                            if time.time() - job.get("last", job["t0"]) > 900:
+                                job["tail"].append("WATCHDOG: 900s 无输出，渲染进程组已杀（ffmpeg 挂死/卷掉线自查）")
+                                try:
+                                    if os.name == "posix":
+                                        import signal as _sig
+                                        os.killpg(os.getpgid(proc.pid), _sig.SIGKILL)
+                                    else:
+                                        proc.kill()
+                                except Exception:
+                                    pass
+                                return
+                    threading.Thread(target=_watchdog, daemon=True).start()
+                    for line in proc.stdout:
+                        job["last"] = time.time()
                         line = line.strip()
                         if line.startswith("PCT "):
                             try: job["pct"] = int(line.split()[1])
@@ -782,8 +867,8 @@ class H(BaseHTTPRequestHandler):
                         elif line:
                             job["tail"].append(line)
                             del job["tail"][:-6]
-                    r.wait()
-                    job["ok"] = r.returncode == 0
+                    proc.wait()
+                    job["ok"] = proc.returncode == 0 and not any(l.startswith("WATCHDOG") for l in job["tail"])
                     job["running"] = False
                 except Exception as e:
                     job["running"] = False
@@ -834,9 +919,10 @@ class H(BaseHTTPRequestHandler):
             if not kind:
                 return self._json({"err": "不支持的格式: .%s" % ext}, 400)
             dest = f"{pk_dir}/{fname}"
-            if os.path.exists(dest):  # 同名不覆盖——加时间戳后缀
+            if os.path.exists(dest):  # 同名不覆盖——加时间戳后缀+随机段（同秒并发同名曾同 dest 交叉写坏，2026-10-23 P2-3）
+                import uuid as _uuid
                 stem, e2 = fname.rsplit(".", 1)
-                dest = f"{pk_dir}/{stem}_{time.strftime('%H%M%S')}.{e2}"
+                dest = f"{pk_dir}/{stem}_{time.strftime('%H%M%S')}_{_uuid.uuid4().hex[:6]}.{e2}"
                 fname = os.path.basename(dest)
             # R2-2（Claude 复核）：upload 全程无锁=9-11 事故同族——读-改-写窗口以分钟计
             # （流式收文件最长达 1GB），必须与 transcribe/understand/proofread/usable 同锁
@@ -858,6 +944,12 @@ class H(BaseHTTPRequestHandler):
                         break
                     f.write(chunk)
                     remain -= len(chunk)
+            if remain > 0:  # 截断上传（客户端断连）——半截文件不入库（曾静默登记成"完好"素材，2026-10-23 P2-2）
+                try:
+                    os.unlink(dest)
+                except OSError:
+                    pass
+                return self._json({"err": "上传截断（少 %d 字节）——文件已弃，请重传" % remain}, 400)
             duration = 0.0
             width = height = 0
             rotation = None
@@ -975,6 +1067,8 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/proofread-pack/"):
             # 人工校对：转写文本以人的修正为准（素材权威解读的最后一道）
             parts = u.path.split("/")
+            if len(parts) < 5:  # 短路径守卫（同批 P3-2）
+                return self._json({"err": "bad path（/api/proofread-pack/<pack>/<fid>）"}, 400)
             pid_, fid = parts[3], parts[4]
             if not (_safe(pid_) and _safe_id(fid)):
                 return self._json({"err": "bad id"}, 400)
@@ -1173,6 +1267,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": False, "err": str(e)[:200]}, 500)
         if u.path.startswith("/api/pack/") and u.path.endswith("/usable"):
             parts = u.path.split("/")
+            if len(parts) < 5:  # 短路径守卫（同批 P3-2）
+                return self._json({"err": "bad path（/api/pack/<pack>/<fid>/usable）"}, 400)
             pid, fid = parts[3], parts[4]
             if not (_safe(pid) and _safe_id(fid)):
                 return self._json({"err": "bad id"}, 400)
@@ -1213,6 +1309,8 @@ class H(BaseHTTPRequestHandler):
         if u.path.startswith("/api/beat/"):
             # 幕级预览渲染：反馈半径缩小到一幕（秒级），绝低压力快速剪辑的核心
             parts = u.path.split("/")
+            if len(parts) < 5:  # 短路径守卫（同批 P3-2）
+                return self._json({"err": "bad path（/api/beat/<proj>/<幕号>）"}, 400)
             name, beat_no = parts[3], parts[4]
             if not _safe_name(name):  # 安全批 A1（2026-10-22）：name 曾漏校——全仓唯一穿越洞
                 return self._json({"err": "bad id"}, 400)
@@ -1225,8 +1323,8 @@ class H(BaseHTTPRequestHandler):
             tag = (sid + "_") if sid else ""
             p = f"{ROOT}/projects/{name}"
             try:
-                r = subprocess.run([sys.executable, PIPE, "beat", p, beat_no] + ([sid] if sid else []),
-                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+                r = _run_pg([sys.executable, PIPE, "beat", p, beat_no] + ([sid] if sid else []),
+                            timeout=300)
             except subprocess.TimeoutExpired:
                 return self._json({"ok": False, "log": "幕渲染超时"})
             ok = r.returncode == 0 and "BEAT OK" in r.stdout
@@ -1241,6 +1339,8 @@ class H(BaseHTTPRequestHandler):
             sid = (_q.get("story") or [None])[0]
             if sid and not _safe_name(sid):
                 return self._json({"err": "bad story id"}, 400)
+            if not os.path.isdir(f"{ROOT}/projects/{name}"):
+                return self._json({"err": "no such project"}, 404)  # 幽灵项目闸（同 cover-upload 纪律：不存在的项目不许静默建目录）
             sp = f"{ROOT}/projects/{name}/storylines/{sid}.json" if sid else f"{ROOT}/projects/{name}/storyline.json"
             is_new = bool(sid) and not os.path.isfile(sp)
             if not os.path.isfile(sp) and not is_new:
@@ -1388,6 +1488,8 @@ class H(BaseHTTPRequestHandler):
             name = u.path.split("/")[3]
             if not _safe_name(name):
                 return self._json({"err": "bad id"}, 400)
+            if not os.path.isdir(f"{ROOT}/projects/{name}"):  # 先验项目再建目录（曾反序=任意 id 造幽灵项目目录，2026-10-23 P3-5）
+                return self._json({"err": "no such project"}, 404)
             cover_dir = f"{ROOT}/projects/{name}/cover"
             os.makedirs(cover_dir, exist_ok=True)
             n = int(self.headers.get("Content-Length", 0))
@@ -1419,8 +1521,8 @@ class H(BaseHTTPRequestHandler):
             with open(f"{p}/params.json", "w", encoding="utf-8") as f:
                 json.dump(params, f, ensure_ascii=False, indent=1)
             try:
-                r = subprocess.run([sys.executable, PIPE, "render", p] + ([sid] if sid else []),
-                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+                r = _run_pg([sys.executable, PIPE, "render", p] + ([sid] if sid else []),
+                            timeout=600)
             except subprocess.TimeoutExpired:
                 return self._json({"ok": False, "log": "渲染超时(600s)"})
             sfx = f"-{sid}" if sid else ""

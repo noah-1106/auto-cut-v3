@@ -19,7 +19,7 @@
 这个抽象换来三件事：
 
 1. **Agent 可编辑**——LLM 起草和修改的是结构化的幕序列 JSON，不是时间轴工程文件；每一幕可独立渲染低清样张自检（秒级），"全片过 ≠ 单幕过"逐幕验证
-2. **人可终审**——创作台呈现的是"这条片讲了什么"的一列卡片，不是一坨波形；点任意一幕秒级预览，改动停顿 1 秒自动落盘
+2. **人可终审**——创作台呈现的是"这条片讲了什么"的一列卡片，不是一坨波形；点任意一幕秒级预览，改动停顿 1.2 秒自动落盘
 3. **管线可自动**——编排器 15 环节（挂载→转写→识别→盘点→校对→档案→台账→起草→VAD 词轨→配音裁剪→配音门禁→封面→渲染→QC→预留 aigen）全自动，换一批新素材包冷启动零人工急救
 
 **设计哲学**：Agent 全自动从原始素材到成片；人是规则制定者（改 config 阈值/策略）+ 成片终审，不进流水线当卡点。
@@ -54,7 +54,7 @@ bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
 | `asr` | 语音转写（词轨原料） | **必需** | minimax | `local-faster-whisper`（本地转写，免 key） |
 | `vision` | 画面识别（素材理解/缺陷） | **视频素材必需**（无 key 则视频永不过审、draft 剔除；人可在素材卡手动 toggle 强制过审） | minimax | 无 |
 | `llm` | AI 起草故事线 + proofread 校对 | **必需** | minimax | 无 |
-| `tts` | dub 配音合成 | dub 幕才需要 | local-audio8（本地，免 key，见 0.5） | 全 original 原声幕可不用 |
+| `tts` | dub 配音合成 | dub 幕才需要 | local-audio8（本仓配置默认，免 key，见 0.5） | 全 original 原声幕可不用 |
 | `image` | AI 生成封面 | 可选（封面也可帧截图/成片抽帧/上传） | minimax | 五途径：first-frame/beat-frame/ai-generated（底图+提示词）/output-frame/upload |
 | `video` | AI 生成视频素材 | 可选（基本不用） | minimax | 全部实拍素材即可 |
 
@@ -63,7 +63,7 @@ bin/ffmpeg -version        # 验证（Windows: bin\ffmpeg.exe -version）
 
 ### 0.5 本地 TTS（Audio8-TTS，可选组件）
 
-默认配音供应商是本地 [Audio8-TTS-Preview-0.6B](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4)（Apache 2.0 开源，ONNX INT4 CPU 推理，~1GB 内存）——零 pip 依赖的核心管线不受影响，运行时独立装在 `~/.local/share/autocut3/audio8/`（venv + 模型权重），适配层 `autocut3/tts_audio8.py` 只经 HTTP(127.0.0.1:8024) 通信、服务按需自启。**闲置自动退出**（2026-09-19）：自启路径附带看门狗 `tts_idlekill.py`——synth/注册成功即续命 `last-use` 标记，**空闲 60 分钟**（`ARKTTS_IDLE_S` 可调）服务自动回收，下次调用零感知自启；手动 `run_server.sh` 拉起的不在看门狗覆盖内。
+默认配音供应商是本地 [Audio8-TTS-Preview-0.6B](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4)（Apache 2.0 开源，ONNX INT4 CPU 推理，~1GB 内存）——注意：**这是本仓 services.json 的配置默认，不是代码缺省**（tts.py `_provider()` 缺省=`"minimax"`；新克隆要在 services.json `tts` 段显式写 `"provider": "local-audio8"`）。零 pip 依赖的核心管线不受影响，运行时独立装在 `~/.local/share/autocut3/audio8/`（venv + 模型权重），适配层 `autocut3/tts_audio8.py` 只经 HTTP(127.0.0.1:8024) 通信、服务按需自启。**闲置自动退出**（2026-09-19）：自启路径附带看门狗 `tts_idlekill.py`——synth/注册成功即续命 `last-use` 标记，**空闲 60 分钟**（`ARKTTS_IDLE_S` 可调）服务自动回收，下次调用零感知自启；手动 `run_server.sh` 拉起的不在看门狗覆盖内。
 
 ```bash
 # 一次性安装（模型 ~1GB，HF 被墙时脚本走 hf-mirror）：
@@ -151,7 +151,7 @@ AI 封面图走 image_gen.py（MiniMax image-01，services.json `image` 段）�
 studio.py            # 后端全部路由（人/Agent 同权 HTTP）
 studio/index.html    # 前端单页（管线进度条/注册表抽屉/渲染实时进度+系统通知）
 autocut3/            # 流水线模块：orchestrate(编排器) process(素材级流水线·入库首选) asr(供应商适配+词轨归一)
-                     #   transcribe(转写) understand(画面识别) vision(视觉供应商适配) digest(包级盘点) draft(AI起草) disposition(缺陷台账)
+                     #   transcribe(转写) understand(画面识别·含包级盘点 build_digest) vision(视觉供应商适配) draft(AI起草) disposition(缺陷台账)
                      #   pipeline(封面/成片渲染) qc(质检R1-R11) proofread(校对) vadwords(VAD词轨)
                      #   dubfit(配音裁剪) dubgate(配音门禁) dossier(素材档案) tts(配音合成) tts_audio8(本地TTS运行时) tts_idlekill(TTS闲置看门狗)
                      #   video_meta(几何探针) flock(跨平台锁) image_gen(AI封面生产依赖)/video_gen(AI视频预留口) library(v1切片遗产层)
@@ -226,10 +226,10 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 9. **滤镜串内嵌路径=相对路径+无引号**（Windows CI 实锤）：ffmpeg 7+ 新解析器把选项值里的盘符冒号（`D:`）当选项分隔符——引号/转义/正斜杠化都救不了；只有值内零特殊字符才稳（`-filter_complex` 里的路径一律 `os.path.relpath(p, ROOT)`，subprocess 统一 `cwd=ROOT`，现成实现 `pipeline._ass_spec()`；argv 里的 `-i` 路径不受此限）
 10. **proofread 复核门**：review-queue.json 有 pending 组=环节不推进（orchestrate 硬门）——"校对过"≠"复核完"，pending 挂着就放行=错词进成片（事故：「违科」当正确词交付，T43 锚）
 11. **content_type 选段门**：draft validate 硬剔除——voiceover/meta/ambient/broll 禁作 A 轨（读稿画面播原声=总结腔画外音穿帮），dialogue/说话画面禁作 B 轨（B 轨无音频通道=哑口型）；B 轨音频通道刻意不加，禁哑口型在选段时刻强制（T45 锚）
-12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
+12. **loudnorm 默认位**：混音链尾 loudnorm=I=-16:TP=-1.5:LRA=11（平台响度锚），storyline `meta.audio.loudnorm` 可关（false）或改目标值；关掉要自知后果（事故：无归一化成片 -19.9 LUFS 偏轻，T46 锚）
 13. **封面前置闸门**：渲染前 build_cover+cover_check，不过 exit 1 不耗渲染（output-frame 唯一后置）；封面归一成片画幅；**含真人脸封面唯一保真路线=帧截图策略+title_text 本地合成**——AI 底图带真脸必被平台审核拦 1026（2026-09-18 隔离矩阵实证），AI 画中文=假字一律禁（T55 锚）
 14. **at_word 触发词门 + 词点两级匹配**：draft 校验 at_word 必须在本幕词轨文本（A 轨转写窗口+story）内否则剔贴纸；word_time 两级匹配（词项 substring→字符序列），不命中必打渲染日志 warn——静默回退 0.4s 零告警是事故（agent 实锤「低价」「评论区」永不命中，T56 锚）
-15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移，srcs 改读 segs 防绕过），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，90s 帽下素材预算≈86-87s（T59 锚）
+15. **转场只吃预留区，不吃素材词**（2026-09-18 Noah 裁定）：幕边界必须落在静音里——build_plan 对每个非 flash 转场按 `dt_eff = min(注册 dt, 尾侧可用静音, 头侧可用静音)` 伸缩转场时长，出点延至词尾+dt_eff、入点回退 dt_eff（owords/音效 at 同步平移，srcs 改读 segs 防绕过），两侧静音不足 0.2s 自动降级直切。词头词尾在结构上不可能被 xfade/acrossfade 压——渲染期钳制降级为纯安全网（`word_drops` 应恒空，非空=窗口数据有 bleed 要修源头）。flash 转场音轨 concat 不重叠、none 幕静音，天然安全不走本规则。时长代价：每边界比裸窗口多 dt_eff，draft 提示词 90s 目标下素材预算≈86-87s（类型档案 duration_range 更宽者从其域；T59 锚）
 16. **并发纪律**（2026-09-18 加固，多 Agent/双 Studio 实例同机是常态）：渲染跨进程互斥——`render.status` running 且 <300s 新鲜即拒（pipeline 闸 + `/api/render-start` 磁盘双检，CLI/Agent/另一实例同权）；成片/幕预览/贴纸/音频缓存一律 tmp(pid)+`os.replace` 原子换名（**ffmpeg 按输出扩展名定封装，tmp 必须保留 `.wav`/`.mp4`/`.png` 尾缀**）；`orchestrate --advance` 项目锁 `.advance.lock` 非阻塞互斥；e2e 夹具名 `e2e-fixture-<pid>` 进程唯一（并行跑 e2e 互不踩，`fixtures.BASE` 跟 `E2E_BASE` 走）。pack.json 写者 flock 与故事线原子写是既有底盘（RMW 冒烟锚定）
 
 ---
@@ -238,11 +238,12 @@ python3 tests/rmw_smoke.py# 读-改-写并发原子性
 
 - 本地 TTS（Audio8-TTS，Apache 2.0）音色按需注册（tts_audio8.py register），现存音色以 `ls ~/.local/share/autocut3/audio8/voices/` 为准
 - 字幕/封面/贴纸字体 LXGWWenKai 已子集化为 GB2312 全集（7545 字形，24MB→3.3MB，2026-10-15）——GBK 扩展生僻字（喆/𰻝 类）会显示豆腐块，真碰到从 git 历史回填全量字体
-- dub 配音成片渲染后自动 loudnorm 两遍精修到目标响度（默认=平台锚 qc_rules.json；storyline `audio.loudnorm` 可关(false)/改自定义值——与混音链单遍归一同一个开关）。全 original 成片不动（平台自行归一）
+- dub 配音成片渲染后自动 loudnorm 两遍精修到目标响度（默认=平台锚 qc_rules.json；storyline `meta.audio.loudnorm` 可关(false)/改自定义值——与混音链单遍归一同一个开关）。全 original 成片不动（平台自行归一）
 
 ## 更多文档
 
 - **剪辑 Agent 操作手册：`剪辑Agent操作手册.md`**（六阶段 SOP + 工具卡 + 数据契约 + 注册表维护 + 坑位清单——Agent 动手前必读）
+- 文档地图+词汇表：`docs/README.md`
 - 管线自动化改造设计：`docs/pipeline-v2.md`
 - 素材音效的第三方许可：`assets/sfx/viral/LICENSE-mixkit.txt`
 

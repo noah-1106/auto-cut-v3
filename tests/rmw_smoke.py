@@ -22,7 +22,7 @@ BASE = "http://127.0.0.1:8765"
 
 def _post(path, body, timeout=20):
     req = urllib.request.Request(BASE + path, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json", "X-AutoCut": "1"})
     return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
 
 def _mkpack():
@@ -68,7 +68,8 @@ def t_rmw_upload():
     _mkpack()
     t = _slow_writer("M-SLOW2")
     req = urllib.request.Request(f"{BASE}/api/pack-upload/{PID}?filename=rmw.mp4",
-                                 data=b"fake-bytes-rmw-test", method="POST")
+                                 data=b"fake-bytes-rmw-test", method="POST",
+                                 headers={"X-AutoCut": "1"})
     r = json.loads(urllib.request.urlopen(req, timeout=30).read())
     t.join()
     pk = json.load(open(PP, encoding="utf-8"))

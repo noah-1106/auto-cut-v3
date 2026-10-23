@@ -90,7 +90,8 @@ def _api(method, path, body=None, raw=None):
     url = BASE + path
     data = json.dumps(body).encode() if body is not None else raw
     req = urllib.request.Request(url, data=data, method=method,
-                                 headers={"Content-Type": "application/octet-stream" if raw else "application/json"})
+                                 headers={"Content-Type": "application/octet-stream" if raw else "application/json",
+                                          "X-AutoCut": "1"})  # CSRF 闸硬契约（2026-10-23）
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
