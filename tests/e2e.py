@@ -3157,7 +3157,10 @@ def t67_browser_smoke():
         return
     url = "%s/files/tests/browser_smoke.html?proj=%s" % (BASE, PROJ)
     try:
+        # 浏览器冒烟必须离线自闭环：页面外链字体不可成为 dump-dom 的 150s 网络等待
+        # （2026-10-24 Ubuntu CI 同点两连红；禁外网后本地同命令 17.4s→3.3s）。
         r = subprocess.run([chrome, "--headless", "--disable-gpu",
+                            "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
                             "--virtual-time-budget=30000", "--dump-dom", url],
                            capture_output=True, text=True, timeout=150)
     except Exception as e:
