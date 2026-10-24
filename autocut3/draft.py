@@ -447,7 +447,7 @@ def validate(draft, mats, transitions):
     return beats
 
 
-def save_storyline(pid, draft, beats, vtype=None, voice=None):
+def save_storyline(pid, draft, beats, vtype=None, voice=None, persona=None):
     pdir = os.path.join(ROOT, "projects", pid)
     sl = {}
     sp = os.path.join(pdir, "storylines")
@@ -475,6 +475,8 @@ def save_storyline(pid, draft, beats, vtype=None, voice=None):
         sl.setdefault("meta", {})["type"] = vtype
     if voice:  # 显式指定音色压过继承（Studio/CLI --voice 传入；_dub_ensure/下方 --dub 合成读它）
         sl.setdefault("meta", {})["voice"] = voice
+    if persona:  # 显式指定人设同样落盘（与 type/voice 同纪律——CLI --persona 曾只进提示词不落 meta，实测抓出 2026-10-23）
+        sl.setdefault("meta", {})["persona"] = persona
     # 原子落盘（实证 2026-09-17：超时幸存进程 + Agent 重跑并存，非原子 dump 会交错写坏故事线）
     flock.write_json(os.path.join(sp, sid + ".json"), sl)
     return sid
@@ -523,7 +525,7 @@ def run(project, intent, packs=None, save=True, vtype=None, persona=None, voice=
     beats = validate(draft, mats, transitions)
     if not beats:
         raise RuntimeError("草稿校验后无有效幕（素材 id 都对不上？）")
-    sid = save_storyline(project, draft, beats, vtype=vtype, voice=voice) if save else None
+    sid = save_storyline(project, draft, beats, vtype=vtype, voice=voice, persona=persona) if save else None
     return sid, draft, beats
 
 

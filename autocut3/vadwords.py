@@ -102,7 +102,23 @@ def main():
         if not story: continue
         text_from = "story"  # dub 幕：story=口播台词（draft --dub 用它 TTS，天然同文本）
         if nar.get("mode") == "dub":
-            src = nar["audio"]
+            src = nar.get("audio")
+            if not src or not os.path.exists(src if os.path.isabs(src) else os.path.join(pdir, src)):
+                # 配音缺失就地补齐（2026-10-23 全流程实测抓出：音色/台词变更失效链摘除 audio 后，
+                # 本分支 nar["audio"] 直接 KeyError——_dub_ensure 只在 studio 渲染入口，编排器
+                # vadwords 环节在渲染之前，CLI/编排链无人补）。按 meta.voice 合成+留痕，
+                # 与 draft --dub 同契约；末尾随词轨一起原子落盘。
+                import tts
+                _voice = ((sl.get("meta") or {}).get("voice") or "").strip() or None
+                ddir = os.path.join(pdir, "materials", "dub")
+                os.makedirs(ddir, exist_ok=True)
+                af = "materials/dub/%s-b%s.mp3" % (a.story or "main", b.get("no") or 0)
+                tts.synth(story, voice_id=_voice, out=os.path.join(ddir, os.path.basename(af)))
+                nar["audio"] = af
+                nar["synth_text"] = story
+                nar["synth_voice"] = _voice or ""
+                print("幕%s: 配音缺失，已按 meta.voice=%s 就地补齐合成" % (b.get("no"), _voice or "默认"), flush=True)
+                src = af
             src = src if os.path.isabs(src) else os.path.join(pdir, src)
             spans, dur = vad_spans(src)
             # 2026-09-18 补齐（既有隐患：此分支原不给 words 赋值——首幕 dub 直接 NameError，

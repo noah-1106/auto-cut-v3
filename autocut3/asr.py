@@ -214,7 +214,17 @@ def transcribe(src, provider=None, cache_dir=None):
         r = transcribe_local(wav, becfg)
         text, words, tier = r["text"], r["words"], "word"
     else:
-        resp = transcribe_minimax(wav, becfg)
+        try:
+            resp = transcribe_minimax(wav, becfg)
+        except urllib.error.HTTPError as e:
+            # 后端语义拒识：纯音乐/汽笛/噪声无清晰说话人（2026-10-23 汽笛素材实测 422
+            # "No clear speaker was detected (711)"）——语义等价于空文本，归一为无语音结果；
+            # 当失败标记会让编排器 transcribe 环节对天然无声素材永远 pending。
+            _body = e.read().decode("utf-8", "replace")
+            if e.code == 422 and "No clear speaker" in _body:
+                resp = {"text": "", "segments": []}
+            else:
+                raise
         text = (resp.get("text") or "").strip()
         segments = resp.get("segments") or []
         # 字级粒度判定：timestamp_level=word 的段文本是单字/词（中文含标点合并 ≤2-3 字）。

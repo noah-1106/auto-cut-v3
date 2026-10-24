@@ -2986,6 +2986,7 @@ def main():
     t72_active_storyline_write()
     t73_security_batch()
     t74_review_batch()
+    t75_acceptance_gaps()
     t25_rmw_smoke()
     print("══ 结果：%d 通过 / %d 失败 ══" % (len(PASS), len(FAIL)))
     fixtures.remove()  # 夹具即用即删（无论成败——曾只挂在 GREEN 分支，失败路径残留测试数据）
@@ -3533,6 +3534,78 @@ def t74_review_batch():
     check("T74g 资源修复在场（看门狗/进程组/截断校验/uuid 后缀/wake POST）",
           all(x in src for x in ("WATCHDOG", "start_new_session", "上传截断", "uuid4().hex",
                                  'self.command == "POST"', "_run_pg")), "")
+
+
+def t75_acceptance_gaps():
+    """2026-10-23 wangyalun 真实素材全流程验收抓出的三个真缺口的回归锚（全离线打桩，零计费）：
+    a) ASR 422「No clear speaker」=后端语义拒识（纯音乐/汽笛无说话人）——曾落 error 标记让编排器
+       transcribe 环节对天然无声素材永远 pending；根修=归一为空词轨无语音（对齐空文本路）。
+    b) draft --persona 曾只进提示词不落 meta.persona（save_storyline 有 vtype/voice 持久化独缺
+       persona，实测 aidraft 起草后 meta 无人设）；根修=三处签名/持久化/传参补齐。
+    c) vadwords dub 分支 nar["audio"] KeyError——音色/台词变更失效链摘除 audio 后 CLI/编排链
+       无人补（_dub_ensure 只挂 studio 渲染入口）；根修=vadwords 就地按 meta.voice 合成补齐。"""
+    import tempfile, shutil as _sh
+    sys.path.insert(0, os.path.join(ROOT, "autocut3"))
+    # a) 422 归一
+    try:
+        import asr, urllib.error, io
+        _orig_t, _orig_e, _orig_d = asr.transcribe_minimax, asr.extract_audio, asr.media_duration
+        asr.extract_audio = lambda src, wav, ff=None: open(wav, "wb").write(b"RIFF")  # 桩：不真解码
+        asr.media_duration = lambda src: 10.0
+        def _boom(wav, becfg):
+            body = b'{"error":{"message":"No clear speaker was detected. Please check the audio. (711)"}}'
+            raise urllib.error.HTTPError("http://x/speech_to_text", 422, "Unprocessable Entity", {}, io.BytesIO(body))
+        asr.transcribe_minimax = _boom
+        r = asr.transcribe(os.path.join(ROOT, "fake-src.mp4"))
+        check("T75a ASR 422 No-clear-speech 归一无语音（不落 error）",
+              r["words"] == [] and r["tier"] == "vad" and not r["text"], "r=%r" % str(r)[:80])
+        asr.transcribe_minimax, asr.extract_audio, asr.media_duration = _orig_t, _orig_e, _orig_d
+    except Exception as e:
+        check("T75a ASR 422 归一", False, str(e)[:120])
+    # b) persona 落盘
+    tmpd = os.path.join(ROOT, "projects", "t75-tmp-%d" % os.getpid())
+    try:
+        import draft
+        sid = draft.save_storyline("t75-tmp-%d" % os.getpid(), {"title": "t", "outline": "o"},
+                                   [{"story": "台词"}], persona="测试人设", vtype="vlog", voice="v1")
+        s = json.load(open(os.path.join(tmpd, "storylines", sid + ".json"), encoding="utf-8"))
+        m = s.get("meta") or {}
+        check("T75b draft persona/voice/type 三键落盘",
+              m.get("persona") == "测试人设" and m.get("voice") == "v1" and m.get("type") == "vlog",
+              "meta=%r" % str(m)[:80])
+    except Exception as e:
+        check("T75b persona 落盘", False, str(e)[:120])
+    finally:
+        _sh.rmtree(tmpd, ignore_errors=True)
+    # c) vadwords dub 缺音频就地补齐（桩 tts.synth 出真音——VAD 要吃真实波形）
+    tmpd2 = os.path.join(ROOT, "projects", "t75-dub-%d" % os.getpid())
+    try:
+        os.makedirs(os.path.join(tmpd2, "storylines"))
+        sl = {"meta": {"voice": "桩音色"}, "beats": [
+            {"no": 1, "story": "测试台词四个字", "narration": {"mode": "dub"},
+             "tracks": [{"role": "A", "source_id": "X", "src_in": 0, "duration": 3.0}]}]}
+        json.dump(sl, open(os.path.join(tmpd2, "storylines", "s1.json"), "w", encoding='utf-8'), ensure_ascii=False)
+        import tts, vadwords
+        _orig_synth, _orig_argv = tts.synth, sys.argv
+        def _fake_synth(text, voice_id=None, out=None, **kw):
+            subprocess.run([os.path.join(ROOT, "bin", "ffmpeg"), "-y", "-loglevel", "error",
+                            "-f", "lavfi", "-i", "sine=frequency=440:duration=3", out], check=True)
+        tts.synth = _fake_synth  # vadwords 分支内 import tts 后按模块属性调用，进程内补丁生效
+        sys.argv = ["vadwords.py", "t75-dub-%d" % os.getpid(), "--story", "s1"]
+        try:
+            vadwords.main()
+        finally:
+            tts.synth, sys.argv = _orig_synth, _orig_argv
+        s2 = json.load(open(os.path.join(tmpd2, "storylines", "s1.json"), encoding="utf-8"))
+        n2 = s2["beats"][0]["narration"]
+        check("T75c vadwords dub 缺音频就地补齐（audio+留痕+词轨）",
+              bool(n2.get("audio")) and n2.get("synth_voice") == "桩音色"
+              and n2.get("synth_text") == "测试台词四个字" and bool(n2.get("words")),
+              "nar=%r" % str(n2)[:100])
+    except Exception as e:
+        check("T75c vadwords dub 补齐", False, str(e)[:120])
+    finally:
+        _sh.rmtree(tmpd2, ignore_errors=True)
 
 
 
